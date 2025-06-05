@@ -161,8 +161,19 @@
         <form id="search-form">
             <label for="query-input">Enter your query:</label>
             <textarea id="query-input" placeholder="e.g., Summarize the latest news about AI from wikipedia.org and a YouTube video link"></textarea>
-
-            <br>
+        
+            <div style="margin: 15px 0;">
+                <label style="display: inline-block; margin-right: 20px;">
+                    <input type="checkbox" id="show-sources-checkbox" checked>
+                    Show Sources
+                </label>
+        
+                <label style="display: inline-block;">
+                    <input type="checkbox" id="show-images-checkbox">
+                    Show Images
+                </label>
+            </div>
+        
             <button type="submit" id="submit-button">Search</button>
         </form>
 
@@ -171,64 +182,73 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script>
-        const searchForm = document.getElementById('search-form');
-        const queryInput = document.getElementById('query-input');
-        const resultsArea = document.getElementById('results-area');
-        const statusMessage = document.getElementById('status-message');
-        const submitButton = document.getElementById('submit-button');
-        const POLLINATIONS_SEARCH_URL = "https://search.pollinations.ai/search"
-        const LOCAL_SEARCH_URL = "http://localhost:5000/search";
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+    const searchForm = document.getElementById('search-form');
+    const queryInput = document.getElementById('query-input');
+    const resultsArea = document.getElementById('results-area');
+    const statusMessage = document.getElementById('status-message');
+    const submitButton = document.getElementById('submit-button');
+    const showSourcesCheckbox = document.getElementById('show-sources-checkbox');
+    const showImagesCheckbox = document.getElementById('show-images-checkbox');
 
-        searchForm.addEventListener('submit', function(event) {
-            event.preventDefault();
+    const POLLINATIONS_SEARCH_URL = "https://search.pollinations.ai/search";
 
-            const query = queryInput.value.trim();
-            const showLogs = true;
+    searchForm.addEventListener('submit', function(event) {
+        event.preventDefault();
 
-            if (!query) {
-                statusMessage.textContent = 'Please enter a query.';
-                statusMessage.className = 'status-error';
-                return;
+        const query = queryInput.value.trim();
+        const showLogs = false;  // Hidden from UI, always false for users
+        const showSources = showSourcesCheckbox.checked;
+        const showImages = showImagesCheckbox.checked;
+
+        if (!query) {
+            statusMessage.textContent = 'Please enter a query.';
+            statusMessage.className = 'status-error';
+            return;
+        }
+
+        statusMessage.textContent = 'Surfing...';
+        statusMessage.className = 'status-loading';
+        resultsArea.innerHTML = marked.parse("### Loading results... Please wait a couple of mins!");
+        submitButton.disabled = true;
+
+        fetch(POLLINATIONS_SEARCH_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                query: query,
+                show_logs: showLogs,
+                show_images: showImages,
+                show_sources: showSources
+            }),
+        })
+        .then(response => {
+            resultsArea.innerHTML = '';
+            if (!response.ok) {
+                return response.json().catch(() => Promise.resolve({ error: `HTTP error! status: ${response.status}` }))
+                    .then(err => { throw new Error(err.error || `HTTP error! status: ${response.status}`); });
             }
-
-            statusMessage.textContent = 'Surfing...';
-            statusMessage.className = 'status-loading';
-            resultsArea.innerHTML = marked.parse("### Loading results... Please wait a couple of mins!");
-            submitButton.disabled = true;
-
-            fetch(`${POLLINATIONS_SEARCH_URL}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ query: query, show_logs: showLogs }),
-            })
-            .then(response => {
-                resultsArea.innerHTML = '';
-                if (!response.ok) {
-                    return response.json().catch(() => Promise.resolve({ error: `HTTP error! status: ${response.status}` }))
-                           .then(err => { throw new Error(err.error || `HTTP error! status: ${response.status}`); });
-                }
-                return response.text();
-            })
-            .then(markdownText => {
-                resultsArea.innerHTML = marked.parse(markdownText);
-                statusMessage.textContent = '';
-                statusMessage.className = '';
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                statusMessage.textContent = 'Error: ' + error.message;
-                statusMessage.className = 'status-error';
-                resultsArea.innerHTML = '';
-            })
-            .finally(() => {
-                submitButton.disabled = false;
-            });
+            return response.text();
+        })
+        .then(markdownText => {
+            resultsArea.innerHTML = marked.parse(markdownText);
+            statusMessage.textContent = '';
+            statusMessage.className = '';
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            statusMessage.textContent = 'Error: ' + error.message;
+            statusMessage.className = 'status-error';
+            resultsArea.innerHTML = '';
+        })
+        .finally(() => {
+            submitButton.disabled = false;
         });
+    });
 
-        resultsArea.innerHTML = marked.parse("### Welcome!\n\nEnter a query above and click 'Search' to get a synthesized answer from web sources and URLs.");
-    </script>
+    resultsArea.innerHTML = marked.parse("### Welcome!\n\nEnter a query above and click 'Search' to get a synthesized answer from web sources and URLs.");
+</script>
+
 </body>
 </html>

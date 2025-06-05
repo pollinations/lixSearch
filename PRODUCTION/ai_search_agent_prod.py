@@ -894,12 +894,16 @@ semaphore = threading.Semaphore(MAX_CONCURRENT_REQUESTS)
 def handle_search():
     user_input_query = None
     show_logs_param = None
+    show_image_param = None
+    show_sources_param = None
 
     if request.method == 'POST':
         data = request.get_json()
         if data:
             user_input_query = data.get('query')
             show_logs_param = data.get('show_logs', None)
+            show_image_param = data.get('show_images', None)
+            show_sources_param = data.get('show_sources', None)
     elif request.method == 'GET':
         user_input_query = request.args.get('query')
         show_logs_param = request.args.get('show_logs', None)
@@ -931,14 +935,10 @@ def handle_search():
     show_logs = str(show_logs_param).lower() == 'true' if show_logs_param is not None else True
     def process_request():
         with semaphore:
-            # Use app.app_context() if any part of the *worker function* needed Flask context,
-            # but the goal here is to make libraries *not* need it. The error suggests
-            # pytube is *trying* to access it, so moving imports/config inside the retry
-            # function (_fetch) is the targeted fix.
             markdown_output, status_code = search_and_synthesize(
                 user_input_query,
-                show_sources=True,
-                scrape_images=True,
+                show_sources=show_sources_param,
+                scrape_images=show_image_param,
                 show_logs=show_logs
             )
             return markdown_output, status_code
