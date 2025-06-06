@@ -47,9 +47,6 @@ get_youtube_video_metadata_show_log = False
 scrape_website_show_log = False
 plan_execution_llm_show_log = False
 perform_duckduckgo_text_search_show_log = False
-
-
-
 load_dotenv()
 
 class DummyContextManager:
@@ -1362,23 +1359,19 @@ def handle_search():
                   return jsonify({"error": error_msg, "test_status": "error"}), 500
              else:
                   return Response(error_msg, mimetype='text/markdown', status=500)
-    # --- End special test query ---
 
-
-    # Submit the main search and synthesis task to the executor
-    # The executor manages the thread pool and semaphore implicitly via max_workers
+    
     future = process_executor.submit(
         search_and_synthesize,
         user_input_query,
         show_sources=show_sources,
         scrape_images=scrape_images,
         show_logs=show_logs,
-        output_format=output_format # Pass the determined output format
+        output_format=output_format 
     )
 
     try:
-        # Wait for the result from the thread
-        markdown_output, status_code, collected_data = future.result(timeout=300) # Add a reasonable timeout for the whole process
+        markdown_output, status_code, collected_data = future.result(timeout=300) 
 
         if output_format == 'json':
             response_body = {
@@ -1391,7 +1384,6 @@ def handle_search():
                     }
                 ]
             }
-            # Add sources and images to the JSON response if requested
             if show_sources:
                  source_info = {}
                  if collected_data.get("native_knowledge_part") and collected_data["native_knowledge_part"] != "None":
@@ -1402,16 +1394,14 @@ def handle_search():
                       source_info["processed_youtube"] = collected_data["processed_youtube_urls"]
                  if collected_data.get("failed_youtube_urls"):
                       source_info["failed_youtube"] = collected_data["failed_youtube_urls"]
-
-                 if source_info: # Only add the sources key if there's source info to report
+                 if source_info: 
                      response_body["sources"] = source_info
 
             if scrape_images and collected_data.get("found_image_urls"):
                  response_body["images"] = collected_data["found_image_urls"]
             elif scrape_images and (collected_data.get("scraped_website_urls") or collected_data.get("processed_youtube_urls")):
-                 # Optionally add an empty images list or a message if scraping happened but no images found
-                 # response_body["images"] = [] # Or skip key entirely if empty
-                 pass # Let's skip the key if the list is empty for cleaner output
+                 response_body["images"] = [] 
+                 pass
 
             # Include error message in JSON if present in collected_data (e.g., for 400/404)
             if collected_data.get("error"):
@@ -1445,7 +1435,7 @@ def index():
     """Simple index page for testing API reachability."""
     return "Pollinations Search API is running.", 200
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
     # Running in __main__ with debug=False is standard for production-like deployment
     # Using 127.0.0.1 binds to localhost only. Use 0.0.0.0 for external access (use with caution).
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    # app.run(host="127.0.0.1", port=5000, debug=False)
