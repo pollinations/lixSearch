@@ -118,41 +118,40 @@ You can adjust the following parameters in `ai_search_agent_prod.py`:
 Environment variables can be set in a `.env` file for API tokens and other secrets.
 
 ---
+## Example CURL Queries
 
-## CURL Queries 
-
-### Root Endpoint / (GET)
+### Root Endpoint `/` (GET)
 ```bash
-curl https://search.pollinations.ai/
+curl http://localhost:5000/
 ```
 
-### Search Endpoint /search (GET)
+### Search Endpoint `/search` (GET)
 ```bash
 # Basic GET request with just the query
-curl "https://search.pollinations.ai/search?query=weather in London tomorrow"
+curl "http://localhost:5000/search?query=weather in London tomorrow"
 
-# GET request with specific parameters
-curl "https://search.pollinations.ai/search?query=latest news on AI&show_sources=false&show_images=true&show_logs=true"
+# GET request with additional parameters
+curl "http://localhost:5000/search?query=latest news on AI&show_sources=true&show_images=true&show_logs=false"
 ```
 
-### Search Endpoint /search (POST - Old/Custom JSON Format)
+### Search Endpoint `/search` (POST - Simple JSON)
 ```bash
-# Basic POST request with just the query JSON
-curl -X POST https://search.pollinations.ai/search \
-  -H 'Content-Type: application/json' \
+# Basic POST request with just the query
+curl -X POST http://localhost:5000/search \
+  -H "Content-Type: application/json" \
   -d '{"query": "how tall is mount everest"}'
 
 # POST request with specific parameters in JSON
-curl -X POST https://search.pollinations.ai/search \
-  -H 'Content-Type: application/json' \
-  -d '{"query": "explain quantum computing", "show_sources": true, "show_images": false}'
+curl -X POST http://localhost:5000/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "explain quantum computing", "show_sources": true, "show_images": false, "show_logs": false}'
 ```
 
-### Search Endpoint /search (POST - OpenAI-compatible JSON Format)
+### Search Endpoint `/search` (POST - OpenAI-compatible JSON)
 ```bash
 # Basic POST request with messages array
-curl -X POST https://search.pollinations.ai/search \
-  -H 'Content-Type: application/json' \
+curl -X POST http://localhost:5000/search \
+  -H "Content-Type: application/json" \
   -d '{
     "messages": [
       {"role": "system", "content": "You are a helpful assistant."},
@@ -160,31 +159,32 @@ curl -X POST https://search.pollinations.ai/search \
     ]
   }'
 
-# POST request with messages and specific parameters in JSON
-curl -X POST https://search.pollinations.ai/search \
-  -H 'Content-Type: application/json' \
+# POST request with messages and specific parameters
+curl -X POST http://localhost:5000/search \
+  -H "Content-Type: application/json" \
   -d '{
     "messages": [
       {"role": "user", "content": "Tell me about the history of the internet."}
     ],
     "show_sources": true,
-    "show_images": true
+    "show_images": true,
+    "show_logs": false
   }'
 ```
 
 ### Special Query: `pollinations_test`
 ```bash
 # Test via GET
-curl "https://search.pollinations.ai/search?query=pollinations_test"
+curl "http://localhost:5000/search?query=pollinations_test"
 
-# Test via POST (Old/Custom JSON)
-curl -X POST https://search.pollinations.ai/search \
-  -H 'Content-Type: application/json' \
+# Test via POST (Simple JSON)
+curl -X POST http://localhost:5000/search \
+  -H "Content-Type: application/json" \
   -d '{"query": "pollinations_test"}'
 
 # Test via POST (OpenAI-compatible JSON)
-curl -X POST https://search.pollinations.ai/search \
-  -H 'Content-Type: application/json' \
+curl -X POST http://localhost:5000/search \
+  -H "Content-Type: application/json" \
   -d '{
     "messages": [
       {"role": "user", "content": "pollinations_test"}
