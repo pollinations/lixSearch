@@ -25,20 +25,20 @@ import threading
 import logging
 import concurrent.futures
 
-MAX_SEARCH_RESULTS_PER_QUERY = 8
+MAX_SEARCH_RESULTS_PER_QUERY = 6
 MAX_SCRAPE_WORD_COUNT = 2000
 MAX_TOTAL_SCRAPE_WORD_COUNT = 8000
 MIN_PAGES_TO_SCRAPE = 3
 MAX_PAGES_TO_SCRAPE = 10
 MAX_IMAGES_TO_INCLUDE = 3
 MAX_TRANSCRIPT_WORD_COUNT = 6000
-DUCKDUCKGO_REQUEST_DELAY = 3
+DUCKDUCKGO_REQUEST_DELAY = 4
 REQUEST_RETRY_DELAY = 5
 MAX_REQUEST_RETRIES = 3
 MAX_DUCKDUCKGO_RETRIES = 5
 MAX_CONCURRENT_REQUESTS = 8
-CLASSIFICATION_MODEL = os.getenv("CLASSIFICATION_MODEL", "OpenAI GPT-4.1-nano")
-SYNTHESIS_MODEL = os.getenv("SYNTHESIS_MODEL", "openai-large")
+CLASSIFICATION_MODEL = os.getenv("CLASSIFICATION_MODEL")
+SYNTHESIS_MODEL = os.getenv("SYNTHESIS_MODEL")
 
 query_pollinations_ai_show_log = True
 get_youtube_transcript_show_log = True
@@ -46,16 +46,18 @@ get_youtube_video_metadata_show_log = True
 scrape_website_show_log = True
 plan_execution_llm_show_log = True
 perform_duckduckgo_text_search_show_log = True
-
 load_dotenv()
 
 class DummyContextManager:
+    def __init__(self, *args, **kwargs):
+        self.n = 0
+        self.total = 1
     def __enter__(self):
         return self
     def __exit__(self, exc_type, exc_value, traceback):
         pass
     def set_postfix_str(self, *args, **kwargs): pass
-    def update(self, *args, **kwargs): pass
+    def update(self, n=1): self.n += n
     def close(self): pass
 
 def conditional_tqdm(iterable, show_logs, *args, **kwargs):
@@ -1151,13 +1153,8 @@ limiter = Limiter(
 
 process_executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_REQUESTS)
 
-# Enable verbose logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s', stream=sys.stdout)
-
-# Set Flask app logger to DEBUG level
 app.logger.setLevel(logging.DEBUG)
-
-# Also enable Werkzeug logger (Flask's underlying WSGI library) for request/response logs
 logging.getLogger('werkzeug').setLevel(logging.DEBUG)
 
 
@@ -1257,7 +1254,7 @@ def handle_search(anything=None):
         provided_youtube_urls,
         cleaned_query_text_for_planner,
         datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
-        "", # Location fetching now happens inside search_and_synthesize if needed for prompt
+        "",
         show_logs=show_logs
     )
 
@@ -1346,6 +1343,72 @@ def handle_search(anything=None):
         else:
              return Response(f"Error: {error_msg}\n---\nAn internal error prevented the request from completing.", mimetype='text/markdown', status=status_code)
 
+
+@app.route('/v1/chat/completions', methods=['POST'])
+def openai_chat_completions():
+    try:
+        data = request.get_json()
+        if not data or 'messages' not in data or not isinstance(data['messages'], list):
+            return jsonify({"error": "Invalid request: 'messages' array required."}), 400
+
+        # Extract user message (LangChain expects OpenAI format)
+        user_input_query = None
+        for message in reversed(data['messages']):
+            if message.get('role') == 'user':
+                user_input_query = message.get('content', '').strip()
+                break
+        if not user_input_query:
+            return jsonify({"error": "No user message found in 'messages'."}), 400
+
+        # Extract URLs and cleaned query
+        provided_website_urls, provided_youtube_urls, cleaned_query_text_for_planner = extract_urls_from_query(user_input_query)
+
+        # Get plan and flags
+        plan, ai_show_sources, ai_scrape_images = plan_execution_llm(
+            user_input_query,
+            provided_website_urls,
+            provided_youtube_urls,
+            cleaned_query_text_for_planner,
+            datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "",
+            show_logs=False
+        )
+
+        # Run main logic
+        markdown_output, status_code, collected_data = search_and_synthesize(
+            user_input_query,
+            provided_website_urls,
+            provided_youtube_urls,
+            cleaned_query_text_for_planner,
+            show_sources=ai_show_sources,
+            scrape_images=ai_scrape_images,
+            show_logs=False,
+            output_format='json'
+        )
+
+        # OpenAI-compatible response
+        response_body = {
+            "id": "chatcmpl-langchain",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": SYNTHESIS_MODEL or "openai-large",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": html.unescape(markdown_output)
+                    },
+                    "finish_reason": "stop"
+                }
+            ]
+        }
+        return jsonify(response_body), status_code
+
+    except Exception as e:
+        logging.exception("LangChain-compatible endpoint error")
+        return jsonify({"error": f"Internal error: {type(e).__name__}: {e}"}), 500
+    
 @app.route('/', methods=['GET'])
 def index():
     return "Pollinations Search API is running.", 200
