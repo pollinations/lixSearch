@@ -3,14 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elixpo-Search</title>
+
+    
+    <title>Elixpo-Search: AI Search & Synthesize with Citations & Images</title>
+    <meta name="description" content="Elixpo-Search is an open-source AI search assistant that synthesizes information from the web, providing comprehensive answers with citations, images, and YouTube summaries. Built with LLM & Langchain.">
+    <meta name="keywords" content="AI search, information synthesis, LLM, Langchain, web search, citations, images, YouTube summary, open source, search assistant, realtime search">
+    <meta name="author" content="Elixpo-Search Project">
+    <meta name="robots" content="index, follow"> 
+
+    
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://search.elixpo.com"> 
+    <meta property="og:title" content="Elixpo-Search: AI Search & Synthesize with Citations & Images">
+    <meta property="og:description" content="Elixpo-Search is an open-source AI search assistant that synthesizes information from the web, providing comprehensive answers with citations, images, and YouTube summaries. Built with LLM & Langchain.">
+    
+    <meta property="og:image" content="https://github.com/user-attachments/assets/98fb5606-2466-49cc-836b-bc4cf088e283">
+
+    
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://search.elixpo.com"> 
+    <meta property="twitter:title" content="Elixpo-Search: AI Search & Synthesize with Citations & Images">
+    <meta property="twitter:description" content="Elixpo-Search is an open-source AI search assistant that synthesizes information from the web, providing comprehensive answers with citations, images, and YouTube summaries. Built with LLM & Langchain.">
+     
+    <meta property="twitter:image" content="https://github.com/user-attachments/assets/98fb5606-2466-49cc-836b-bc4cf088e283">
+
+    
+    <link rel="icon" type="image/png" href="CSS/IMAGES/ElixpoSearchIcon.png"> 
+
+    
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="CSS/searchAgent.css">
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- Tailwind Configuration -->
     <script>
         tailwind.config = {
             theme: {
@@ -30,45 +61,52 @@
         }
     </script>
 </head>
-<body class="bg-darkBg text-white">
-    <div class="min-h-screen">
-        <div class="max-w-4xl mx-auto px-6 py-8">
-            <div class="text-center mb-8">
-                <h1 class="text-5xl font-bold text-primary mb-4">Elixpo-Search</h1>
-                <p class="text-gray-300 text-xl mb-4">AI Search & Synthesize</p>
+<body class="bg-darkBg text-white min-h-screen flex items-center justify-center"> 
+    <main class="max-w-4xl mx-auto px-6 py-8 w-full"> 
+        <header class="text-center mb-8"> 
+            <h1 class="text-5xl font-bold text-primary mb-4">Elixpo-Search</h1>
+            <p class="text-gray-300 text-xl mb-4">AI Search & Synthesize</p>
+        </header>
+
+        <section class="search-input-container max-w-2xl mx-auto mb-8"> 
+            <div class="flex items-start p-4">
+                <i data-lucide="message-circle" class="w-5 h-5 text-gray-400 mt-3 mr-3 flex-shrink-0"></i>
+                <textarea
+                    id="queryInput"
+                    class="flex-1 bg-transparent border-none outline-none resize-none text-white placeholder-gray-400 min-h-[60px] py-2"
+                    placeholder="e.g., Explain quantum computing, show images and sources. Summarize https://www.youtube.com/watch?v=example cite sources."
+                    rows="3"
+                    aria-label="Enter your search query" 
+                ></textarea>
+                <button id="submitButton" class="relative bottom-[10%] search-btn px-4 py-2 ml-3 text-white font-medium flex items-center gap-2">
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                    Search
+                </button>
             </div>
-            
-            <div class="search-input-container max-w-2xl mx-auto mb-8">
-                <div class="flex items-start p-4">
-                    <i data-lucide="message-circle" class="w-5 h-5 text-gray-400 mt-3 mr-3 flex-shrink-0"></i>
-                    <textarea
-                        id="queryInput"
-                        class="flex-1 bg-transparent border-none outline-none resize-none text-white placeholder-gray-400 min-h-[60px] py-2"
-                        placeholder="e.g., Explain quantum computing, show images and sources. Summarize https://www.youtube.com/watch?v=example cite sources."
-                        rows="3"
-                    ></textarea>
-                    <button id="submitButton" class=" relative bottom-[10%] search-btn px-4 py-2 ml-3 text-white font-medium flex items-center gap-2">
-                        <i data-lucide="send" class="w-4 h-4"></i>
-                        Search
-                    </button>
+        </section>
+
+        <div id="statusMessage" class="text-center mb-6 hidden"></div> 
+
+        <section id="resultsContainer"> 
+             
+            <article class="result-card p-6 max-w-4xl mx-auto"> 
+                <div class="prose prose-invert max-w-none">
+                    <h3 class="text-xl font-semibold mb-4 text-white">Welcome!</h3>
+                    <p class="text-gray-300">This is Elixpo Search, a realtime upto-date LLM + Langchain Supported Search Assistant (Open Source).
+                        An intelligent search system that synthesizes information from multiple web sources, providing comprehensive answers with citations and relevant images.
+                    </p>
                 </div>
-            </div>
-            
-            <div id="statusMessage" class="text-center mb-6 hidden"></div>
-            
-            <div id="resultsContainer">
-                <div class="result-card p-6 max-w-4xl mx-auto">
-                    <div class="prose prose-invert max-w-none">
-                        <h3 class="text-xl font-semibold mb-4 text-white">Welcome!</h3>
-                        <p class="text-gray-300">This is Elixpo Search, a realtime upto-date LLM + Langchain Supported Search Assistant (Open Source). 
-                            An intelligent search system that synthesizes information from multiple web sources, providing comprehensive answers with citations and relevant images.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+            </article>
+            <!-- Search results will be appended here -->
+        </section>
+    </main>
 
     <script src="JS/searchAgent.js"></script>
+    <script>
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+        });
+    </script>
 </body>
 </html>
