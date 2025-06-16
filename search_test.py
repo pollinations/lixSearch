@@ -1,5 +1,13 @@
-from search_module import search_and_synthesize
+import requests
 
-query_simple = "What's the current weather in kolkata india? and how's it different from the weather in delhi india right now?" 
-markdown_no_sources = search_and_synthesize(query_simple, show_sources=True, scrape_images=False)
-print(markdown_no_sources)
+query = "artificial intelligence"
+url = f"http://51.15.192.16:4000/search"
+
+response = requests.get(url, params={
+    "q": query,
+    "format": "json"
+})
+
+data = response.json()
+for result in data.get("results", []):
+    print(result["title"], "-", result["url"])

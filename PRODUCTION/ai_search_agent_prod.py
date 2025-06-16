@@ -499,42 +499,41 @@ def perform_duckduckgo_text_search(query, max_results, retries=MAX_DUCKDUCKGO_RE
             valid_results = [r for r in search_results if r and isinstance(r.get('href'), str) and r['href'].strip()]
 
             if not valid_results:
-                 conditional_print(f"DDGS returned no valid results (empty or missing href) for query '{query}'.", show_logs)
-                 return []
+                conditional_print(f"DDGS returned no valid results (empty or missing href) for query '{query}'.", show_logs)
+                return []
 
             conditional_print(f"DDGS search successful for query '{query}'. Found {len(valid_results)} results.", show_logs)
             return valid_results
 
-        except DuckDuckGoSearchException as e:
-            conditional_print(f"DDGS search error during _search for '{query}': {type(e).__name__}: {e}", show_logs)
-            raise
-        except TimeoutException as e:
-            conditional_print(f"DDGS search timed out for '{query}': {type(e).__name__}: {e}", show_logs)
-            raise
-        except RatelimitException as e:
-            conditional_print(f"DDGS search rate limit exceeded for '{query}': {type(e).__name__}: {e}", show_logs)
-            raise
         except Exception as e:
-            conditional_print(f"DDGS search error during _search for '{query}': {type(e).__name__}: {e}", show_logs)
-            raise
+            conditional_print(f"DDGS search failed for '{query}': {type(e).__name__}: {e}. Falling back to SearxNG.", show_logs)
+            # Fallback to SearxNG
+            try:
+                searxng_url = "http://localhost:4000/search"
+                resp = requests.get(searxng_url, params={"q": query, "format": "json"}, timeout=120)
+                resp.raise_for_status()
+                searxng_data = resp.json()
+                results = []
+                for item in searxng_data.get("results", []):
+                    href = item.get("url") or item.get("href")
+                    if href:
+                        results.append({
+                            "title": item.get("title", ""),
+                            "href": href,
+                            "body": item.get("content", "") or item.get("description", "")
+                        })
+                        if len(results) >= max_results:
+                            break
+                conditional_print(f"SearxNG fallback successful for query '{query}'. Found {len(results)} results.", show_logs)
+                return results
+            except Exception as searx_e:
+                conditional_print(f"SearxNG fallback failed for '{query}': {type(searx_e).__name__}: {searx_e}", show_logs)
+                return []
 
     try:
         return retry_operation(_search, retries=retries, show_logs=show_logs)
-    except TimeoutException as e:
-        conditional_print(f"DDGS search timed out for query '{query}' after {retries} retries: {e}. Consider increasing DDGS_TIMEOUT environment variable.", show_logs)
-        return []
-    except RatelimitException as e:
-        conditional_print(f"DDGS rate limit exceeded for query '{query}' after retries: {e}. Consider adding longer delays between requests.", show_logs)
-        return []
-    except requests.exceptions.HTTPError as e:
-        status_code = e.response.status_code if e.response is not None else 'N/A'
-        if status_code in [403, 429]:
-             conditional_print(f"DDGS Received {status_code} for query '{query}'. Skipping after retries.", show_logs)
-        else:
-            conditional_print(f"DDGS HTTP error {status_code} for query '{query}'. Failed after retries.", show_logs)
-        return []
     except Exception as e:
-        conditional_print(f"DDGS Error performing text search for query '{query}' after retries: {type(e).__name__}: {e}.", show_logs)
+        conditional_print(f"All search attempts failed for query '{query}': {type(e).__name__}: {e}", show_logs)
         return []
 
 def search_and_synthesize(original_query, provided_website_urls, provided_youtube_urls, cleaned_query_text, show_sources=True, scrape_images=True, show_logs=True, output_format='markdown'):
