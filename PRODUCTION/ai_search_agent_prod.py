@@ -1185,7 +1185,7 @@ app.logger.setLevel(logging.DEBUG)
 logging.getLogger('werkzeug').setLevel(logging.DEBUG)
 
 
-# @limiter.limit("10 per minute")
+@limiter.limit("10 per minute")
 @app.route('/search', methods=['GET', 'POST'])
 @app.route('/search/', methods=['GET', 'POST'])
 @app.route('/search/<path:anything>', methods=['GET', 'POST'])

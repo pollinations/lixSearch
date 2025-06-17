@@ -16,7 +16,7 @@ const queryInput = document.getElementById('queryInput');
 const submitButton = document.getElementById('submitButton');
 const statusMessage = document.getElementById('statusMessage');
 const resultsContainer = document.getElementById('resultsContainer');
-const API_SEARCH_URL = "https://text.pollinations.ai/openai";
+const API_SEARCH_URL = "https://search.pollinations.ai/search";
 // const API_SEARCH_URL = "http://10.42.0.56:5000/search";
 
 
@@ -34,9 +34,6 @@ function performSearch(query) {
         messages: [
             { role: 'user', content: query }
         ],
-        model: "elixposearch",
-        seed: Math.floor(Math.random() * 1000000)
-
     };
 
     fetch(API_SEARCH_URL, {
