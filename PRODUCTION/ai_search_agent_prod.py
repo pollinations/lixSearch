@@ -46,8 +46,8 @@ MAX_TRANSCRIPT_WORD_COUNT = 500
 
 CLASSIFICATION_MODEL = os.getenv("CLASSIFICATION_MODEL", "openai-fast")
 SYNTHESIS_MODEL = os.getenv("SYNTHESIS_MODEL", "openai-fast")
-DDGS_TIMEOUT = int(os.getenv("DDGS_TIMEOUT", "120"))  # 120 seconds default timeout (increased from 60)
-DDGS_PROXY = os.getenv("DDGS_PROXY", None)  # Optional proxy configuration
+DDGS_TIMEOUT = int(os.getenv("DDGS_TIMEOUT", "120"))  
+DDGS_PROXY = os.getenv("DDGS_PROXY", None)  
 DDGS_BACKEND = os.getenv("DDGS_BACKEND", "auto")
 
 query_pollinations_ai_show_log = True
@@ -1185,7 +1185,7 @@ app.logger.setLevel(logging.DEBUG)
 logging.getLogger('werkzeug').setLevel(logging.DEBUG)
 
 
-@limiter.limit("10 per minute")
+# @limiter.limit("10 per minute")
 @app.route('/search', methods=['GET', 'POST'])
 @app.route('/search/', methods=['GET', 'POST'])
 @app.route('/search/<path:anything>', methods=['GET', 'POST'])
@@ -1401,7 +1401,7 @@ def openai_chat_completions():
             show_logs=False
         )
 
-        # Run main logic
+        # Run main logi
         markdown_output, status_code, collected_data = search_and_synthesize(
             user_input_query,
             provided_website_urls,
