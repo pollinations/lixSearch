@@ -3,11 +3,9 @@ import json
 
 url = "https://text.pollinations.ai/openai"
 headers = {"Content-Type": "application/json"}
-
-# Initial messages from the conversation
 messages = [{"role": "user", "content": "What's the weather in Tokyo?"}]
 
-# Definition of the tool(s) your application exposes to the AI model
+
 tools = [
     {
         "type": "function",
@@ -28,7 +26,7 @@ tools = [
 
 # Payload for the initial API call
 payload = {
-    "model": "openai", # The model must support function calling
+    "model": "openai", 
     "messages": messages,
     "tools": tools,
     "tool_choice": "auto" # Allows the model to decide whether to call a tool or respond directly
