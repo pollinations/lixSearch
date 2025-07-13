@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ElixpoSearch SSE Demo</title>
+    <style>
+        body { font-family: sans-serif; margin: 2rem; }
+        textarea, pre { width: 100%; height: 150px; }
+        #thinking, #response {
+            padding: 1rem;
+            border: 1px solid #ddd;
+            white-space: pre-wrap;
+            background-color: #f9f9f9;
+            margin-bottom: 1rem;
+        }
+        #thinking { background-color: #f3f3f3; }
+    </style>
+</head>
+<body>
+    <h1>ElixpoSearch Live Logs (SSE)</h1>
+    <input id="queryInput" type="text" placeholder="Ask something..." style="width: 100%; padding: 0.5rem; font-size: 1rem;">
+    <button onclick="startSearch()" style="margin-top: 1rem; padding: 0.5rem 1rem;">Start Search</button>
+
+    <h2>Thinking (Live Logs)</h2>
+    <div id="thinking">Logs will appear here...</div>
+
+    <h2>Final Response (Markdown Rendered)</h2>
+    <div id="response">Final answer will appear here...</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        function startSearch() {
+            const query = document.getElementById('queryInput').value;
+            const thinkingArea = document.getElementById('thinking');
+            const responseArea = document.getElementById('response');
+
+            thinkingArea.textContent = "Thinking started...\n";
+            responseArea.textContent = "Awaiting response...";
+
+            if (window.currentEventSource) {
+                window.currentEventSource.close();
+            }
+
+            const sseUrl = 'http://127.0.0.1:5000/search/sse?query=' + encodeURIComponent(query);
+            const eventSource = new EventSource(sseUrl);
+            window.currentEventSource = eventSource;
+
+            // Listen for all progress and info events
+            eventSource.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    // Show all progress/info messages in the thinking area
+                    if (data.message) {
+                        thinkingArea.textContent += data.message + "\n";
+                    }
+                } catch (e) {
+                    thinkingArea.textContent += "\n[Error parsing SSE data]\n";
+                }
+            };
+
+            // Listen for the final response event
+            eventSource.addEventListener('final', function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.content) {
+                        responseArea.innerHTML = marked.parse(data.content);
+                    }
+                } catch (e) {
+                    responseArea.textContent = "[Error parsing final response]";
+                }
+            });
+
+            // Listen for stream close event
+            eventSource.addEventListener('close', function(event) {
+                eventSource.close();
+            });
+
+            eventSource.onerror = function(err) {
+                thinkingArea.textContent += "\n[Connection error]\n";
+                responseArea.textContent = "SSE connection failed.";
+                eventSource.close();
+            };
+        }
+    </script>
+</body>
+</html>

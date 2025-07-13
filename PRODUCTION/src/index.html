@@ -41,64 +41,115 @@
 <div id="response">Awaiting response...</div>
 
 <script>
-    let eventSource;
-
     function startSearch() {
+    const query = document.getElementById('queryInput').value;
+    const thinkingArea = document.getElementById('thinking');
+    const responseArea = document.getElementById('response');
+
+    thinkingArea.textContent = "Thinking started...\n";
+    responseArea.textContent = "Awaiting response...";
+
+    // Close any previous EventSource
+    if (window.currentEventSource) {
+        window.currentEventSource.close();
+    }
+
+    // Clear areas for fresh search
+    thinkingArea.textContent = "";
+    responseArea.textContent = "";
+
+    const sseUrl = 'http://127.0.0.1:5000/search/sse?query=' + encodeURIComponent(query);
+    const eventSource = new EventSource(sseUrl);
+    window.currentEventSource = eventSource;
+
+    eventSource.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.message) {
+                thinkingArea.textContent += data.message + "\n";
+            }
+        } catch (e) {
+            thinkingArea.textContent += "\n[Error parsing SSE data]\n";
+        }
+    };
+
+    eventSource.addEventListener('final', function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.content) {
+                responseArea.innerHTML = marked.parse(data.content);
+            }
+        } catch (e) {
+            responseArea.textContent = "[Error parsing final response]";
+        }
+    });
+
+    eventSource.addEventListener('close', function(event) {
+        eventSource.close();
+    });
+
+    eventSource.onerror = function(err) {
+        thinkingArea.textContent += "\n[Connection error]\n";
+        responseArea.textContent = "SSE connection failed.";
+        eventSource.close();
+    };
+}
+
+
+    function startSearchGET() {
         const query = document.getElementById('queryInput').value;
-        document.getElementById('thinking').textContent = "Thinking started...\n";
+        document.getElementById('thinking').textContent = "Thinking started (GET)...\n";
         document.getElementById('response').textContent = "Awaiting response...";
 
-        if (eventSource) {
-            eventSource.close();
-        }
-
-        // Only use SSE GET request, as the backend expects query param for SSE
-        const sseUrl = 'http://127.0.0.1:5000/search/sse?query=' + encodeURIComponent(query);
-        eventSource = new EventSource(sseUrl);
-
-        let thinkingArea = document.getElementById('thinking');
-        let fullResponse = '';
-
-        eventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                thinkingArea.textContent += data.message + "\n";
-
-                if (thinkingArea.textContent.length > 5000) {
-                    thinkingArea.textContent = thinkingArea.textContent.slice(-5000); // Keep it readable
-                }
-
-                if (data.message.startsWith('--- ElixpoSearch Final Answer ---')) {
-                    fullResponse = '';
-                }
-
-                // Collect final response
-                if (data.message.startsWith('--- ElixpoSearch Final Answer ---') ||
-                    fullResponse !== '') {
-                    fullResponse += data.message + '\n';
-                }
-
-                // If the backend signals done, or the stream is closed, render
-                if (data.done) {
-                    eventSource.close();
-                    document.getElementById('response').innerHTML = marked.parse(fullResponse);
-                }
-            } catch (e) {
-                // Handle possible JSON parse errors or other issues
-                thinkingArea.textContent += "\n[Error parsing SSE data]\n";
+        fetch('http://127.0.0.1:5000/search?query=' + encodeURIComponent(query))
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('thinking').textContent += "Done!\n";
+            if (data.output) {
+                document.getElementById('response').innerHTML = marked.parse(data.output);
+            } else if (data.error) {
+                document.getElementById('response').textContent = data.error;
+            } else {
+                document.getElementById('response').textContent = "No response received.";
             }
-        };
-
-        eventSource.addEventListener('close', function() {
-            eventSource.close();
-            document.getElementById('response').innerHTML = marked.parse(fullResponse);
+        })
+        .catch(err => {
+            document.getElementById('thinking').textContent += "\n[Error]\n";
+            document.getElementById('response').textContent = "Request failed: " + err;
         });
+    }
 
-        eventSource.onerror = (err) => {
-            console.error('EventSource failed:', err);
-            eventSource.close();
-            thinkingArea.textContent += "\nConnection closed.";
-        };
+    function startOpenAIStyle() {
+        const query = document.getElementById('queryInput').value;
+        document.getElementById('thinking').textContent = "Thinking started (OpenAI style)...\n";
+        document.getElementById('response').textContent = "Awaiting response...";
+
+        fetch('http://127.0.0.1:5000/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messages: [
+                    { role: "user", content: query }
+                ]
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('thinking').textContent += "Done!\n";
+            if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+                document.getElementById('response').innerHTML = marked.parse(data.choices[0].message.content);
+            } else if (data.error) {
+                document.getElementById('response').textContent = data.error;
+            } else {
+                document.getElementById('response').textContent = "No response received.";
+            }
+        })
+        .catch(err => {
+            document.getElementById('thinking').textContent += "\n[Error]\n";
+            document.getElementById('response').textContent = "Request failed: " + err;
+        });
     }
 </script>
 

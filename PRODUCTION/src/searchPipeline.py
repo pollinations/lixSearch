@@ -8,8 +8,15 @@ from tools import tools
 from datetime import datetime, timezone
 from getTimeZone import get_timezone_and_offset, convert_utc_to_local
 import time
+import logging
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("elixpo")
 event_sources = {}
+POLLINATIONS_ENDPOINT = "https://text.pollinations.ai/openai"
+headers = {"Content-Type": "application/json"}
+
+
 def track_event(event_id, event):
     if event_id not in event_sources or event_sources[event_id] == "done":
         event_sources[event_id] = []
@@ -23,15 +30,14 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
     def emit_event(msg):
         if event_id:
             track_event(event_id, {"timestamp": time.time(), "message": msg})
+
     current_utc_datetime = datetime.now(timezone.utc)
     current_utc_time = current_utc_datetime.strftime("%H:%M UTC")
     current_utc_date = current_utc_datetime.strftime("%Y-%m-%d")
 
-    emit_event(f"[INFO] Running ElixpoSearch at {current_utc_date} {current_utc_time} UTC...")
-    emit_event(f"[INFO] User Query: {user_query}")
+    # 1. Start event
+    emit_event(f"[INFO] Picking up the Process! [INFO]")
 
-    POLLINATIONS_ENDPOINT = "https://text.pollinations.ai/openai"
-    headers = {"Content-Type": "application/json"}
     messages = [
         {
             "role": "system",
@@ -112,13 +118,18 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
     }
 
     try:
+        emit_event("[INFO] Sending initial query to LLM API...")
         response = requests.post(POLLINATIONS_ENDPOINT, headers=headers, json=payload)
         response.raise_for_status()
         response_data = response.json()
+        emit_event("[INFO] Received response from LLM API.")
     except requests.exceptions.RequestException as e:
         emit_event(f"[ERROR] Initial ElixpoSearch API call failed: {e}")
-        print(f"[ERROR] Initial ElixpoSearch API call failed: {e}")
+        logger.info(f"[ERROR] Initial ElixpoSearch API call failed: {e}")
+        if event_id:
+            mark_event_done(event_id)
         return
+
     assistant_message = response_data["choices"][0]["message"]
     messages.append(assistant_message)
 
@@ -128,42 +139,54 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
         for tool_call in tool_calls:
             function_name = tool_call["function"]["name"]
             function_args = json.loads(tool_call["function"]["arguments"])
-            emit_event(f"[INFO] Running tool: {function_name} with args: {function_args}")
-            print(f"[INFO] Running tool: {function_name} with args: {function_args}")
+            emit_event(f"[INFO] Intent Determined - Function `{function_name}` Called [INFO]")
+            logger.info(f"[INFO] Running tool: {function_name} with args: {function_args}")
 
-            if function_name == "cleanQuery":
-                tool_result = cleanQuery(function_args.get("query"))
-            elif function_name == "get_timezone_and_offset":
-                location_name = function_args.get("location_name")
-                timezone_str, utc_offset = get_timezone_and_offset(location_name)
-                local_time = convert_utc_to_local(current_utc_datetime, utc_offset)
-                location_details = (
-                    f"Location: {location_name}, "
-                    f"Timezone: {timezone_str}, "
-                    f"UTC Offset: {utc_offset}, "
-                    f"Local Time: {local_time}"
-                )
-                tool_result = location_details
-            elif function_name == "web_search":
-                search_results = web_search(function_args.get("query"))
-                summaries = ""
-                for url in search_results:
-                    try:
-                        text_content, image_urls = fetch_full_text(url)
-                        text_content = text_content[:500]
-                        summaries += f"\nURL: {url}\nSummary: {text_content if text_content else '[Could not fetch or summarize this page.]'}\nImages: {image_urls}\n"
-                    except Exception as e:
-                        emit_event(f"[WARN] Failed to fetch or summarize {url}: {e}")
-                        print(f"[WARN] Failed to fetch or summarize {url}: {e}")
-                        continue
-                tool_result = summaries
-            elif function_name == "get_youtube_metadata":
-                tool_result = get_youtube_metadata(function_args.get("url"))
-            elif function_name == "get_youtube_transcript":
-                tool_result = get_youtube_transcript(function_args.get("url"))
-            elif function_name == "fetch_full_text":
-                tool_result = fetch_full_text(function_args.get("url"))
-            else:
+            try:
+                if function_name == "cleanQuery":
+                    emit_event("[INFO] Cleaning query...")
+                    tool_result = cleanQuery(function_args.get("query"))
+                elif function_name == "get_timezone_and_offset":
+                    emit_event("[INFO] Getting timezone and offset...")
+                    location_name = function_args.get("location_name")
+                    timezone_str, utc_offset = get_timezone_and_offset(location_name)
+                    local_time = convert_utc_to_local(current_utc_datetime, utc_offset)
+                    location_details = (
+                        f"Location: {location_name}, "
+                        f"Timezone: {timezone_str}, "
+                        f"UTC Offset: {utc_offset}, "
+                        f"Local Time: {local_time}"
+                    )
+                    tool_result = location_details
+                elif function_name == "web_search":
+                    emit_event("[INFO] Surfing Web! [INFO]")
+                    search_results = web_search(function_args.get("query"))
+                    summaries = ""
+                    for url in search_results:
+                        try:
+                            emit_event(f"[INFO] Fetching and summarizing: {url}")
+                            text_content, image_urls = fetch_full_text(url)
+                            text_content = text_content[:500]
+                            summaries += f"\nURL: {url}\nSummary: {text_content if text_content else '[Could not fetch or summarize this page.]'}\nImages: {image_urls}\n"
+                        except Exception as e:
+                            emit_event(f"[WARN] Failed to fetch or summarize {url}: {e}")
+                            logger.info(f"[WARN] Failed to fetch or summarize {url}: {e}")
+                            continue
+                    tool_result = summaries
+                elif function_name == "get_youtube_metadata":
+                    emit_event("[INFO] Getting YouTube metadata...")
+                    tool_result = get_youtube_metadata(function_args.get("url"))
+                elif function_name == "get_youtube_transcript":
+                    emit_event("[INFO] Fetching YouTube transcript...")
+                    tool_result = get_youtube_transcript(function_args.get("url"))
+                elif function_name == "fetch_full_text":
+                    emit_event("[INFO] Summarizing Information [INFO]")
+                    tool_result = fetch_full_text(function_args.get("url"))
+                else:
+                    tool_result = {}
+            except Exception as e:
+                emit_event(f"[ERROR] Tool `{function_name}` failed: {e}")
+                logger.info(f"[ERROR] Tool `{function_name}` failed: {e}")
                 tool_result = {}
 
             messages.append({
@@ -172,7 +195,9 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
                 "name": function_name,
                 "content": tool_result
             })
+            emit_event(f"[INFO] Tool `{function_name}` finished.")
 
+        emit_event(f"[INFO] Exiting Pool [INFO]")
         collected_sources = []
         collected_images = []
 
@@ -220,7 +245,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
                        "Remember to mention if any information might be time-sensitive relative to today's date and time."
                        f"{sources_md}"
         })
-
+        emit_event(f"[INFO] Wrapping Up! [INFO]")
         final_payload = {
             "model": "openai",
             "messages": messages,
@@ -233,24 +258,33 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
         }
 
         try:
+            emit_event("[INFO] Sending final summary request to LLM API...")
             final_response = requests.post(POLLINATIONS_ENDPOINT, headers=headers, json=final_payload)
             final_response.raise_for_status()
             final_message = final_response.json()['choices'][0]['message']['content']
-            emit_event("\n--- ElixpoSearch Final Answer ---\n")
-            print("\n--- ElixpoSearch Final Answer ---\n")
-            print(final_message)
+            emit_event("[INFO] Success [INFO]")
+            logger.info(final_message)
+            # Send the final response as a special event for SSE
+            if event_id:
+                track_event(event_id, {"timestamp": time.time(), "final": True, "content": final_message})
+                mark_event_done(event_id)
+            return final_message
         except requests.exceptions.RequestException as e:
-            emit_event(f"[ERROR] Final ElixpoSearch API call failed: {e}")
-            print(f"[ERROR] Final ElixpoSearch API call failed: {e}")
-            
+            emit_event("[INFO] Sadly, Failed [INFO]")
+            logger.info(f"[ERROR] Final ElixpoSearch API call failed: {e}")
+            if event_id:
+                mark_event_done(event_id)
+            return None
+
     else:
-        emit_event("\n--- ElixpoSearch Answer ---\n")
-        print(response_data['choices'][0]['message']['content'])
-
-    if event_id:
-        mark_event_done(event_id)
-
+        emit_event("[INFO] No tool calls needed, sending final response...")
+        final_content = response_data['choices'][0]['message']['content']
+        logger.info(final_content)
+        if event_id:
+            track_event(event_id, {"timestamp": time.time(), "final": True, "content": final_content})
+            mark_event_done(event_id)
+        return final_content
 
 if __name__ == "__main__":
-    user_query = "what's the latest research in the field of quantum computing?"
+    user_query = "What's 1+1?"
     run_elixposearch_pipeline(user_query)

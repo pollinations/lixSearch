@@ -7,13 +7,13 @@ from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 from collections import defaultdict
 from datetime import datetime
-from waitress import serve
 from searchPipeline import run_elixposearch_pipeline, track_event, mark_event_done, event_sources
+import logging
 
-
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("elixpo")
 app = Flask(__name__)
 CORS(app)
-
 
 @app.route("/search", methods=["GET", "POST"])
 @app.route("/search/", methods=["GET", "POST"])
@@ -45,7 +45,6 @@ def search(anything=None):
 
     return jsonify({"output": "\n".join(output)})
 
-
 @app.route("/search/sse", methods=["GET", "POST"])
 @app.route("/search/sse/", methods=["GET", "POST"])
 @app.route("/search/sse/<path:anything>", methods=["GET", "POST"])
@@ -56,6 +55,7 @@ def search_sse(anything=None):
     if request.method == "POST":
         data = request.get_json(force=True)
         user_query = data.get("query", "")
+        logger.info(f"Received POST query: {user_query}")
     else:
         user_query = request.args.get("query", "")
 
@@ -66,17 +66,13 @@ def search_sse(anything=None):
     event_sources[event_id] = []
 
     def pipeline_thread():
-        def event_print(*args, **kwargs):
-            msg = " ".join(str(a) for a in args)
-            track_event(event_id, {"timestamp": time.time(), "message": msg})
-        orig_print = __builtins__.print
-        __builtins__.print = event_print
         try:
-            print(f"Starting ElixpoSearch pipeline for query: {user_query}")
             run_elixposearch_pipeline(user_query, event_id=event_id)
-        finally:
-            __builtins__.print = orig_print
+        except Exception as e:
+            # Always mark done on error
             mark_event_done(event_id)
+            track_event(event_id, {"timestamp": time.time(), "message": f"[ERROR] {e}"})
+            logger.info(f"[ERROR] {e}")
 
     threading.Thread(target=pipeline_thread, daemon=True).start()
 
@@ -88,16 +84,20 @@ def search_sse(anything=None):
                 break
             if last_sent < len(events):
                 for i in range(last_sent, len(events)):
-                    yield f"data: {json.dumps(events[i])}\n\n"
+                    event = events[i]
+                    # Always send every event as a generic message event
+                    yield f"data: {json.dumps(event)}\n\n"
+                    # If this is the final response, also send as a special event
+                    if event.get("final"):
+                        yield f"event: final\ndata: {json.dumps(event)}\n\n"
                 last_sent = len(events)
-            time.sleep(0.5)
+            time.sleep(0.02)
         yield "event: close\ndata: {}\n\n"
 
     return Response(
         stream_with_context(robust_event_stream(event_id)),
         mimetype="text/event-stream"
     )
-
 
 @app.route("/v1/chat/completions", methods=["GET", "POST"])
 def openai_compatible():
@@ -147,7 +147,6 @@ def openai_compatible():
         }]
     })
 
-
 @app.route("/")
 def index():
     return jsonify({
@@ -157,8 +156,5 @@ def index():
         "model": "elixposearch"
     })
 
-
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    print(f"Starting ElixpoSearch API on port {port} ...")
-    serve(app, host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
