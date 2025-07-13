@@ -23,7 +23,6 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
     def emit_event(msg):
         if event_id:
             track_event(event_id, {"timestamp": time.time(), "message": msg})
-        print(msg)
     current_utc_datetime = datetime.now(timezone.utc)
     current_utc_time = current_utc_datetime.strftime("%H:%M UTC")
     current_utc_date = current_utc_datetime.strftime("%Y-%m-%d")
@@ -101,7 +100,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
     ]
 
     payload = {
-        "model": "openai-fast",
+        "model": "openai",
         "messages": messages,
         "tools": tools,
         "tool_choice": "auto",
@@ -223,7 +222,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
         })
 
         final_payload = {
-            "model": "openai-fast",
+            "model": "openai",
             "messages": messages,
             "tools": tools,
             "tool_choice": "auto",
@@ -246,7 +245,6 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
             
     else:
         emit_event("\n--- ElixpoSearch Answer ---\n")
-        print("\n--- ElixpoSearch Answer ---\n")
         print(response_data['choices'][0]['message']['content'])
 
     if event_id:
@@ -254,5 +252,5 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
 
 
 if __name__ == "__main__":
-    user_query = "Summarize me this video https://youtu.be/7fkS-18KBlw?si=-rJeSmGuNdawc9EY. What's the latest research in this field?"
+    user_query = "what's the latest research in the field of quantum computing?"
     run_elixposearch_pipeline(user_query)

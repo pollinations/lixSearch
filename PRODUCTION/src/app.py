@@ -11,24 +11,14 @@ from waitress import serve
 from searchPipeline import run_elixposearch_pipeline, track_event, mark_event_done, event_sources
 
 
-def event_stream_generator(event_id):
-    last_sent = 0
-    while True:
-        events = event_sources.get(event_id, [])
-        if last_sent < len(events):
-            for i in range(last_sent, len(events)):
-                yield f"data: {json.dumps(events[i])}\n\n"
-            last_sent = len(events)
-        time.sleep(0.5)
-        if event_sources.get(event_id, None) == "done":
-            break
-
 app = Flask(__name__)
 CORS(app)
 
 
 @app.route("/search", methods=["GET", "POST"])
-def search():
+@app.route("/search/", methods=["GET", "POST"])
+@app.route("/search/<path:anything>", methods=["GET", "POST"])
+def search(anything=None):
     """
     Normal GET/POST endpoint for ElixpoSearch.
     """
@@ -57,7 +47,9 @@ def search():
 
 
 @app.route("/search/sse", methods=["GET", "POST"])
-def search_sse():
+@app.route("/search/sse/", methods=["GET", "POST"])
+@app.route("/search/sse/<path:anything>", methods=["GET", "POST"])
+def search_sse(anything=None):
     """
     SSE endpoint for live event streaming.
     """
@@ -88,8 +80,21 @@ def search_sse():
 
     threading.Thread(target=pipeline_thread, daemon=True).start()
 
+    def robust_event_stream(event_id):
+        last_sent = 0
+        while True:
+            events = event_sources.get(event_id, [])
+            if events == "done":
+                break
+            if last_sent < len(events):
+                for i in range(last_sent, len(events)):
+                    yield f"data: {json.dumps(events[i])}\n\n"
+                last_sent = len(events)
+            time.sleep(0.5)
+        yield "event: close\ndata: {}\n\n"
+
     return Response(
-        stream_with_context(event_stream_generator(event_id)),
+        stream_with_context(robust_event_stream(event_id)),
         mimetype="text/event-stream"
     )
 
