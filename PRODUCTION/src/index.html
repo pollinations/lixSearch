@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ElixpoSearch Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 50px auto;
+            max-width: 600px;
+            color: #333;
+        }
+        #thinking {
+            padding: 1em;
+            background: #f9f9f9;
+            border-left: 4px solid #00c3ff;
+            margin-bottom: 1em;
+            white-space: pre-wrap;
+            font-family: monospace;
+            color: #555;
+        }
+        #response {
+            padding: 1em;
+            border: 1px solid #ccc;
+            background: #fff;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+
+<h1>ElixpoSearch</h1>
+
+<input type="text" id="queryInput" placeholder="Type your question here..." style="width: 80%; padding: 10px;" value="what's 1+1?">
+<button onclick="startSearch()" style="padding: 10px;">Search</button>
+
+<h3>Thinking...</h3>
+<div id="thinking">No activity yet.</div>
+
+<h3>Final Response:</h3>
+<div id="response">Awaiting response...</div>
+
+<script>
+    let eventSource;
+
+    function startSearch() {
+        const query = document.getElementById('queryInput').value;
+        document.getElementById('thinking').textContent = "Thinking started...\n";
+        document.getElementById('response').textContent = "Awaiting response...";
+
+        if (eventSource) {
+            eventSource.close();
+        }
+
+        fetch('https://127.0.0.1:5000/search/sse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query })
+        }).then(() => {
+            eventSource = new EventSource('https://127.0.0.1:5000/search/sse?query=' + encodeURIComponent(query));
+
+            let thinkingArea = document.getElementById('thinking');
+            let fullResponse = '';
+
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                thinkingArea.textContent += data.message + "\n";
+
+                if (thinkingArea.textContent.length > 5000) {
+                    thinkingArea.textContent = thinkingArea.textContent.slice(-5000); // Keep it readable
+                }
+
+                if (data.message.startsWith('--- ElixpoSearch Final Answer ---')) {
+                    fullResponse = '';
+                }
+
+                // Collect final response
+                if (data.message.startsWith('--- ElixpoSearch Final Answer ---') || 
+                    fullResponse !== '') {
+                    fullResponse += data.message + '\n';
+                }
+
+                // When 'done' is received, render
+                if (eventSource.readyState === EventSource.CLOSED || data.done) {
+                    eventSource.close();
+                    document.getElementById('response').innerHTML = marked.parse(fullResponse);
+                }
+            };
+
+            eventSource.onerror = (err) => {
+                console.error('EventSource failed:', err);
+                eventSource.close();
+                thinkingArea.textContent += "\nConnection closed.";
+            };
+        });
+    }
+</script>
+
+<!-- Include marked.js for Markdown rendering -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+</body>
+</html>

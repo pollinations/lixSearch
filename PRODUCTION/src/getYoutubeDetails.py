@@ -16,7 +16,7 @@ import yt_dlp
 
 
 get_youtube_video_metadata_show_log = False
-MAX_TRANSCRIPT_WORD_COUNT = 5000
+MAX_TRANSCRIPT_WORD_COUNT = 1000
 
 
 def get_youtube_video_id(url):
@@ -58,10 +58,8 @@ def get_youtube_metadata(url, show_logs=get_youtube_video_metadata_show_log):
         title = info.get('title')
         duration = info.get('duration', 0)
         duration_m, duration_s = divmod(duration, 60)
-        return {
-            "title": title,
-            "duration": f"{duration_m}m {duration_s}s"
-        }
+        finalDetails = f"{title} ({duration_m}m {duration_s}s)"
+        return finalDetails
 
 
 

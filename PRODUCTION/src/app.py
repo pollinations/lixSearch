@@ -3,43 +3,15 @@ import sys
 import time
 import json
 import threading
-from functools import wraps
 from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from waitress import serve
-from searchPipeline import run_elixposearch_pipeline
+from searchPipeline import run_elixposearch_pipeline, track_event, mark_event_done, event_sources
 
-
-
-# Import the ElixpoSearch pipeline
-sys.path.append(os.path.dirname(__file__))
-
-# --- Rate Limiting ---
-RATE_LIMIT = 10  # requests
-RATE_PERIOD = 60  # seconds
-
-client_requests = defaultdict(list)
-
-def rate_limiter(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        client_ip = request.remote_addr or "global"
-        now = datetime.utcnow()
-        window = [t for t in client_requests[client_ip] if now - t < timedelta(seconds=RATE_PERIOD)]
-        if len(window) >= RATE_LIMIT:
-            return jsonify({"error": "Rate limit exceeded. Try again later."}), 429
-        window.append(now)
-        client_requests[client_ip] = window
-        return func(*args, **kwargs)
-    return wrapper
-
-# --- Event Sourcing ---
-event_sources = {}
 
 def event_stream_generator(event_id):
-    """Yield events for a given event_id."""
     last_sent = 0
     while True:
         events = event_sources.get(event_id, [])
@@ -51,20 +23,11 @@ def event_stream_generator(event_id):
         if event_sources.get(event_id, None) == "done":
             break
 
-def track_event(event_id, event):
-    if event_id not in event_sources or event_sources[event_id] == "done":
-        event_sources[event_id] = []
-    event_sources[event_id].append(event)
-
-def mark_event_done(event_id):
-    event_sources[event_id] = "done"
-
-# --- Flask App ---
 app = Flask(__name__)
 CORS(app)
 
+
 @app.route("/search", methods=["GET", "POST"])
-@rate_limiter
 def search():
     """
     Normal GET/POST endpoint for ElixpoSearch.
@@ -78,13 +41,11 @@ def search():
     if not user_query:
         return jsonify({"error": "Missing 'query' parameter."}), 400
 
-    # Run the pipeline and capture stdout for progress
     output = []
     def capture_print(*args, **kwargs):
         msg = " ".join(str(a) for a in args)
         output.append(msg)
 
-    # Patch print temporarily
     orig_print = __builtins__.print
     __builtins__.print = capture_print
     try:
@@ -94,14 +55,18 @@ def search():
 
     return jsonify({"output": "\n".join(output)})
 
-@app.route("/search/sse", methods=["POST"])
-@rate_limiter
+
+@app.route("/search/sse", methods=["GET", "POST"])
 def search_sse():
     """
     SSE endpoint for live event streaming.
     """
-    data = request.get_json(force=True)
-    user_query = data.get("query", "")
+    if request.method == "POST":
+        data = request.get_json(force=True)
+        user_query = data.get("query", "")
+    else:
+        user_query = request.args.get("query", "")
+
     if not user_query:
         return jsonify({"error": "Missing 'query' parameter."}), 400
 
@@ -115,7 +80,8 @@ def search_sse():
         orig_print = __builtins__.print
         __builtins__.print = event_print
         try:
-            run_elixposearch_pipeline(user_query)
+            print(f"Starting ElixpoSearch pipeline for query: {user_query}")
+            run_elixposearch_pipeline(user_query, event_id=event_id)
         finally:
             __builtins__.print = orig_print
             mark_event_done(event_id)
@@ -127,22 +93,24 @@ def search_sse():
         mimetype="text/event-stream"
     )
 
-@app.route("/v1/chat/completions", methods=["POST"])
-@rate_limiter
+
+@app.route("/v1/chat/completions", methods=["GET", "POST"])
 def openai_compatible():
     """
     OpenAI-compatible endpoint.
     """
-    data = request.get_json(force=True)
-    user_query = ""
-    if "messages" in data and isinstance(data["messages"], list):
-        # Use the last user message
-        for msg in reversed(data["messages"]):
-            if msg.get("role") == "user":
-                user_query = msg.get("content", "")
-                break
-    elif "query" in data:
-        user_query = data["query"]
+    if request.method == "POST":
+        data = request.get_json(force=True)
+        user_query = ""
+        if "messages" in data and isinstance(data["messages"], list):
+            for msg in reversed(data["messages"]):
+                if msg.get("role") == "user":
+                    user_query = msg.get("content", "")
+                    break
+        elif "query" in data:
+            user_query = data["query"]
+    else:
+        user_query = request.args.get("query", "")
 
     if not user_query:
         return jsonify({"error": "Missing user query."}), 400
@@ -159,12 +127,11 @@ def openai_compatible():
     finally:
         __builtins__.print = orig_print
 
-    # OpenAI compatible response
     return jsonify({
         "id": f"elixpo-{int(time.time())}",
         "object": "chat.completion",
         "created": int(time.time()),
-        "model": "elixpo-search",
+        "model": "elixposearch",
         "choices": [{
             "index": 0,
             "message": {
@@ -175,13 +142,16 @@ def openai_compatible():
         }]
     })
 
+
 @app.route("/")
 def index():
     return jsonify({
         "service": "ElixpoSearch API",
         "endpoints": ["/search", "/search/sse", "/v1/chat/completions"],
-        "rate_limit": f"{RATE_LIMIT} requests per {RATE_PERIOD} seconds"
+        "rate_limit": "None (disabled)",
+        "model": "elixposearch"
     })
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

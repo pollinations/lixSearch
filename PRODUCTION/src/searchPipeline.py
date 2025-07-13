@@ -7,12 +7,29 @@ from scrape import fetch_full_text
 from tools import tools
 from datetime import datetime, timezone
 from getTimeZone import get_timezone_and_offset, convert_utc_to_local
+import time
+
+event_sources = {}
+def track_event(event_id, event):
+    if event_id not in event_sources or event_sources[event_id] == "done":
+        event_sources[event_id] = []
+    event_sources[event_id].append(event)
+
+def mark_event_done(event_id):
+    event_sources[event_id] = "done"
 
 
-def run_elixposearch_pipeline(user_query: str):
+def run_elixposearch_pipeline(user_query: str, event_id: str = None):
+    def emit_event(msg):
+        if event_id:
+            track_event(event_id, {"timestamp": time.time(), "message": msg})
+        print(msg)
     current_utc_datetime = datetime.now(timezone.utc)
     current_utc_time = current_utc_datetime.strftime("%H:%M UTC")
     current_utc_date = current_utc_datetime.strftime("%Y-%m-%d")
+
+    emit_event(f"[INFO] Running ElixpoSearch at {current_utc_date} {current_utc_time} UTC...")
+    emit_event(f"[INFO] User Query: {user_query}")
 
     POLLINATIONS_ENDPOINT = "https://text.pollinations.ai/openai"
     headers = {"Content-Type": "application/json"}
@@ -100,6 +117,7 @@ def run_elixposearch_pipeline(user_query: str):
         response.raise_for_status()
         response_data = response.json()
     except requests.exceptions.RequestException as e:
+        emit_event(f"[ERROR] Initial ElixpoSearch API call failed: {e}")
         print(f"[ERROR] Initial ElixpoSearch API call failed: {e}")
         return
     assistant_message = response_data["choices"][0]["message"]
@@ -111,7 +129,7 @@ def run_elixposearch_pipeline(user_query: str):
         for tool_call in tool_calls:
             function_name = tool_call["function"]["name"]
             function_args = json.loads(tool_call["function"]["arguments"])
-
+            emit_event(f"[INFO] Running tool: {function_name} with args: {function_args}")
             print(f"[INFO] Running tool: {function_name} with args: {function_args}")
 
             if function_name == "cleanQuery":
@@ -136,6 +154,7 @@ def run_elixposearch_pipeline(user_query: str):
                         text_content = text_content[:500]
                         summaries += f"\nURL: {url}\nSummary: {text_content if text_content else '[Could not fetch or summarize this page.]'}\nImages: {image_urls}\n"
                     except Exception as e:
+                        emit_event(f"[WARN] Failed to fetch or summarize {url}: {e}")
                         print(f"[WARN] Failed to fetch or summarize {url}: {e}")
                         continue
                 tool_result = summaries
@@ -218,16 +237,22 @@ def run_elixposearch_pipeline(user_query: str):
             final_response = requests.post(POLLINATIONS_ENDPOINT, headers=headers, json=final_payload)
             final_response.raise_for_status()
             final_message = final_response.json()['choices'][0]['message']['content']
+            emit_event("\n--- ElixpoSearch Final Answer ---\n")
             print("\n--- ElixpoSearch Final Answer ---\n")
             print(final_message)
         except requests.exceptions.RequestException as e:
+            emit_event(f"[ERROR] Final ElixpoSearch API call failed: {e}")
             print(f"[ERROR] Final ElixpoSearch API call failed: {e}")
-            print("[INFO] Some sources may be down or unavailable.")
+            
     else:
+        emit_event("\n--- ElixpoSearch Answer ---\n")
         print("\n--- ElixpoSearch Answer ---\n")
         print(response_data['choices'][0]['message']['content'])
 
+    if event_id:
+        mark_event_done(event_id)
+
 
 if __name__ == "__main__":
-    user_query = "What's the time of Kolkata now? Shall i keep an umbrella with me?"
+    user_query = "Summarize me this video https://youtu.be/7fkS-18KBlw?si=-rJeSmGuNdawc9EY. What's the latest research in this field?"
     run_elixposearch_pipeline(user_query)
