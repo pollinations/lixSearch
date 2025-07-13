@@ -3,7 +3,7 @@ from time import sleep
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 
-
+MAX_LINKS_TO_TAKE = 4
 def google_search(query):
     blacklist = [
         "maps.google.", "support.google.", "accounts.google.", "policies.google.",
@@ -43,7 +43,7 @@ def google_search(query):
                     results.append(href)
 
             browser.close()
-            return results[:3]
+            return results[:MAX_LINKS_TO_TAKE]
     except Exception as e:
         print("❌ Google search failed:", e)
         return []
@@ -65,7 +65,7 @@ def mojeek_form_search(query):
         results = soup.select("ul.results-standard li")
         links = []
 
-        for r in results[:3]:
+        for r in results[:MAX_LINKS_TO_TAKE]:
             title_tag = r.select_one("a.title")
             if title_tag and title_tag.has_attr("href"):
                 links.append(title_tag["href"])
@@ -99,7 +99,7 @@ def ddgs_search(query):
             ):
                 links.append(href)
         print("[INFO] DDG search completed")
-        return links[:3]
+        return links[:MAX_LINKS_TO_TAKE]
 
     except Exception as e:
         print("❌ DDG search failed:", e)

@@ -4,7 +4,7 @@ from urllib.parse import urljoin, urlparse
 import re
 from conditional_print import conditional_print
 
-MAX_TOTAL_SCRAPE_WORD_COUNT = 500
+MAX_TOTAL_SCRAPE_WORD_COUNT = 1000
 MAX_IMAGES_TO_INCLUDE = 3
 scrape_website_show_log = True
 

@@ -30,7 +30,7 @@ def get_timezone_and_offset(location_name: str):
         sign = "+" if offset_seconds >= 0 else "-"
         offset_str = f"UTC{sign}{abs(offset_hours):02d}:{abs(offset_minutes):02d}"
 
-        return timezone_str, offset_str
+        return offset_str
 
     except Exception as e:
         print(f"[ERROR] Failed to get timezone for {location_name}: {e}")
@@ -49,6 +49,6 @@ def convert_utc_to_local(utc_datetime: datetime, offset_str: str):
 
 
 if __name__ == "__main__":
-    location = "USA"
+    location = "Kolkata"
     timezone, utc_offset = get_timezone_and_offset(location)
     print(f"[DEBUG] Timezone for {location}: {timezone}, Offset: {utc_offset}")

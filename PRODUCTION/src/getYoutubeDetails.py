@@ -16,7 +16,7 @@ import yt_dlp
 
 
 get_youtube_video_metadata_show_log = False
-MAX_TRANSCRIPT_WORD_COUNT = 1000
+MAX_TRANSCRIPT_WORD_COUNT = 2000
 
 
 def get_youtube_video_id(url):
