@@ -90,6 +90,91 @@
             width: 1.1em;
             height: 1.1em;
         }
+        #finalOutput h1, #finalOutput h2, #finalOutput h3 {
+    font-weight: 600;
+    color: #ffffff;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    }
+
+    #finalOutput h1 { font-size: 1.8rem; border-bottom: 1px solid #444ce7; padding-bottom: 0.2rem; }
+    #finalOutput h2 { font-size: 1.4rem; color: #b4b4b4; }
+    #finalOutput h3 { font-size: 1.2rem; color: #888; }
+
+    #finalOutput p {
+        color: #cfcfcf;
+        margin-bottom: 0.75rem;
+        line-height: 1.6;
+    }
+
+    #finalOutput blockquote {
+        border-left: 4px solid #444ce7;
+        background: #212223;
+        padding: 0.75rem 1rem;
+        margin: 1rem 0;
+        color: #b4b4b4;
+        font-style: italic;
+        border-radius: 0.5rem;
+    }
+
+    #finalOutput ul, #finalOutput ol {
+        padding-left: 1.5rem;
+        margin-bottom: 1rem;
+        color: #b4b4b4;
+    }
+
+    #finalOutput ul li::marker {
+        color: #444ce7;
+    }
+    #finalOutput code {
+        background: #18191a;
+        padding: 0.2em 0.4em;
+        border-radius: 0.25rem;
+        color: #58a6ff;
+        font-family: 'Fira Mono', 'Consolas', monospace;
+        font-size: 0.95em;
+    }
+
+    #finalOutput pre {
+        background: #1e1f20;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        overflow-x: auto;
+        color: #ccc;
+        font-family: 'Fira Mono', 'Consolas', monospace;
+        margin-bottom: 1rem;
+    }
+
+    /* Link Styling */
+    #finalOutput a {
+        color: #444ce7;
+        text-decoration: underline;
+        font-weight: 500;
+        transition: color 0.2s;
+    }
+    #finalOutput a:hover {
+        color: #3a41c5;
+    }
+
+    /* Images Grid */
+    #finalOutput img {
+        width: 250px;
+        height: 250px;
+        object-fit: cover;
+        border-radius: 0.75rem;
+        margin: 0.5rem;
+        box-shadow: 0 2px 5px #0003;
+    }
+
+    #finalOutput .image-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.75rem;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+    margin-top: 1rem;
+}
+
     </style>
 </head>
 <body class="bg-darkBg text-white min-h-screen flex items-center justify-center"> 
@@ -194,11 +279,31 @@
                                 data = data.trim();
                                 if (event === 'final-part') {
                                     finalChunks.push(data);
-                                } else if (event === 'final') {
+                                } 
+                                
+                                if (event === 'final') {
                                     finalChunks.push(data);
-                                    finalOutput.innerHTML = marked.parse(finalChunks.join(''));
+                                    let html = marked.parse(finalChunks.join(''));
+
+                                    // Collect all images
+                                    const tempDiv = document.createElement('div');
+                                    tempDiv.innerHTML = html;
+
+                                    const images = Array.from(tempDiv.querySelectorAll('img'));
+                                    if (images.length > 0) {
+                                        const imageGrid = document.createElement('div');
+                                        imageGrid.className = 'image-grid overflow-x-auto flex-nowrap';
+                                        images.forEach(img => {
+                                            imageGrid.appendChild(img);
+                                        });
+                                        tempDiv.querySelectorAll('img').forEach(img => img.remove());
+                                        tempDiv.appendChild(imageGrid);
+                                    }
+                                    finalOutput.innerHTML = tempDiv.innerHTML;
                                     finalChunks = [];
-                                } else if (event === 'error') {
+                                }
+
+                                else if (event === 'error') {
                                     finalOutput.innerHTML = `<span class="text-red-400">${data}</span>`;
                                 } else if (event) {
                                     let div = document.createElement('div');

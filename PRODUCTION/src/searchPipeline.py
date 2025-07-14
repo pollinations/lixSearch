@@ -53,7 +53,7 @@ def sse_format(event, data):
 
 def run_elixposearch_pipeline(user_query: str, event_id: str = None):
     if event_id: 
-        yield sse_format("info", "[INFO] Initiating Pipeline [INFO]")
+        yield sse_format("INFO", " Initiating Pipeline ")
 
     current_utc_datetime = datetime.now(timezone.utc)
     current_utc_time = current_utc_datetime.strftime("%H:%M UTC")
@@ -164,7 +164,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
     while current_iteration < max_iterations:
         current_iteration += 1
         if event_id:
-            yield sse_format("info", f"[INFO] Research Iteration Continued [INFO]")
+            yield sse_format("INFO", f" Research Iteration Continued ")
         payload = {
             "model": "openai",
             "messages": messages,
@@ -198,7 +198,8 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
             function_name = tool_call["function"]["name"]
             function_args = json.loads(tool_call["function"]["arguments"])
             if event_id:
-                yield sse_format("info", f"[INFO] Executing tool: {function_name} with args: {function_args}")
+                print(f"[INFO] Tool call detected: {function_name} with args: {function_args}")
+                yield sse_format("INFO", f" Execution In Progress ")
             tool_result = "[Tool execution failed or returned no data.]"
 
             try:
@@ -224,7 +225,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
 
                 elif function_name == "web_search":
                     if event_id:
-                        yield sse_format("info", f"[INFO] Surfing Internet [INFO]")
+                        yield sse_format("INFO", f" Surfing Internet ")
                     search_query = function_args.get("query")
                     search_results_raw = web_search(search_query)
                     summaries = ""
@@ -245,7 +246,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
 
                 elif function_name == "get_youtube_transcript":
                     if event_id:
-                        yield sse_format("info", f"[INFO] Watching Youtube [INFO]")
+                        yield sse_format("INFO", f" Watching Youtube ")
                     urls = [function_args.get("url")]
                     results = fetch_youtube_parallel(urls, mode='transcript')
                     for url, transcript in results.items():
@@ -255,7 +256,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
 
                 elif function_name == "fetch_full_text":
                     if event_id:
-                        yield sse_format("info", f"[INFO] Writing Script [INFO]")
+                        yield sse_format("INFO", f" Writing Script ")
                     urls = [function_args.get("url")]
                     parallel_results = fetch_url_content_parallel(urls)
                     for url, (text_content, image_urls) in parallel_results.items():
@@ -277,7 +278,8 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
                 "content": tool_result
             })
             if event_id:
-                yield sse_format("info", f"[INFO] Tool {function_name} execution complete.")
+                print(f"[INFO] Tool {function_name} executed successfully.")
+                yield sse_format("INFO", f" Execution Completed! ")
 
     if final_message_content:
         response_with_sources = final_message_content
@@ -295,7 +297,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
 
         response_with_sources += sources_md
         if event_id:
-            yield sse_format("info", "[INFO] SUCCESS [INFO]")
+            yield sse_format("INFO", " SUCCESS ")
             chunk_size = 5000 
             for i in range(0, len(response_with_sources), chunk_size):
                 chunk = response_with_sources[i:i+chunk_size]
