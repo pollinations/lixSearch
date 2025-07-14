@@ -3,17 +3,12 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 import re
 from conditional_print import conditional_print
-
-MAX_TOTAL_SCRAPE_WORD_COUNT = 1000
-MAX_IMAGES_TO_INCLUDE = 3
-scrape_website_show_log = True
-
-
+from config import SCRAPE_IMAGE, MAX_TOTAL_SCRAPE_WORD_COUNT, scrape_website_show_log, MAX_IMAGES_TO_INCLUDE
 
 
 def fetch_full_text(
     url,
-    scrape_images=True,
+    scrape_images=SCRAPE_IMAGE,
     total_word_count_limit=MAX_TOTAL_SCRAPE_WORD_COUNT,
     show_logs=scrape_website_show_log
 ):

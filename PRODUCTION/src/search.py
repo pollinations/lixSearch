@@ -2,8 +2,8 @@ import requests
 from time import sleep
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
+from config import MAX_LINKS_TO_TAKE
 
-MAX_LINKS_TO_TAKE = 4
 def google_search(query):
     blacklist = [
         "maps.google.", "support.google.", "accounts.google.", "policies.google.",

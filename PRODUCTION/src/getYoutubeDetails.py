@@ -1,11 +1,4 @@
 from urllib.parse import urlparse, parse_qs
-"""
-This module provides utilities to extract metadata and transcripts from YouTube videos.
-Functions:
-    get_youtube_video_id(url):  # Extracts the YouTube video ID from a given URL.
-    get_youtube_metadata(url, show_logs=False):  # Retrieves the title and duration of a YouTube video.
-    get_youtube_transcript(url, show_logs=True):  # Fetches the transcript of a YouTube video, truncated if too long.
-"""
 import re
 from conditional_print import conditional_print
 from pytube import YouTube, exceptions
@@ -13,10 +6,7 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import NoTranscriptFound, TranscriptsDisabled
 from youtube_transcript_api.formatters import TextFormatter
 import yt_dlp
-
-
-get_youtube_video_metadata_show_log = False
-MAX_TRANSCRIPT_WORD_COUNT = 3000
+from config import MAX_TRANSCRIPT_WORD_COUNT, get_youtube_video_metadata_show_log
 
 
 def get_youtube_video_id(url):

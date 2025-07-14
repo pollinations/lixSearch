@@ -10,8 +10,18 @@ from getTimeZone import get_timezone_and_offset, convert_utc_to_local
 import random
 import concurrent.futures
 import logging
+import dotenv
+import os
+
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("elixpo")
+dotenv.load_dotenv()
+
+POLLINATIONS_TOKEN=os.getenv("TOKEN")
+MODEL=os.getenv("MODEL")
+REFRRER=os.getenv("REFERRER")
+POLLINATIONS_ENDPOINT = "https://text.pollinations.ai/openai"
 
 
 def fetch_url_content_parallel(urls, max_workers=5):
@@ -58,7 +68,6 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
     current_utc_datetime = datetime.now(timezone.utc)
     current_utc_time = current_utc_datetime.strftime("%H:%M UTC")
     current_utc_date = current_utc_datetime.strftime("%Y-%m-%d")
-    POLLINATIONS_ENDPOINT = "https://text.pollinations.ai/openai"
     headers = {"Content-Type": "application/json"}
 
     memoized_results = {
@@ -166,11 +175,12 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
         if event_id:
             yield sse_format("INFO", f" Research Iteration Continued ")
         payload = {
-            "model": "openai",
+            "model": MODEL,
             "messages": messages,
             "tools": tools,
             "tool_choice": "auto",
-            "token": "fEWo70t94146ZYgk",
+            "token": POLLINATIONS_TOKEN,
+            "referrer": REFRRER,
             "temperature": 0.7,
             "private": True,
             "seed": random.randint(1000, 9999)

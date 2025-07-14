@@ -1,17 +1,5 @@
 import re 
-"""
-Extracts website and YouTube URLs from the input query string, removes them from the query, 
-and returns a tuple containing a list of website URLs, a list of YouTube URLs, and the cleaned query string.
-Args:
-    query (str): The input string potentially containing URLs.
-Returns:
-    tuple: A tuple containing:
-        - website_urls (list): List of extracted website URLs (excluding YouTube).
-        - youtube_urls (list): List of extracted YouTube URLs.
-        - cleaned_query (str): The input query string with URLs removed and whitespace cleaned.
-"""
 from urllib.parse import urlparse
-
 
 def cleanQuery(query):
     print("[INFO] Cleaning User Query")
