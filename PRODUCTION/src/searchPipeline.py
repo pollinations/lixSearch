@@ -47,7 +47,9 @@ def fetch_youtube_parallel(urls, mode='metadata', max_workers=5):
         return results
 
 def sse_format(event, data):
-    return f"event: {event}\ndata: {data}\n\n"
+    lines = data.splitlines()
+    data_str = ''.join(f"data: {line}\n" for line in lines)
+    return f"event: {event}\n{data_str}\n\n"
 
 def run_elixposearch_pipeline(user_query: str, event_id: str = None):
     if event_id: 
@@ -294,7 +296,12 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
         response_with_sources += sources_md
         if event_id:
             yield sse_format("info", "[INFO] SUCCESS [INFO]")
-            yield sse_format("final", response_with_sources)
+            chunk_size = 5000 
+            for i in range(0, len(response_with_sources), chunk_size):
+                chunk = response_with_sources[i:i+chunk_size]
+                # Use the same event name for all chunks except the last
+                event_name = "final" if i + chunk_size >= len(response_with_sources) else "final-part"
+                yield sse_format(event_name, chunk)
         else:
             print("\n--- ElixpoSearch Final Answer ---\n")
             print(response_with_sources)

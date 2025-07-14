@@ -163,6 +163,7 @@
             clearOutputs();
             if (sseToggle.checked) {
                 sseFeed.style.display = 'block';
+                let finalChunks = [];
                 fetch(`${SERVER_URL}/search/sse`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -173,7 +174,13 @@
                     let buffer = '';
                     function read() {
                         reader.read().then(({ done, value }) => {
-                            if (done) return;
+                            if (done) {
+                                // On stream end, join all final-part chunks if any
+                                if (finalChunks.length > 0) {
+                                    finalOutput.innerHTML = marked.parse(finalChunks.join(''));
+                                }
+                                return;
+                            }
                             buffer += decoder.decode(value, { stream: true });
                             let parts = buffer.split('\n\n');
                             buffer = parts.pop();
@@ -185,8 +192,12 @@
                                     if (line.startsWith('data:')) data += line.replace('data:', '').trim() + '\n';
                                 }
                                 data = data.trim();
-                                if (event === 'final') {
-                                    finalOutput.innerHTML = marked.parse(data);
+                                if (event === 'final-part') {
+                                    finalChunks.push(data);
+                                } else if (event === 'final') {
+                                    finalChunks.push(data);
+                                    finalOutput.innerHTML = marked.parse(finalChunks.join(''));
+                                    finalChunks = [];
                                 } else if (event === 'error') {
                                     finalOutput.innerHTML = `<span class="text-red-400">${data}</span>`;
                                 } else if (event) {
