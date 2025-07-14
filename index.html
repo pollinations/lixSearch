@@ -90,164 +90,207 @@
             width: 1.1em;
             height: 1.1em;
         }
-        #finalOutput h1, #finalOutput h2, #finalOutput h3 {
-    font-weight: 600;
-    color: #ffffff;
-    margin-top: 1rem;
-    margin-bottom: 0.5rem;
-    }
 
-    #finalOutput h1 { font-size: 1.8rem; border-bottom: 1px solid #444ce7; padding-bottom: 0.2rem; }
-    #finalOutput h2 { font-size: 1.4rem; color: #b4b4b4; }
-    #finalOutput h3 { font-size: 1.2rem; color: #888; }
+        /* Improved Markdown Styling for finalOutput */
+        #finalOutput h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.3rem;
+            border-bottom: 1px solid #444ce7; /* Primary color border for h1 */
+        }
 
-    #finalOutput p {
-        color: #cfcfcf;
-        margin-bottom: 0.75rem;
-        line-height: 1.6;
-    }
+        #finalOutput h2 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: #ffffff;
+            margin-top: 1.8rem;
+            margin-bottom: 0.8rem;
+            padding-bottom: 0.2rem;
+            border-bottom: 1px solid #3a3b3c; /* Subtle grey border for h2 */
+        }
 
-    #finalOutput blockquote {
-        border-left: 4px solid #444ce7;
-        background: #212223;
-        padding: 0.75rem 1rem;
-        margin: 1rem 0;
-        color: #b4b4b4;
-        font-style: italic;
-        border-radius: 0.5rem;
-    }
+        #finalOutput h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #ffffff;
+            margin-top: 1.5rem;
+            margin-bottom: 0.7rem;
+        }
 
-    #finalOutput ul, #finalOutput ol {
-        padding-left: 1.5rem;
-        margin-bottom: 1rem;
-        color: #b4b4b4;
-    }
+        #finalOutput p {
+            color: #cfcfcf;
+            margin-bottom: 0.75rem;
+            line-height: 1.6;
+        }
 
-    #finalOutput ul li::marker {
-        color: #444ce7;
-    }
-    #finalOutput code {
-        background: #18191a;
-        padding: 0.2em 0.4em;
-        border-radius: 0.25rem;
-        color: #58a6ff;
-        font-family: 'Fira Mono', 'Consolas', monospace;
-        font-size: 0.95em;
-    }
+        #finalOutput blockquote {
+            border-left: 4px solid #444ce7;
+            background: #212223;
+            padding: 0.75rem 1rem;
+            margin: 1rem 0;
+            color: #b4b4b4;
+            font-style: italic;
+            border-radius: 0.5rem;
+        }
 
-    #finalOutput pre {
-        background: #1e1f20;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        overflow-x: auto;
-        color: #ccc;
-        font-family: 'Fira Mono', 'Consolas', monospace;
-        margin-bottom: 1rem;
-    }
+        #finalOutput ul, #finalOutput ol {
+            padding-left: 1.5rem;
+            margin-bottom: 1rem;
+            color: #b4b4b4;
+        }
 
-    /* Link Styling */
-    #finalOutput a {
-        color: #444ce7;
-        text-decoration: underline;
-        font-weight: 500;
-        transition: color 0.2s;
-    }
-    #finalOutput a:hover {
-        color: #3a41c5;
-    }
+        #finalOutput ul li::marker {
+            color: #444ce7;
+        }
 
-    /* Images Grid */
-    #finalOutput img {
-        width: 250px;
-        height: 250px;
-        object-fit: cover;
-        border-radius: 0.75rem;
-        margin: 0.5rem;
-        box-shadow: 0 2px 5px #0003;
-    }
+        #finalOutput code {
+            background: #18191a;
+            padding: 0.2em 0.4em;
+            border-radius: 0.25rem;
+            color: #58a6ff;
+            font-family: 'Fira Mono', 'Consolas', monospace;
+            font-size: 0.95em;
+        }
 
-    #finalOutput .image-grid {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 0.75rem;
-    overflow-x: auto;
-    padding-bottom: 1rem;
-    margin-top: 1rem;
-    }
-    .toggle-switch {
-    position: relative;
-    width: 44px;
-    height: 22px;
-}
-.toggle-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-.slider {
-    position: absolute;
-    cursor: pointer;
-    inset: 0;
-    background-color: #3a3b3c;
-    transition: .4s;
-    border-radius: 34px;
-}
-.slider:before {
-    position: absolute;
-    content: "";
-    height: 16px;
-    width: 16px;
-    left: 3px;
-    bottom: 3px;
-    background-color: white;
-    transition: .4s;
-    border-radius: 50%;
-}
-input:checked + .slider {
-    background-color: #444ce7;
-}
-input:checked + .slider:before {
-    transform: translateX(22px);
-}
+        #finalOutput pre {
+            background: #1e1f20;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            color: #ccc;
+            font-family: 'Fira Mono', 'Consolas', monospace;
+            margin-bottom: 1rem;
+        }
 
-.api-toggle {
-    background: #212223;
-    color: #b4b4b4;
-    padding: 0.5em 1em;
-    border-radius: 0.5rem;
-    cursor: pointer;
-    border: 1px solid #333;
-    transition: all 0.2s;
-    user-select: none;
-}
-.api-toggle:hover {
-    background: #2a2b2d;
-    color: #fff;
-    border-color: #444ce7;
-}
+        /* Link Styling */
+        #finalOutput a {
+            color: #444ce7;
+            text-decoration: underline;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        #finalOutput a:hover {
+            color: #3a41c5;
+        }
 
-.api-toggle.active {
-    background: #444ce7;
-    color: #fff;
-    border-color: transparent;
-}
+        /* Images Grid */
+        #finalOutput .image-grid {
+            display: flex;
+            flex-wrap: nowrap; /* Ensures images stay side-by-side */
+            gap: 1rem; /* Spacing between images */
+            overflow-x: auto; /* Enables horizontal scrolling */
+            padding: 0.5rem;
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+            background: #212223; /* Slightly darker background for the grid container */
+            border-radius: 0.75rem;
+            justify-content: flex-start;
+        }
 
-/* Modern Scrollbars */
-#sseFeed, #finalOutput {
-    scrollbar-width: thin;
-    scrollbar-color: #444ce7 #18191a;
-}
-#sseFeed::-webkit-scrollbar, #finalOutput::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-#sseFeed::-webkit-scrollbar-thumb, #finalOutput::-webkit-scrollbar-thumb {
-    background-color: #444ce7;
-    border-radius: 4px;
-}
-#sseFeed::-webkit-scrollbar-track, #finalOutput::-webkit-scrollbar-track {
-    background: #18191a;
-}
+        #finalOutput img {
+            width: 250px;
+            height: 250px;
+            object-fit: cover;
+            border-radius: 0.75rem;
+            box-shadow: 0 2px 5px #0003;
+            flex-shrink: 0; /* Prevents images from shrinking */
+        }
+
+        /* Strong and Emphatic Text */
+        #finalOutput strong {
+            font-weight: 700;
+            color: #fff;
+        }
+
+        #finalOutput em {
+            font-style: italic;
+            color: #b4b4b4; /* Slightly dimmed for emphasis */
+        }
+
+        /* Horizontal Rule */
+        #finalOutput hr {
+            border: none;
+            border-top: 1px solid #3a3b3c; /* Light grey line */
+            margin: 2rem 0;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 44px;
+            height: 22px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background-color: #3a3b3c;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #444ce7;
+        }
+        input:checked + .slider:before {
+            transform: translateX(22px);
+        }
+
+        .api-toggle {
+            background: #212223;
+            color: #b4b4b4;
+            padding: 0.5em 1em;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            border: 1px solid #333;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .api-toggle:hover {
+            background: #2a2b2d;
+            color: #fff;
+            border-color: #444ce7;
+        }
+
+        .api-toggle.active {
+            background: #444ce7;
+            color: #fff;
+            border-color: transparent;
+        }
+
+        /* Modern Scrollbars */
+        #sseFeed, #finalOutput, #finalOutput .image-grid {
+            scrollbar-width: thin;
+            scrollbar-color: #444ce7 #18191a;
+        }
+        #sseFeed::-webkit-scrollbar, #finalOutput::-webkit-scrollbar, #finalOutput .image-grid::-webkit-scrollbar {
+            width: 8px;
+            height: 8px; /* For horizontal scrollbar in image-grid */
+        }
+        #sseFeed::-webkit-scrollbar-thumb, #finalOutput::-webkit-scrollbar-thumb, #finalOutput .image-grid::-webkit-scrollbar-thumb {
+            background-color: #444ce7;
+            border-radius: 4px;
+        }
+        #sseFeed::-webkit-scrollbar-track, #finalOutput::-webkit-scrollbar-track, #finalOutput .image-grid::-webkit-scrollbar-track {
+            background: #18191a;
+        }
 
     </style>
 </head>
@@ -408,10 +451,14 @@ function doSearch() {
                 const images = Array.from(tempDiv.querySelectorAll('img'));
                 if (images.length > 0) {
                     const imageGrid = document.createElement('div');
-                    imageGrid.className = 'image-grid overflow-x-auto flex-nowrap';
+                    imageGrid.className = 'image-grid'; // CSS handles `overflow-x-auto flex-nowrap`
                     images.forEach(img => imageGrid.appendChild(img));
-                    tempDiv.querySelectorAll('img').forEach(img => img.remove());
-                    tempDiv.appendChild(imageGrid);
+                    // Remove images from their original parsed positions
+                    tempDiv.querySelectorAll('img').forEach(img => img.remove()); 
+                    // Insert the image grid at the beginning of the content or a suitable place
+                    // For simplicity, let's append it to the tempDiv.
+                    // If you want images to appear *before* text, you'd insertBefore.
+                    tempDiv.prepend(imageGrid); 
                 }
 
                 finalOutput.innerHTML = tempDiv.innerHTML;
@@ -422,25 +469,25 @@ function doSearch() {
     } 
 
     else if (useChatApi) {
-    finalOutput.innerHTML = '<span class="text-gray-400">Loading (Chat API)...</span>';
-    fetch(`${SERVER_URL}/search/v1/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            messages: [{ role: "user", content: input.value }]
+        finalOutput.innerHTML = '<span class="text-gray-400">Loading (Chat API)...</span>';
+        fetch(`${SERVER_URL}/search/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                messages: [{ role: "user", content: input.value }]
+            })
         })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.choices && data.choices[0]) {
-            showResult('Chat API', { result: data.choices[0].message.content });
-        } else {
-            showResult('Chat API', data);
-        }
-    })
-    .catch(e => showResult('Chat API', { error: e.toString() }));
-    return;
-}
+        .then(r => r.json())
+        .then(data => {
+            if (data.choices && data.choices[0]) {
+                showResult('Chat API', { result: data.choices[0].message.content });
+            } else {
+                showResult('Chat API', data);
+            }
+        })
+        .catch(e => showResult('Chat API', { error: e.toString() }));
+        return;
+    }
     
     else {
         sseFeed.style.display = 'none';
@@ -455,10 +502,6 @@ function doSearch() {
         .then(data => showResult('POST', data))
         .catch(e => showResult('POST', { error: e.toString() }));
     }
-
-
-    
-
 }
 
 submitButton.onclick = (e) => {

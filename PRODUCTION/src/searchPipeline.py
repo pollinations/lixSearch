@@ -160,7 +160,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
         },
         {
             "role": "user",
-            "content": f"This is the raw query from the user: {user_query}"
+            "content": f"Answer my query in detail -- : {user_query}"
         }
     ]
 
@@ -241,7 +241,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
                     summaries = ""
                     parallel_results = fetch_url_content_parallel(search_results_raw)
                     for url, (text_content, image_urls) in parallel_results.items():
-                        summaries += f"\nURL: {url}\nSummary: {text_content[:500]}\nImages: {image_urls}\n"
+                        summaries += f"\nURL: {url}\nSummary: {text_content}\nImages: {image_urls}\n"
                         collected_sources.append(url)
                         collected_images.extend(image_urls)
                     tool_result = summaries
@@ -260,7 +260,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
                     urls = [function_args.get("url")]
                     results = fetch_youtube_parallel(urls, mode='transcript')
                     for url, transcript in results.items():
-                        tool_result = f"YouTube Transcript for {url}:\n{transcript[:2000] if transcript else '[No transcript available]'}..."
+                        tool_result = f"YouTube Transcript for {url}:\n{transcript if transcript else '[No transcript available]'}..."
                         memoized_results["youtube_transcripts"][url] = tool_result
                         collected_sources.append(url)
 
@@ -270,7 +270,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
                     urls = [function_args.get("url")]
                     parallel_results = fetch_url_content_parallel(urls)
                     for url, (text_content, image_urls) in parallel_results.items():
-                        tool_result = f"URL: {url}\nText Preview: {text_content[:2000]}...\nImages Found: {len(image_urls)}"
+                        tool_result = f"URL: {url}\nText Preview: {text_content}...\nImages Found: {len(image_urls)}"
                         collected_sources.append(url)
                         collected_images.extend(image_urls)
                         memoized_results["fetched_urls"][url] = tool_result
