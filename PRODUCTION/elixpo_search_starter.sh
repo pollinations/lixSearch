@@ -25,4 +25,4 @@ pip install -r requirements.txt
 
 # Start the app with Waitress
 echo "Starting the app on port 5000..."
-waitress-serve --host=0.0.0.0 --port=5000 ai_search_agent_prod:app > access.log 2> error.log
+python3 src/app.py &
