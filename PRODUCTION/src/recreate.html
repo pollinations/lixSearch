@@ -36,7 +36,15 @@
         function showResult(label, data) {
             output.innerHTML = '';
             let div = document.createElement('div');
-            div.innerText = `[${label}] ${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}`;
+            // Show error if present, else show result
+            if (typeof data === 'object' && data !== null && data.error) {
+                div.innerText = `[${label}] ERROR: ${data.error}`;
+                div.id = 'error';
+            } else if (typeof data === 'object' && data !== null && data.result !== undefined) {
+                div.innerText = `[${label}] ${data.result}`;
+            } else {
+                div.innerText = `[${label}] ${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}`;
+            }
             output.appendChild(div);
         }
 
@@ -44,8 +52,8 @@
             output.innerHTML = 'Loading...';
             fetch(`http://127.0.0.1:5000/search?query=${encodeURIComponent(input.value)}`)
                 .then(r => r.json())
-                .then(data => showResult('GET', data.result || data.error || data))
-                .catch(e => showResult('GET', e.toString()));
+                .then(data => console.log(data))
+                .catch(e => showResult('GET', {error: e.toString()}));
         }
 
         function testPOST() {
@@ -56,8 +64,8 @@
                 body: JSON.stringify({ query: input.value })
             })
             .then(r => r.json())
-            .then(data => showResult('POST', data.result || data.error || data))
-            .catch(e => showResult('POST', e.toString()));
+            .then(data => showResult('POST', data))
+            .catch(e => showResult('POST', {error: e.toString()}));
         }
 
         function testOpenAI() {
@@ -73,10 +81,14 @@
             })
             .then(r => r.json())
             .then(data => {
-                let content = data?.choices?.[0]?.message?.content || data.error || data;
-                showResult('OpenAI', content);
+                let content = data?.choices?.[0]?.message?.content;
+                if (content !== undefined) {
+                    showResult('OpenAI', {result: content});
+                } else {
+                    showResult('OpenAI', data);
+                }
             })
-            .catch(e => showResult('OpenAI', e.toString()));
+            .catch(e => showResult('OpenAI', {error: e.toString()}));
         }
 
         function testSSE() {

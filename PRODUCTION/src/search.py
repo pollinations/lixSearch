@@ -106,37 +106,43 @@ def ddgs_search(query):
         return []
 
 
-
 def web_search(query):
-    print("[INFO] Web Searching")
+    print(f"[INFO] Running web search for: {query}")
 
     try:
-        results = ddgs_search(query)
-        if results:
-            return results
-    except Exception:
-        pass
-    
+        ddg_results = ddgs_search(query)
+        if ddg_results:
+            print(f"[INFO] Using DuckDuckGo with {len(ddg_results)} results.")
+            return ddg_results
+        else:
+            print("[INFO] DuckDuckGo returned no results. Falling back to Mojeek.")
+    except Exception as e:
+        print(f"[WARN] DuckDuckGo search failed with error: {e}. Falling back to Mojeek.")
 
     try:
-        results = mojeek_form_search(query)
-        print("[INFO] Using Mojeek search")
-        if results:
-            return results
-    except Exception:
-        pass
+        mojeek_results = mojeek_form_search(query)
+        if mojeek_results:
+            print(f"[INFO] Using Mojeek with {len(mojeek_results)} results.")
+            return mojeek_results
+        else:
+            print("[INFO] Mojeek returned no results. Falling back to Google.")
+    except Exception as e:
+        print(f"[WARN] Mojeek search failed with error: {e}. Falling back to Google.")
 
-    print("[INFO] Using Google search as fallback")
     try:
-        results = google_search(query)
-        print("[INFO] Using Google search")
-        if results:
-            return results
-    except Exception:
-        pass
+        google_results = google_search(query)
+        if google_results:
+            print(f"[INFO] Using Google with {len(google_results)} results.")
+            return google_results
+        else:
+            print("[INFO] Google returned no results.")
+    except Exception as e:
+        print(f"[WARN] Google search failed with error: {e}.")
 
+    print("[INFO] All search engines failed to return results.")
     return []
-# ---------- Testing ----------
+
+
 if __name__ == "__main__":
 
     print("\nDDGS:")
