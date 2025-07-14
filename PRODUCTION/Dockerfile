@@ -16,5 +16,5 @@ RUN pip install playwright && playwright install chromium
 COPY . .
 
 EXPOSE 5000
-ENV FLASK_APP=app.py
+ENV FLASK_APP=src/app.py
 CMD ["python3", "src/app.py"]

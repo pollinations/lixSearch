@@ -1,8 +1,8 @@
 import requests
 
 query = "artificial intelligence"
-url = f"http://51.15.192.16:5000/test"
+url = f"https://search.pollinations.ai/test"
 
 response = requests.get(url)
 
-print(response)
+print(response.text)
