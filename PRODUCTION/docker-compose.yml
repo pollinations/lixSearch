@@ -9,7 +9,7 @@ services:
     env_file:
       - .env
     environment:
-      - FLASK_APP=ai_search_agent_prod.py
+      - FLASK_APP=app.py
       - PYTHONUNBUFFERED=1
     volumes:
       - ./logs:/app/logs

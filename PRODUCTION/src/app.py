@@ -155,6 +155,9 @@ async def openai_chat_completions():
     app.logger.debug(f"Returning response for /search/v1/chat/completions: {response}")
     return jsonify(response)
 
+@app.route("/test", methods=["GET"])
+async def test():
+    return jsonify({"status": "ok"})
 
 
 if __name__ == "__main__":
