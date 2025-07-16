@@ -33,14 +33,9 @@ async def search_sse():
     return Response(event_stream(), content_type="text/event-stream")
 
 
-from flask import jsonify, request
-import asyncio
-
-
 @app.route('/search', methods=['GET', 'POST'])
 async def search_json():
-    is_openai_chat_format = False
-
+    is_openai_chat = False
     if request.method == "POST":
         data = await request.get_json(force=True, silent=True) or {}
         user_query = ""
@@ -49,7 +44,7 @@ async def search_json():
             for msg in reversed(messages):
                 if msg.get("role") == "user":
                     user_query = msg.get("content", "").strip()
-                    is_openai_chat_format = True
+                    is_openai_chat = True
                     break
 
         if not user_query:
@@ -94,7 +89,7 @@ async def search_json():
 
     app.logger.debug(f"Returning response for /search: {final_response}")
 
-    if is_openai_chat_format:
+    if is_openai_chat:
         return jsonify([
             {
                 "message": {
@@ -103,9 +98,8 @@ async def search_json():
                 }
             }
         ])
-
-    return jsonify({"content": final_response})
-
+    else:
+        return jsonify({"result": final_response})
 
 
 @app.route("/v1/chat/completions", methods=["GET", "POST"])

@@ -1,7 +1,7 @@
 import requests
 import json
 import urllib.parse
-url = "https://search.pollinations.ai/search"
+url = "http://localhost:5000/search"
 headers = {"Content-Type": "application/json"}
 data = {
     "messages": [
