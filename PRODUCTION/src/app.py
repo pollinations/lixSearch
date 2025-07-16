@@ -32,13 +32,23 @@ async def search_sse():
 
     return Response(event_stream(), content_type="text/event-stream")
 
+
 @app.route('/search', methods=['GET', 'POST'])
 async def search_json():
     if request.method == "POST":
         data = await request.get_json(force=True, silent=True) or {}
-        user_query = data.get("query") or data.get("message") or data.get("prompt") or ""
+        user_query = ""
+        messages = data.get("messages", [])
+        if messages and isinstance(messages, list):
+            for msg in reversed(messages):
+                if msg.get("role") == "user":
+                    user_query = msg.get("content", "").strip()
+                    break
+
+        if not user_query:
+            user_query = data.get("query") or data.get("message") or data.get("prompt") or ""
     else:
-        user_query = request.args.get("query")
+        user_query = request.args.get("query", "").strip()
 
     if not user_query:
         return jsonify({"error": "Missing query"}), 400
@@ -72,12 +82,12 @@ async def search_json():
         app.logger.error(f"Error iterating generator: {e}", exc_info=True)
         final_response = None
 
-    # Fallback if generator did not return anything
     if not final_response:
         final_response = "\n".join(final_result_content).strip() or "Didn't Wait"
 
     app.logger.debug(f"Returning response for /search: {final_response}")
     return jsonify({"result": final_response})
+
 
 @app.route("/v1/chat/completions", methods=["GET", "POST"])
 async def openai_chat_completions():

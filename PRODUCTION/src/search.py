@@ -2,6 +2,7 @@ import requests
 from time import sleep
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
+from duckduckgo_search import DDGS
 from config import MAX_LINKS_TO_TAKE
 
 def google_search(query):
@@ -76,7 +77,6 @@ def mojeek_form_search(query):
         print("❌ Mojeek request failed:", e)
         return []
 
-
 def ddgs_search(query):
     url = "https://html.duckduckgo.com/html/"
     headers = {
@@ -90,15 +90,16 @@ def ddgs_search(query):
         soup = BeautifulSoup(response.text, "html.parser")
 
         links = []
-        for a in soup.select("a.result__a"):
-            href = a.get("href")
+        for h2 in soup.select("h2.result__title a[href^='http']"):
+            href = h2.get("href")
             if (
                 href
                 and href.startswith("http")
                 and not href.startswith("https://duckduckgo.com/y.js?")
             ):
                 links.append(href)
-        print("[INFO] DDG search completed")
+
+        print(f"[INFO] DDG search completed with {len(links)} results.")
         return links[:MAX_LINKS_TO_TAKE]
 
     except Exception as e:
@@ -106,18 +107,41 @@ def ddgs_search(query):
         return []
 
 
+def ddgs_search_module_search(query):
+    results = []
+    try:
+        with DDGS() as ddgs:
+            for entry in ddgs.text(query, max_results=MAX_LINKS_TO_TAKE):
+                url = entry.get("href") or entry.get("link")
+                if url and url.startswith("http"):
+                    results.append(url)
+        print(f"[INFO] DDG search returned {len(results)} links")
+    except Exception as e:
+        print("❌ DDG search failed:", e)
+    return results
+
 def web_search(query):
     print(f"[INFO] Running web search for: {query}")
 
     try:
         ddg_results = ddgs_search(query)
         if ddg_results:
-            print(f"[INFO] Using DuckDuckGo with {len(ddg_results)} results.")
+            print(f"[INFO] Using DuckDuckGo HTML with {len(ddg_results)} results.")
             return ddg_results
         else:
-            print("[INFO] DuckDuckGo returned no results. Falling back to Mojeek.")
+            print("[INFO] DuckDuckGo HTML returned no results. Falling back to DDG module.")
     except Exception as e:
-        print(f"[WARN] DuckDuckGo search failed with error: {e}. Falling back to Mojeek.")
+        print(f"[WARN] DuckDuckGo HTML search failed with error: {e}. Falling back to DDG module.")
+
+    try:
+        ddg_module_results = ddgs_search_module_search(query)
+        if ddg_module_results:
+            print(f"[INFO] Using DuckDuckGo module with {len(ddg_module_results)} results.")
+            return ddg_module_results
+        else:
+            print("[INFO] DuckDuckGo module returned no results. Falling back to Mojeek.")
+    except Exception as e:
+        print(f"[WARN] DuckDuckGo module search failed with error: {e}. Falling back to Mojeek.")
 
     try:
         mojeek_results = mojeek_form_search(query)
@@ -144,18 +168,23 @@ def web_search(query):
 
 
 if __name__ == "__main__":
-
     print("\nDDGS:")
     for url in ddgs_search("the best sign language detection using cnn"):
         print(url)
 
         
-    print("\nMOJEEK:")
-    for urls in mojeek_form_search("sign language detection using cnn"):
-        print(urls)
+    # print("\nMOJEEK:")
+    # for urls in mojeek_form_search("sign language detection using cnn"):
+    #     print(urls)
 
-    print("\nGOOGLE:")
-    for url in google_search("jis university"):
-        print(url)
-
+    # print("\nGOOGLE:")
+    # for url in google_search("jis university"):
+    #     print(url)
+    
+    # print("\nWeb Search")
+    # query = "Tell me something about quantum computing"
+    # results = web_search(query)
+    # print("Search results:")
+    # for link in results:
+    #     print(link)
 
