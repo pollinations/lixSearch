@@ -36,6 +36,7 @@ def fetch_url_content_parallel(urls, max_workers=10):
             except Exception as e:
                 print(f"[ERROR] Failed fetching {url}: {e}")
                 results[url] = ('[Failed]', [])
+        print(f"[INFO] Fetched all URL information in parallel.")
         return results
 
 
@@ -95,52 +96,50 @@ async def run_elixposearch_pipeline(user_query: str, event_id: str = None):
     {
         "role": "system",
         "content": f"""
+        Mission: Fully answer the user's query with reliable, well-researched, and well-explained information.
+        **IF YOU ALREADY KNOW THE ANSWER, ANSWER IT DIRECTLY.**  
+        ONLY USE TOOLS IF NEEDED — when uncertain, requires fresh/current data, or if explicitly requested.
 
-Mission: Fully answer the user's query with reliable, well-researched, and well-explained information.
+        Your answers must prioritize:
+        - Clarity and correctness
+        - Concise explanations
+        - Markdown formatting
+        - Relevant citations if sources are used
 
-**IF YOU ALREADY KNOW THE ANSWER, ANSWER IT DIRECTLY.**  
-ONLY USE TOOLS IF NEEDED — when uncertain, requires fresh/current data, or if explicitly requested.
+        ---
 
-Your answers must prioritize:
-- Clarity and correctness
-- Concise explanations
-- Markdown formatting
-- Relevant citations if sources are used
+        Available Tools (Use Only When Necessary):
+        - cleanQuery(query: str): Extracts URLs (websites, YouTube) and a cleaned text query.
+        - web_search(query: str): Returns websites and short summaries. Does not fetch full text.
+        - get_youtube_metadata(url: str): Retrieves video metadata.
+        - get_youtube_transcript(url: str): Retrieves readable transcripts.
+        - fetch_full_text(url: str): Extracts main text and images from web pages.
+        - get_timezone_and_offset(location_name: str): Retrieves timezone, UTC offset, and local time.
+        - convert_utc_to_local(utc_datetime: str, utc_offset_hours: float): Converts UTC datetime to local.
 
----
+        ---
 
-Available Tools (Use Only When Necessary):
-- cleanQuery(query: str): Extracts URLs (websites, YouTube) and a cleaned text query.
-- web_search(query: str): Returns websites and short summaries. Does not fetch full text.
-- get_youtube_metadata(url: str): Retrieves video metadata.
-- get_youtube_transcript(url: str): Retrieves readable transcripts.
-- fetch_full_text(url: str): Extracts main text and images from web pages.
-- get_timezone_and_offset(location_name: str): Retrieves timezone, UTC offset, and local time.
-- convert_utc_to_local(utc_datetime: str, utc_offset_hours: float): Converts UTC datetime to local.
+        Context:
+        Current UTC Date: {current_utc_date}  
+        Current UTC Time: {current_utc_time}
 
----
+        ---
 
-Context:
-Current UTC Date: {current_utc_date}  
-Current UTC Time: {current_utc_time}
+        Workflow:
+        1. Analyze the query.
+        2. If answer is obvious or factual respond directly.
+        3. If uncertain or needing current data, use tools.
+        4. After using a tool, reason step-by-step. Stop if enough data is gathered.
+        5. Use at most 2-5 sources.
+        6. Provide clean, organized markdown output with sources if applicable.
 
----
+        Final Response:
+        - Answer clearly and concisely.
+        - Provide reliable sources when external data is used.
+        - Mention date relevance if information is time-sensitive.
 
-Workflow:
-1. Analyze the query.
-2. If answer is obvious or factual respond directly.
-3. If uncertain or needing current data, use tools.
-4. After using a tool, reason step-by-step. Stop if enough data is gathered.
-5. Use at most 2-5 sources.
-6. Provide clean, organized markdown output with sources if applicable.
-
-Final Response:
-- Answer clearly and concisely.
-- Provide reliable sources when external data is used.
-- Mention date relevance if information is time-sensitive.
-
-Tone:
-Professional, clear, confident. No unnecessary exaggeration or excessive length. Never expose internal reasoning or tool calls explicitly.
+        Tone:
+        Professional, clear, confident. No unnecessary exaggeration or excessive length. Never expose internal reasoning or tool calls explicitly.
         """
     },
     {
@@ -332,10 +331,8 @@ Professional, clear, confident. No unnecessary exaggeration or excessive length.
             # For non-SSE calls, yield the result as a simple event for the app to parse
             yield format_sse("final", response_with_sources)
 
-        await google_agent.close()
         return  
     else:
-        await google_agent.close()
         error_msg = f"[ERROR] ElixpoSearch failed after {max_iterations} iterations."
         if event_id:
             yield format_sse("error", error_msg)
