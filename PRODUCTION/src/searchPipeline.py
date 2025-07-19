@@ -22,7 +22,7 @@ POLLINATIONS_TOKEN=os.getenv("TOKEN")
 MODEL=os.getenv("MODEL")
 REFRRER=os.getenv("REFERRER")
 POLLINATIONS_ENDPOINT = "https://text.pollinations.ai/openai"
-MAX_LINKS_TO_TAKE=5
+
 
 def fetch_url_content_parallel(urls, max_workers=10):
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -143,9 +143,10 @@ async def run_elixposearch_pipeline(user_query: str, event_id: str = None):
         """
     },
     {
-        "role": "user",
+    "role": "user",
     "content": f"""Perform general online research with web searches if the answer is unclear.  
-    Answer with proper markdown and cite sources.  
+    Answer with proper markdown and cite sources. 
+    Make me a detailed well structured response with sources and images if available. 
     Query: {user_query}
     Treat the query as search keywords, not known knowledge. Avoid assumptions."""  
     
