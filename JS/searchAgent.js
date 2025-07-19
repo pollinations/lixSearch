@@ -68,7 +68,7 @@ function renderFinalOutput(markdown) {
         imageGrid.className = 'image-grid';
         images.forEach(img => imageGrid.appendChild(img));
         tempDiv.querySelectorAll('img').forEach(img => img.remove());
-        tempDiv.prepend(imageGrid);
+        tempDiv.append(imageGrid);
     }
     finalOutput.innerHTML = tempDiv.innerHTML;
 }
@@ -76,7 +76,7 @@ function renderFinalOutput(markdown) {
 function doSearch() {
     clearOutputs();
     const query = input.value;
-
+    input.value = '';
     if (sseToggle.checked) {
         sseFeed.style.display = 'block';
         const finalChunks = [];
