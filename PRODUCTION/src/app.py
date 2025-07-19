@@ -7,7 +7,6 @@ import logging
 import sys
 from searchPipeline import run_elixposearch_pipeline
 
-
 app = Quart(__name__)
 app = cors(app, allow_origin="*")
 
@@ -23,9 +22,8 @@ async def search_sse():
     app.logger.info(f"Received SSE search request: event_id={event_id}, query={user_query}")
 
     async def event_stream():
-        for chunk in run_elixposearch_pipeline(user_query, event_id):
+        async for chunk in run_elixposearch_pipeline(user_query, event_id):  # Use async for
             yield chunk
-            await asyncio.sleep(0.05)
         while True:
             yield ":\n\n"  # Ping
             await asyncio.sleep(30)
@@ -56,15 +54,13 @@ async def search_json(anything=None):
     if not user_query:
         return jsonify({"error": "Missing query"}), 400
 
-    loop = asyncio.get_event_loop()
-    generator = await loop.run_in_executor(None, lambda: run_elixposearch_pipeline(user_query))
-
+    # Call the async generator and collect final result
     final_result_content = []
-    final_response = None
     try:
-        while True:
-            chunk = next(generator)
+        async for chunk in run_elixposearch_pipeline(user_query, event_id=None):
             app.logger.debug(f"[DEBUG] Chunk: {chunk}")
+            
+            # Parse SSE format
             lines = chunk.splitlines()
             event_type = None
             data_lines = []
@@ -77,18 +73,25 @@ async def search_json(anything=None):
 
             data_text = "\n".join(data_lines)
 
+            # Collect final content
             if data_text and event_type in ["final", "final-part"]:
                 final_result_content.append(data_text)
-    except StopIteration as e:
-        final_response = e.value
+
     except Exception as e:
-        app.logger.error(f"Error iterating generator: {e}", exc_info=True)
-        final_response = None
+        app.logger.error(f"Error running pipeline: {e}", exc_info=True)
+        final_response = f"Error: {e}"
+        if is_openai_chat:
+            return jsonify([{"message": {"role": "assistant", "content": final_response}}])
+        else:
+            return jsonify({"result": final_response})
 
+    # Join all final content
+    final_response = "\n".join(final_result_content).strip()
+    
     if not final_response:
-        final_response = "\n".join(final_result_content).strip() or "Didn't Wait"
+        final_response = "No results found"
 
-    app.logger.debug(f"Returning response for /search: {final_response}")
+    app.logger.debug(f"Returning response for /search: {final_response[:200]}...")
 
     if is_openai_chat:
         return jsonify([
@@ -103,81 +106,6 @@ async def search_json(anything=None):
         return jsonify({"result": final_response})
 
 
-@app.route("/v1/chat/completions", methods=["GET", "POST"])
-async def openai_chat_completions():
-    if request.method == "POST":
-        data = await request.get_json(force=True, silent=True) or {}
-        messages = data.get("messages", [])
-        app.logger.info(f"POST /search/v1/chat/completions with body: {data}")
-    else:
-        query = request.args.get("query") or request.args.get("message") or ""
-        messages = [{"role": "user", "content": query}] if query else []
-        app.logger.info(f"GET /search/v1/chat/completions with query: {query}")
-
-    if not messages or not isinstance(messages, list):
-        app.logger.warning("Missing or invalid messages in /search/v1/chat/completions request")
-        return jsonify({"error": "Missing or invalid messages"}), 400
-
-    user_query = ""
-    for msg in reversed(messages):
-        if msg.get("role") == "user":
-            user_query = msg.get("content", "")
-            break
-
-    if not user_query:
-        app.logger.warning("No user message found in /search/v1/chat/completions request")
-        return jsonify({"error": "No user message found"}), 400
-
-    loop = asyncio.get_event_loop()
-    generator = await loop.run_in_executor(None, lambda: run_elixposearch_pipeline(user_query))
-
-    final_result_content = []
-    final_response = None
-    try:
-        while True:
-            chunk = next(generator)
-            app.logger.debug(f"[DEBUG] Chunk: {chunk}")
-            lines = chunk.splitlines()
-            event_type = None
-            data_lines = []
-
-            for line in lines:
-                if line.startswith("event:"):
-                    event_type = line.replace("event:", "").strip()
-                elif line.startswith("data:"):
-                    data_lines.append(line.replace("data:", "").strip())
-
-            data_text = "\n".join(data_lines)
-
-            if data_text and event_type in ["final", "final-part"]:
-                final_result_content.append(data_text)
-    except StopIteration as e:
-        final_response = e.value
-    except Exception as e:
-        app.logger.error(f"Error iterating generator in /search/v1/chat/completions: {e}", exc_info=True)
-        final_response = None
-
-    if not final_response:
-        final_response = "\n".join(final_result_content).strip() or ""
-
-    response = {
-        "id": "chatcmpl-elixpo",
-        "object": "chat.completion",
-        "created": int(time.time()),
-        "model": "elixpo-search",
-        "choices": [
-            {
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": final_response
-                },
-                "finish_reason": "stop"
-            }
-        ]
-    }
-    app.logger.debug(f"Returning response for /search/v1/chat/completions: {response}")
-    return jsonify(response)
 
 @app.route("/test", methods=["GET"])
 async def test():

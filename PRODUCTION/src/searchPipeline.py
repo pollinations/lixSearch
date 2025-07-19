@@ -1,7 +1,7 @@
 import requests
 import json
 from clean_query import cleanQuery
-from search import web_search
+from search import web_search, GoogleSearchAgent
 from getYoutubeDetails import get_youtube_metadata, get_youtube_transcript
 from scrape import fetch_full_text
 from tools import tools
@@ -22,9 +22,9 @@ POLLINATIONS_TOKEN=os.getenv("TOKEN")
 MODEL=os.getenv("MODEL")
 REFRRER=os.getenv("REFERRER")
 POLLINATIONS_ENDPOINT = "https://text.pollinations.ai/openai"
+MAX_LINKS_TO_TAKE=5
 
-
-def fetch_url_content_parallel(urls, max_workers=5):
+def fetch_url_content_parallel(urls, max_workers=10):
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(fetch_full_text, url): url for url in urls}
         results = {}
@@ -39,7 +39,7 @@ def fetch_url_content_parallel(urls, max_workers=5):
         return results
 
 
-def fetch_youtube_parallel(urls, mode='metadata', max_workers=5):
+def fetch_youtube_parallel(urls, mode='metadata', max_workers=10):
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         if mode == 'metadata':
             futures = {executor.submit(get_youtube_metadata, url): url for url in urls}
@@ -61,9 +61,22 @@ def format_sse(event: str, data: str) -> str:
     data_str = ''.join(f"data: {line}\n" for line in lines)
     return f"event: {event}\n{data_str}\n\n"
 
-def run_elixposearch_pipeline(user_query: str, event_id: str = None):
-    if event_id: 
-        yield format_sse("INFO", " Initiating Pipeline ")
+async def run_elixposearch_pipeline(user_query: str, event_id: str = None):
+    print(f"[INFO] Starting ElixpoSearch Pipeline for query: {user_query}")
+    
+    def emit_event(event_type, message):
+        if event_id:
+            return format_sse(event_type, message)
+        return None
+    
+    # Send initial event if streaming
+    initial_event = emit_event("INFO", " Initiating Pipeline ")
+    if initial_event:
+        yield initial_event
+    
+    google_agent = GoogleSearchAgent()
+    await google_agent.start()
+    google_req_count = 0  # Track number of Google searches
 
     current_utc_datetime = datetime.now(timezone.utc)
     current_utc_time = current_utc_datetime.strftime("%H:%M UTC")
@@ -79,77 +92,67 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
     }
 
     messages = [
-            {
-                "role": "system",
-                "content": f"""
+    {
+        "role": "system",
+        "content": f"""
 
-        🎯 **Mission:** Fully answer the user's query with reliable, well-researched, and well-explained information.
+Mission: Fully answer the user's query with reliable, well-researched, and well-explained information.
 
-        > **IF YOU ALREADY KNOW THE ANSWER, JUST ANSWER IT.**  
-        > **ONLY USE TOOLS IF NEEDED** — for example, if you are uncertain, if it requires current data (web, time, etc.), or if a user explicitly requests deep verification.
+**IF YOU ALREADY KNOW THE ANSWER, ANSWER IT DIRECTLY.**  
+ONLY USE TOOLS IF NEEDED — when uncertain, requires fresh/current data, or if explicitly requested.
 
-        Your responses should always prioritize being:
-        - **Comprehensive and Clear:** Provide enough detail for understanding, but avoid unnecessary exaggeration or excessive length.
-        - **Moderate by Default:** For most questions, give a balanced, moderately detailed answer that is informative but concise.
-        - **Detailed When Needed:** If the question is complex, nuanced, or requires special attention, provide a more in-depth, thorough response.
-        - **Well-Structured:** Organize your answers logically, with clarity.
+Your answers must prioritize:
+- Clarity and correctness
+- Concise explanations
+- Markdown formatting
+- Relevant citations if sources are used
 
-        ---
-        🛠️ **Available Tools (Use Only When Necessary):**
-        - `cleanQuery(query: str)`: Extracts URLs (websites, YouTube) and a cleaned text query from raw input.
-        - `web_search(query: str)`: Performs a web search and returns a list of URLs with short snippets. **Does not fetch full text.**
-        - `get_youtube_metadata(url: str)`: Fetches metadata for a YouTube video.
-        - `get_youtube_transcript(url: str)`: Fetches the full transcript for a YouTube video. **Present transcripts as clean, readable text.**
-        - `fetch_full_text(url: str)`: Extracts main text and images from a webpage.
-        - `get_timezone_and_offset(location_name: str)`: Gets timezone info, UTC offset, and current local time for a location.
-        - `convert_utc_to_local(utc_datetime: str, utc_offset_hours: float)`: Converts UTC to local datetime.
+---
 
-        ---
-        📅 **Current UTC Date:** {current_utc_date}  
-        ⏰ **Current UTC Time:** {current_utc_time}
+Available Tools (Use Only When Necessary):
+- cleanQuery(query: str): Extracts URLs (websites, YouTube) and a cleaned text query.
+- web_search(query: str): Returns websites and short summaries. Does not fetch full text.
+- get_youtube_metadata(url: str): Retrieves video metadata.
+- get_youtube_transcript(url: str): Retrieves readable transcripts.
+- fetch_full_text(url: str): Extracts main text and images from web pages.
+- get_timezone_and_offset(location_name: str): Retrieves timezone, UTC offset, and local time.
+- convert_utc_to_local(utc_datetime: str, utc_offset_hours: float): Converts UTC datetime to local.
 
-        ---
-        🧠 **Workflow:**
-        1️⃣ **Understand & Deconstruct:**  
-            - Analyze the query. Break complex ones into sub-parts if needed.
-            - Consider implicit needs.
+---
 
-        2️⃣ **Decide:**  
-            - **If you already know the answer, answer immediately.**
-            - **If uncertain or needing current/specific data, use tools.**
+Context:
+Current UTC Date: {current_utc_date}  
+Current UTC Time: {current_utc_time}
 
-        3️⃣ **Tool Use (If Needed):**
-            - Call tools iteratively.
-            - After each result, reason step-by-step:
-                - Call more tools or provide a final answer.
+---
 
-        4️⃣ **Evidence Gathering:**
-            - Prioritize 2-5 trusted sources.
-            - Confirm consistency.
+Workflow:
+1. Analyze the query.
+2. If answer is obvious or factual respond directly.
+3. If uncertain or needing current data, use tools.
+4. After using a tool, reason step-by-step. Stop if enough data is gathered.
+5. Use at most 2-5 sources.
+6. Provide clean, organized markdown output with sources if applicable.
 
-        ---
-        📄 **Final Response Guidelines:**
-        - Provide clear, well-organized answers.
-        - Summarize cleanly, cite sources (URLs).
-        - Note if info is time-sensitive relative to **{current_utc_date} at {current_utc_time} UTC**.
-        - For YouTube: Provide **clean, human-readable transcripts** only.
-        - If answers can't be found reliably, say so and suggest practical next steps.
+Final Response:
+- Answer clearly and concisely.
+- Provide reliable sources when external data is used.
+- Mention date relevance if information is time-sensitive.
 
-        ---
-        🎙️ **Tone & Style:**
-        - Professional, clear, confident.
-        - Friendly and engaging; light wit allowed.
-        - Never expose tool calls or internal reasoning explicitly.
-
-        ---
-        Begin solving the user's query thoughtfully. First, determine whether tools are needed. If not, answer directly. If so, proceed.
+Tone:
+Professional, clear, confident. No unnecessary exaggeration or excessive length. Never expose internal reasoning or tool calls explicitly.
         """
-            },
-            {
-                "role": "user",
-                "content": f"Answer my query with sources and proper markdown. Query: {user_query}"
-            }
-    ]
+    },
+    {
+        "role": "user",
+    "content": f"""Perform general online research with web searches if the answer is unclear.  
+    Answer with proper markdown and cite sources.  
+    Query: {user_query}
+    Treat the query as search keywords, not known knowledge. Avoid assumptions."""  
+    
+    }
+]
+
 
 
     max_iterations = 7
@@ -160,8 +163,12 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
 
     while current_iteration < max_iterations:
         current_iteration += 1
-        if event_id:
-            yield format_sse("INFO", f" Research Iteration Continued ")
+        
+        # Send iteration event if streaming
+        iteration_event = emit_event("INFO", f" Research Iteration Continued ")
+        if iteration_event:
+            yield iteration_event
+            
         payload = {
             "model": MODEL,
             "messages": messages,
@@ -169,7 +176,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
             "tool_choice": "auto",
             "token": POLLINATIONS_TOKEN,
             "referrer": REFRRER,
-            "temperature": 0.7,
+            "temperature": 0.2,
             "private": True,
             "seed": random.randint(1000, 9999)
         }
@@ -198,6 +205,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
             if event_id:
                 print(f"[INFO] Tool call detected: {function_name} with args: {function_args}")
                 yield format_sse("INFO", f" Execution In Progress ")
+            
             tool_result = "[Tool execution failed or returned no data.]"
 
             try:
@@ -222,10 +230,22 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
                     tool_result = convert_utc_to_local(utc_dt_obj, utc_offset).strftime('%Y-%m-%d %H:%M:%S')
 
                 elif function_name == "web_search":
-                    if event_id:
-                        yield format_sse("INFO", f" Surfing Internet ")
+                    web_event = emit_event("INFO", f" Surfing Internet ")
+                    if web_event:
+                        yield web_event
+                    print(f"[INFO] Performing web search")
                     search_query = function_args.get("query")
-                    search_results_raw = web_search(search_query)
+
+                    google_req_count += 1
+                    if google_req_count > 50:
+                        print("[INFO] Restarting GoogleSearchAgent after 50 requests.")
+                        await google_agent.close()
+                        google_agent = GoogleSearchAgent()
+                        await google_agent.start()
+                        google_req_count = 1  # Reset count for new agent
+
+                    search_results_raw = await web_search(search_query, google_agent)
+                    print(f"[INFO] Web search returned {len(search_results_raw)} results")
                     summaries = ""
                     parallel_results = fetch_url_content_parallel(search_results_raw)
                     for url, (text_content, image_urls) in parallel_results.items():
@@ -235,6 +255,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
                     tool_result = summaries
 
                 elif function_name == "get_youtube_metadata":
+                    print(f"[INFO] Getting YouTube metadata for URLs")
                     urls = [function_args.get("url")]
                     results = fetch_youtube_parallel(urls, mode='metadata')
                     for url, metadata in results.items():
@@ -243,6 +264,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
                         collected_sources.append(url)
 
                 elif function_name == "get_youtube_transcript":
+                    print(f"[INFO] Getting YouTube transcripts for URLs")
                     if event_id:
                         yield format_sse("INFO", f" Watching Youtube ")
                     urls = [function_args.get("url")]
@@ -253,6 +275,7 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
                         collected_sources.append(url)
 
                 elif function_name == "fetch_full_text":
+                    print(f"[INFO] Fetching full text for URLs")
                     if event_id:
                         yield format_sse("INFO", f" Writing Script ")
                     urls = [function_args.get("url")]
@@ -279,7 +302,9 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
                 print(f"[INFO] Tool {function_name} executed successfully.")
                 yield format_sse("INFO", f" Execution Completed! ")
 
+    # Handle final response
     if final_message_content:
+        print(f"[INFO] Preparing final response")
         response_with_sources = final_message_content
         sources_md = ""
         if collected_sources:
@@ -294,22 +319,54 @@ def run_elixposearch_pipeline(user_query: str, event_id: str = None):
                 sources_md += f"![image]({img})\n"
 
         response_with_sources += sources_md
+        print(f"[INFO] Preparing final response with sources and images")
+        
         if event_id:
             yield format_sse("INFO", " SUCCESS ")
             chunk_size = 5000 
             for i in range(0, len(response_with_sources), chunk_size):
                 chunk = response_with_sources[i:i+chunk_size]
-                # Use the same event name for all chunks except the last
                 event_name = "final" if i + chunk_size >= len(response_with_sources) else "final-part"
                 yield format_sse(event_name, chunk)
         else:
-            print("\n--- ElixpoSearch Final Answer ---\n")
-            # print(response_with_sources)
-        return response_with_sources
-    else:
-        if event_id:
-            yield format_sse("error", f"[ERROR] ElixpoSearch failed after {max_iterations} iterations.")
-            return None
-        else:
-            print(f"[ERROR] ElixpoSearch failed after {max_iterations} iterations.")
+            # For non-SSE calls, yield the result as a simple event for the app to parse
+            yield format_sse("final", response_with_sources)
 
+        await google_agent.close()
+        return  
+    else:
+        await google_agent.close()
+        error_msg = f"[ERROR] ElixpoSearch failed after {max_iterations} iterations."
+        if event_id:
+            yield format_sse("error", error_msg)
+            return  
+        else:
+            print(error_msg)
+            return  
+
+# Fix the main block:
+if __name__ == "__main__":
+    user_query = "Who developed elixpo art?"
+    event_id = None
+    
+    if event_id:
+        # Handle generator case
+        generator = run_elixposearch_pipeline(user_query, event_id=event_id)
+        answer = None
+        try:
+            while True:
+                next(generator)  
+        except StopIteration as e:
+            answer = e.value  
+    else:
+        # Handle non-generator case
+        result = run_elixposearch_pipeline(user_query, event_id=None)
+        # Consume the generator to get the return value
+        answer = None
+        try:
+            while True:
+                next(result)
+        except StopIteration as e:
+            answer = e.value
+    
+    print(f"\n--- Final Answer ---\n{answer}")

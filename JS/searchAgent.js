@@ -1,4 +1,3 @@
-
 marked.setOptions({
     breaks: true, 
     gfm: true,    
@@ -12,12 +11,8 @@ marked.setOptions({
     }
 });
 
-// const SERVER_URL = "http://127.0.0.1:5000";
-const SERVER_URL = "https://search.pollinations.ai";
-document.addEventListener('DOMContentLoaded', () => {
-    lucide.createIcons();
-});
-
+const SERVER_URL = "http://127.0.0.1:5000";
+// const SERVER_URL = "https://search.pollinations.ai";
 const input = document.getElementById('queryInput');
 const submitButton = document.getElementById('submitButton');
 const sseFeed = document.getElementById('sseFeed');
@@ -55,28 +50,44 @@ function showResult(label, data) {
         div.className = 'text-red-400';
     } else if (typeof data === 'object' && data !== null && data.result !== undefined) {
         div.innerHTML = marked.parse(data.result);
+    } else if (typeof data === 'object' && data.choices && data.choices[0]) {
+        div.innerHTML = marked.parse(data.choices[0].message.content);
     } else {
         div.innerText = `[${label}] ${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}`;
     }
     finalOutput.appendChild(div);
 }
 
+function renderFinalOutput(markdown) {
+    let html = marked.parse(markdown);
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    const images = Array.from(tempDiv.querySelectorAll('img'));
+    if (images.length > 0) {
+        const imageGrid = document.createElement('div');
+        imageGrid.className = 'image-grid';
+        images.forEach(img => imageGrid.appendChild(img));
+        tempDiv.querySelectorAll('img').forEach(img => img.remove());
+        tempDiv.prepend(imageGrid);
+    }
+    finalOutput.innerHTML = tempDiv.innerHTML;
+}
+
 function doSearch() {
     clearOutputs();
+    const query = input.value;
 
     if (sseToggle.checked) {
         sseFeed.style.display = 'block';
         const finalChunks = [];
-
         fetch(`${SERVER_URL}/search/sse`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: input.value })
+            body: JSON.stringify({ query })
         }).then(response => {
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
-
             function readStream() {
                 reader.read().then(({ done, value }) => {
                     if (done) {
@@ -92,7 +103,6 @@ function doSearch() {
                     readStream();
                 });
             }
-
             function handleSSEPart(part) {
                 let lines = part.trim().split('\n');
                 let event = '', data = '';
@@ -101,7 +111,6 @@ function doSearch() {
                     if (line.startsWith('data:')) data += line.replace('data:', '').trim() + '\n';
                 }
                 data = data.trim();
-
                 if (event === 'final-part') {
                     finalChunks.push(data);
                 } else if (event === 'final') {
@@ -117,61 +126,27 @@ function doSearch() {
                     sseFeed.scrollTop = sseFeed.scrollHeight;
                 }
             }
-
-            function renderFinalOutput(markdown) {
-                let html = marked.parse(markdown);
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = html;
-
-                const images = Array.from(tempDiv.querySelectorAll('img'));
-                if (images.length > 0) {
-                    const imageGrid = document.createElement('div');
-                    imageGrid.className = 'image-grid'; // CSS handles `overflow-x-auto flex-nowrap`
-                    images.forEach(img => imageGrid.appendChild(img));
-                    // Remove images from their original parsed positions
-                    tempDiv.querySelectorAll('img').forEach(img => img.remove()); 
-                    // Insert the image grid at the beginning of the content or a suitable place
-                    // For simplicity, let's append it to the tempDiv.
-                    // If you want images to appear *before* text, you'd insertBefore.
-                    tempDiv.prepend(imageGrid); 
-                }
-
-                finalOutput.innerHTML = tempDiv.innerHTML;
-            }
-
             readStream();
         });
-    } 
-
-    else if (useChatApi) {
+    } else if (useChatApi) {
         finalOutput.innerHTML = '<span class="text-gray-400">Loading (Chat API)...</span>';
         fetch(`${SERVER_URL}/search/v1/chat/completions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                messages: [{ role: "user", content: input.value }]
+                messages: [{ role: "user", content: query }]
             })
         })
         .then(r => r.json())
-        .then(data => {
-            if (data.choices && data.choices[0]) {
-                showResult('Chat API', { result: data.choices[0].message.content });
-            } else {
-                showResult('Chat API', data);
-            }
-        })
+        .then(data => showResult('Chat API', data))
         .catch(e => showResult('Chat API', { error: e.toString() }));
-        return;
-    }
-    
-    else {
+    } else {
         sseFeed.style.display = 'none';
         finalOutput.innerHTML = '<span class="text-gray-400">Loading...</span>';
-
         fetch(`${SERVER_URL}/search`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: input.value })
+            body: JSON.stringify({ query })
         })
         .then(r => r.json())
         .then(data => showResult('POST', data))
