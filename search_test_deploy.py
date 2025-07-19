@@ -1,11 +1,11 @@
 import requests
 import json
 import urllib.parse
-url = "http://localhost:5000/search"
+url = "https://search.pollinations.ai/search"
 headers = {"Content-Type": "application/json"}
 data = {
     "messages": [
-        {"role": "user", "content": "what's 1+1?"}
+        {"role": "user", "content": "What is the latest information of the stock market?"}
     ]
 }
 

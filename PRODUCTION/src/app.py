@@ -34,7 +34,8 @@ async def search_sse():
 
 
 @app.route('/search', methods=['GET', 'POST'])
-async def search_json():
+@app.route('/search/<path:anything>', methods=['GET', 'POST'])
+async def search_json(anything=None):
     is_openai_chat = False
     if request.method == "POST":
         data = await request.get_json(force=True, silent=True) or {}
