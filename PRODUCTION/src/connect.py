@@ -2,7 +2,7 @@ import requests
 import json
 import sseclient 
 
-url = "http://localhost:5000/search/sse"
+url = "https://search.pollinations.ai/search/sse"
 payload = {
     "model": "openai",
     "messages": [
@@ -25,7 +25,7 @@ try:
     for event in client.events():
         if event.data:
             try:
-                # Handle potential '[DONE]' marker
+                
                 if event.data.strip() == '[DONE]':
                      print("\nStream finished.")
                      break
