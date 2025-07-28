@@ -8,6 +8,7 @@ import sys
 import uuid
 from searchPipeline import run_elixposearch_pipeline
 import hypercorn.asyncio
+import json
 from hypercorn.config import Config
 from getYoutubeDetails import get_youtube_transcript
 from collections import deque
@@ -20,8 +21,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 app.logger.setLevel(logging.INFO)
 
 # Increased concurrency settings
-request_queue = asyncio.Queue(maxsize=100)  # Larger queue
-processing_semaphore = asyncio.Semaphore(15)  # Increased from 10 to 15
+request_queue = asyncio.Queue(maxsize=100) 
+processing_semaphore = asyncio.Semaphore(15)  
 active_requests = {}
 
 # Global stats for monitoring
@@ -57,9 +58,7 @@ async def process_request_worker():
         try:
             task = await asyncio.wait_for(request_queue.get(), timeout=1.0)
             
-            
             if task.request_type == 'sse':
-                # This shouldn't happen anymore, but just in case
                 task.result_future.set_exception(Exception("SSE requests should not be queued"))
                 continue
             
@@ -128,48 +127,80 @@ async def startup():
         asyncio.create_task(process_request_worker())
     app.logger.info("Started 8 request processing workers")
 
+
 @app.route("/search/sse", methods=["POST"])
 async def search_sse():
-    data = await request.get_json()
-    user_query = data.get("query", "")
+    data = await request.get_json(force=True, silent=True) or {}
+
+    user_query = ""
+    messages = data.get("messages", [])
+    if messages and isinstance(messages, list):
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                user_query = msg.get("content", "").strip()
+                break
+    if not user_query:
+        user_query = data.get("query") or data.get("message") or data.get("prompt") or ""
+
     request_id = f"sse-{uuid.uuid4().hex[:8]}"
     event_id = f"elixpo-{int(time.time() * 1000)}-{random.randint(1000, 9999)}"
-    
+
     update_request_stats()
     app.logger.info(f"SSE request {request_id}: {user_query[:50]}...")
 
-    # Check if server is overloaded
     if len(active_requests) >= 15:
-        return Response("event: error\ndata: Server overloaded, try again later\n\n", 
-                       content_type="text/event-stream")
+        return Response(
+            'data: {"error": "Server overloaded, try again later"}\n\n',
+            content_type="text/event-stream"
+        )
 
     async def event_stream():
         try:
-            # Add to active requests for monitoring
             active_requests[request_id] = {
                 "type": "sse",
                 "query": user_query[:50],
                 "start_time": time.time()
             }
-            
-            # Acquire semaphore to limit concurrent SSE requests
+
             async with processing_semaphore:
-                # Stream directly from pipeline - REAL-TIME
                 async for chunk in run_elixposearch_pipeline(user_query, event_id):
-                    yield chunk
-                    # Small delay to prevent overwhelming the client
+                    lines = chunk.splitlines()
+                    event_type = None
+                    data_lines = []
+
+                    for line in lines:
+                        if line.startswith("event:"):
+                            event_type = line.replace("event:", "").strip()
+                        elif line.startswith("data:"):
+                            data_lines.append(line.replace("data:", "").strip())
+
+                    data_text = "\n".join(data_lines)
+                    if data_text:
+                        json_data = {
+                            "choices": [
+                                {"delta": {"content": data_text}}
+                            ]
+                        }
+                        yield f'data: {json.dumps(json_data)}\n\n'
+
+                    if event_type == "final":
+                        break
+
                     await asyncio.sleep(0.01)
-                    
+
+            yield 'data: [DONE]\n\n'
+
         except Exception as e:
-            yield f"event: error\ndata: Error: {e}\n\n"
-            app.logger.error(f"SSE error for {request_id}: {e}")
+            app.logger.error(f"SSE error for {request_id}: {e}", exc_info=True)
+            yield f'data: {json.dumps({"error": str(e)})}\n\n'
         finally:
-            # Clean up
             active_requests.pop(request_id, None)
             global_stats["successful_requests"] += 1
-            return
 
     return Response(event_stream(), content_type="text/event-stream")
+
+
+
 
 @app.route('/search', methods=['GET', 'POST'])
 @app.route('/search/<path:anything>', methods=['GET', 'POST'])
@@ -178,9 +209,10 @@ async def search_json(anything=None):
     request_id = f"json-{uuid.uuid4().hex[:8]}"
     
     update_request_stats()
-    
+
     if request.method == "POST":
         data = await request.get_json(force=True, silent=True) or {}
+        stream_flag = data.get("stream", False)
         user_query = ""
         messages = data.get("messages", [])
         if messages and isinstance(messages, list):
@@ -193,7 +225,13 @@ async def search_json(anything=None):
         if not user_query:
             user_query = data.get("query") or data.get("message") or data.get("prompt") or ""
     else:
-        user_query = request.args.get("query", "").strip()
+        args = request.args
+        stream_flag = args.get("stream", "false").lower() == "true"
+        user_query = args.get("query", "").strip()
+
+
+    if stream_flag:
+        return await search_sse()
 
     if not user_query:
         return jsonify({"error": "Missing query"}), 400
@@ -209,9 +247,7 @@ async def search_json(anything=None):
         return jsonify({"error": "Server overloaded, try again later"}), 503
     
     try:
-        # Wait for result with shorter timeout
         final_response = await asyncio.wait_for(task.result_future, timeout=180)  # 3 min
-        
     except asyncio.TimeoutError:
         final_response = "Request timed out"
         app.logger.error(f"Request {request_id} timed out")
@@ -223,6 +259,9 @@ async def search_json(anything=None):
         return jsonify([{"message": {"role": "assistant", "content": final_response}}])
     else:
         return jsonify({"result": final_response})
+
+
+
 
 @app.route("/v1/chat/completions", methods=["GET", "POST"])
 async def openai_chat_completions():
