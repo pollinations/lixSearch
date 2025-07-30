@@ -2,9 +2,20 @@ import asyncio
 import os
 import base64
 import shutil
-from urllib.parse import quote
+from urllib.parse import urlparse, parse_qs, unquote, quote
 from playwright.async_api import async_playwright
 import stat
+
+
+
+def extract_imgurl(href):
+    if not href:
+        return None
+    parsed = urlparse(href)
+    query = parse_qs(parsed.query)
+    imgurl_encoded = query.get("imgurl", [None])[0]
+    return unquote(imgurl_encoded) if imgurl_encoded else None
+
 
 class GoogleImageSearchAgent:
     def __init__(self):
@@ -33,47 +44,42 @@ class GoogleImageSearchAgent:
             locale="en-US",
         )
 
-    def save_base64_image(self, base64_str, filename):
-        try:
-            if base64_str.startswith("data:image"):
-                _, encoded = base64_str.split(",", 1)
-                img_data = base64.b64decode(encoded)
-                with open(filename, "wb") as f:
-                    f.write(img_data)
-                print(f"[✓] Saved image: {filename}")
-            else:
-                print("[!] Skipped non-base64 image.")
-        except Exception as e:
-            print("❌ Error saving image:", e)
 
-    async def search_and_save_images(self, query, max_images=10):
+    async def search_images(self, query, max_images):
+        cleaned_links = []
         os.makedirs(self.save_dir, exist_ok=True)
         search_url = f"https://www.google.com/search?tbm=isch&q={quote(query)}"
         page = self.browser.pages[0] if self.browser.pages else await self.browser.new_page()
 
         await page.goto(search_url, timeout=60000)
         await page.wait_for_selector('.ob5Hkd', timeout=15000)
-
-        await page.mouse.wheel(0, 2000)
         await page.wait_for_timeout(2000)
 
         elements = await page.query_selector_all('.ob5Hkd > a > div > div > div > g-img > img')
 
-        print(f"[INFO] Found {len(elements)} matching <img> nodes.")
-        count = 0
-
         for i, el in enumerate(elements):
-            data_id = await el.get_attribute("data-id")
-            src = await el.get_attribute("src")
+            if i >= max_images:
+                break
 
-            print(f"{i+1}. data-id: {data_id}, src: {'[base64]' if src and src.startswith('data:image') else src}")
+            try:
+                await el.scroll_into_view_if_needed()
+                await el.click()
+                await page.wait_for_timeout(1000)
 
-            if src and src.startswith("data:image"):
-                filename = os.path.join(self.save_dir, f"{query.replace(' ', '_')}_{i+1}.jpg")
-                self.save_base64_image(src, filename)
-                count += 1
-                if count >= max_images:
-                    break
+                link_el = await page.query_selector('.ob5Hkd a')
+                if link_el:
+                    link_href = await link_el.get_attribute('href')
+                    cleaned_href = extract_imgurl(link_href)
+                    if cleaned_href:
+                        cleaned_links.append(cleaned_href)
+            except Exception as e:
+                print(f"[!] Error processing image {i}: {e}")
+                continue
+
+        return cleaned_links
+    
+
+    
 
     async def close(self):
         if self.browser:
@@ -89,7 +95,8 @@ async def run():
     agent.clear_user_data()  # Remove old session
     await agent.start()
 
-    await agent.search_and_save_images("wooden trail in forest", max_images=5)
+    base64_list = await agent.search_images("wooden trail in forest", max_images=1)
+    print(base64_list)
 
     await agent.close()
     def remove_readonly(func, path, excinfo):

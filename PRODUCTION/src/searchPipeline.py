@@ -4,6 +4,8 @@ from clean_query import cleanQuery
 from search import web_search, GoogleSearchAgent
 from getYoutubeDetails import get_youtube_metadata, get_youtube_transcript
 from scrape import fetch_full_text
+from getImagePrompt import generate_prompt_from_image, image_url_to_base64
+from getImageSimilarity import find_similarity, load_image
 from tools import tools
 from datetime import datetime, timezone
 from getTimeZone import get_timezone_and_offset, convert_utc_to_local
@@ -62,7 +64,7 @@ def format_sse(event: str, data: str) -> str:
     data_str = ''.join(f"data: {line}\n" for line in lines)
     return f"event: {event}\n{data_str}\n\n"
 
-async def run_elixposearch_pipeline(user_query: str, event_id: str = None):
+async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: str = None):
     print(f"[INFO] Starting ElixpoSearch Pipeline for query: {user_query}")
     
     def emit_event(event_type, message):
@@ -128,6 +130,11 @@ async def run_elixposearch_pipeline(user_query: str, event_id: str = None):
     - fetch_full_text(url: str): Extracts main text and images from web pages.
     - get_timezone_and_offset(location_name: str): Retrieves timezone, UTC offset, and local time.
     - convert_utc_to_local(utc_datetime: str, utc_offset_hours: float): Converts UTC datetime to local.
+    - generate_prompt_from_image(image_url: str): Generates a search query from an image URL.
+    - image_url_to_base64(image_url: str): Converts an image URL to base64 format for prompt generation.
+    - find_similarity(image1_url: str, image2_url: str): Compares two images and returns similarity score.
+    - load_image(image_path_or_pil): Loads an image from a file path or PIL object.
+
 
     ---
 
@@ -144,6 +151,8 @@ async def run_elixposearch_pipeline(user_query: str, event_id: str = None):
     4. **Explicit research requests**: Use tools as needed
     5. **Time-sensitive data**: Use tools for current information
     6. **Keywords like "now", "current", "latest", "today"**: Use web_search tool
+    7. **If you get an image URL, convert it to a base64 url and generate a search query from it.**
+    8. **if you get an image + query then find out relevant information with the context of the image, and return new images by reverse searching the image.**
 
     **CRITICAL: For any query asking about current political positions, office holders, or using words like "now", "current", "latest" - ALWAYS use web_search first.**
 
@@ -365,11 +374,12 @@ if __name__ == "__main__":
     import asyncio
     
     async def main():
-        user_query = "what's the weather of kolkata india of this week, mention me the date and give me some local news of this week of kolkata"
+        user_query = "which country is famous for this dance form"
+        user_image = "https://media.istockphoto.com/id/1421310827/photo/young-graceful-ballerina-is-performing-classic-dance-beauty-and-elegance-of-classic-ballet.jpg?s=612x612&w=0&k=20&c=GQ1DVEarW4Y-lGD6y8jCb3YPIgap7gj-6ReS3C7Qi3Y=" 
         event_id = None
         
         # Handle async generator
-        async_generator = run_elixposearch_pipeline(user_query, event_id=event_id)
+        async_generator = run_elixposearch_pipeline(user_query, user_image, event_id=event_id)
         answer = None
         
         try:

@@ -2,3 +2,4 @@
 /PRODUCTION/venv
 clipenv/
 model/
+playwright_user_data/

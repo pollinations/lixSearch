@@ -103,5 +103,62 @@ tools = [
             "required": ["utc_datetime", "offset_str"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_prompt_from_image",
+            "description": "Generates a search-friendly prompt from an image in base64 format.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "imageBase64": {"type": "string", "description": "The base64 encoded image string."}
+                },
+                "required": ["imageBase64"]
+            }
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "image_url_to_base64",
+            "description": "Converts an image URL to a base64 encoded string.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "image_url": {"type": "string", "description": "The URL of the image to convert."}
+                },
+                "required": ["image_url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_similarity",
+            "description": "Calculates the cosine similarity between two images given their base64 encoded strings.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "image1_base64": {"type": "string", "description": "Base64 encoded string of the first image."},
+                    "image2_base64": {"type": "string", "description": "Base64 encoded string of the second image."}
+                },
+                "required": ["image1_base64", "image2_base64"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "load_image",
+            "description": "Loads an image from a file path or PIL image and returns a tensor.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "image_path_or_pil": {"type": "string", "description": "File path to the image or a PIL Image object."}
+                },
+                "required": ["image_path_or_pil"]
+            }
+        }
     }
 ]

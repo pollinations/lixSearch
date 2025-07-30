@@ -5,6 +5,27 @@ from playwright.async_api import async_playwright
 from duckduckgo_search import DDGS
 from config import MAX_LINKS_TO_TAKE
 import asyncio
+import stat
+import shutil
+import os
+from urllib.parse import urlparse, parse_qs, unquote, quote
+
+
+def extract_imgurl(href):
+    if not href:
+        return None
+    parsed = urlparse(href)
+    query = parse_qs(parsed.query)
+    imgurl_encoded = query.get("imgurl", [None])[0]
+    return unquote(imgurl_encoded) if imgurl_encoded else None
+
+def remove_readonly(func, path, _):
+    """Clear the readonly bit and reattempt deletion."""
+    os.chmod(path, stat.S_IWRITE)
+    try:
+        func(path)
+    except Exception as e:
+        print(f"[!] Failed to delete: {path} → {e}")
 
 class GoogleSearchAgent:
     def __init__(self):
@@ -12,14 +33,28 @@ class GoogleSearchAgent:
         self.browser = None
         self.context = None
         self.query_count = 0
+        self.user_data_dir = "playwright_user_data"
+        self.save_dir = "downloaded_images"
+
+        # Remove previous session folder if exists
+        if os.path.exists(self.user_data_dir):
+            try:
+                shutil.rmtree(self.user_data_dir, onerror=remove_readonly)
+                print(f"[INFO] Cleared existing user data at: {self.user_data_dir}")
+            except Exception as e:
+                print(f"[ERROR] Failed to delete old user data: {e}")
+
         print("[INFO] GoogleSearchAgent ready and warmed up.")
 
     async def start(self):
         self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch(headless=True, args=[
-            "--disable-blink-features=AutomationControlled",
-        ])
-        self.context = await self._new_context()
+        self.browser = await self.playwright.chromium.launch_persistent_context(
+            user_data_dir=self.user_data_dir,
+            headless=True,
+            args=["--remote-debugging-port=9222", "--disable-blink-features=AutomationControlled"],
+            viewport={'width': 1280, 'height': 800},
+            locale="en-US",
+        )
 
     async def _new_context(self):
         context = await self.browser.new_context(
@@ -72,6 +107,39 @@ class GoogleSearchAgent:
         except Exception as e:
             print("❌ Google search failed:", e)
             return []
+        
+    async def search_images(self, query, max_images):
+        cleaned_links = []
+        os.makedirs(self.save_dir, exist_ok=True)
+        search_url = f"https://www.google.com/search?tbm=isch&q={quote(query)}"
+        page = self.browser.pages[0] if self.browser.pages else await self.browser.new_page()
+
+        await page.goto(search_url, timeout=60000)
+        await page.wait_for_selector('.ob5Hkd', timeout=15000)
+        await page.wait_for_timeout(2000)
+
+        elements = await page.query_selector_all('.ob5Hkd > a > div > div > div > g-img > img')
+
+        for i, el in enumerate(elements):
+            if i >= max_images:
+                break
+
+            try:
+                await el.scroll_into_view_if_needed()
+                await el.click()
+                await page.wait_for_timeout(1000)
+
+                link_el = await page.query_selector('.ob5Hkd a')
+                if link_el:
+                    link_href = await link_el.get_attribute('href')
+                    cleaned_href = extract_imgurl(link_href)
+                    if cleaned_href:
+                        cleaned_links.append(cleaned_href)
+            except Exception as e:
+                print(f"[!] Error processing image {i}: {e}")
+                continue
+
+        return cleaned_links
 
     async def close(self):
         if self.context:
@@ -80,6 +148,15 @@ class GoogleSearchAgent:
             await self.browser.close()
         if self.playwright:
             await self.playwright.stop()
+
+        # Delete user data after browser closes
+        if os.path.exists(self.user_data_dir):
+            try:
+                shutil.rmtree(self.user_data_dir, onerror=remove_readonly)
+                print(f"[INFO] Deleted user data folder: {self.user_data_dir}")
+            except Exception as e:
+                print(f"[ERROR] Could not remove user data folder: {e}")
+
         print("[INFO] GoogleSearchAgent closed.")
 
         
@@ -206,6 +283,26 @@ async def web_search(query, google_agent):
 
 
 
+async def imageSearch(query, google_agent):
+    print(f"[INFO] Running image search for: {query}")
+    await google_agent.start()
+
+    try:
+        results = await google_agent.search_images(query, max_images=10)
+        if results:
+            print(f"[INFO] Image search returned {len(results)} images.")
+            return results
+        else:
+            print("[INFO] No images found.")
+            return []
+    except Exception as e:
+        print(f"[ERROR] Image search failed with error: {e}")
+        return []
+    finally:
+        await google_agent.close()
+
+
+
 if __name__ == "__main__":
     # print("\nDDGS:")
     # for url in ddgs_search("the best sign language detection using cnn"):
@@ -221,10 +318,10 @@ if __name__ == "__main__":
         agent = GoogleSearchAgent()
         await agent.start()
         print("\nGoogle Search with Playwright:")
-        queries = ["who is elixpo?", "sign language detection using cnn", "quantum computing basics"]
+        queries = ["ballet dancer"]
         for query in queries:
             print(f"\nResults for: {query}")
-            results = await agent.search(query, max_links=5)
+            results = await agent.search_images(query, 10)
             for link in results:
                 print(link)
         await agent.close()
