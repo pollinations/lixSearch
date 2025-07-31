@@ -70,7 +70,9 @@ async def process_request_worker():
                 try:
                     # For JSON/Chat, collect final result
                     final_result_content = []
-                    async for chunk in run_elixposearch_pipeline(task.user_query, event_id=None):
+                    # Unpack user_query and user_image for the pipeline
+                    uq, ui = task.user_query if isinstance(task.user_query, tuple) else (task.user_query, None)
+                    async for chunk in run_elixposearch_pipeline(uq, ui, event_id=None):
                         lines = chunk.splitlines()
                         event_type = None
                         data_lines = []
@@ -133,6 +135,7 @@ async def search_sse():
     data = await request.get_json(force=True, silent=True) or {}
 
     user_query = ""
+    user_image = data.get("image") or data.get("user_image") or data.get("image_url") or None
     messages = data.get("messages", [])
     if messages and isinstance(messages, list):
         for msg in reversed(messages):
@@ -163,7 +166,7 @@ async def search_sse():
             }
 
             async with processing_semaphore:
-                async for chunk in run_elixposearch_pipeline(user_query, event_id):
+                async for chunk in run_elixposearch_pipeline(user_query, user_image, event_id):
                     lines = chunk.splitlines()
                     event_type = None
                     data_lines = []
@@ -201,7 +204,6 @@ async def search_sse():
 
 
 
-
 @app.route('/search', methods=['GET', 'POST'])
 @app.route('/search/<path:anything>', methods=['GET', 'POST'])
 async def search_json(anything=None):
@@ -209,6 +211,8 @@ async def search_json(anything=None):
     request_id = f"json-{uuid.uuid4().hex[:8]}"
     
     update_request_stats()
+
+    user_image = None
 
     if request.method == "POST":
         data = await request.get_json(force=True, silent=True) or {}
@@ -224,22 +228,28 @@ async def search_json(anything=None):
 
         if not user_query:
             user_query = data.get("query") or data.get("message") or data.get("prompt") or ""
+        user_image = data.get("image") or data.get("user_image") or data.get("image_url") or None
     else:
         args = request.args
         stream_flag = args.get("stream", "false").lower() == "true"
         user_query = args.get("query", "").strip()
-
+        user_image = args.get("image") or args.get("user_image") or args.get("image_url") or None
 
     if stream_flag:
+        data = {
+            "messages": [{"role": "user", "content": user_query}] if user_query else [],
+            "image": user_image,
+            "stream": True
+        }
+        request._cached_json = data
         return await search_sse()
 
-    if not user_query:
-        return jsonify({"error": "Missing query"}), 400
+    if not user_query and not user_image:
+        return jsonify({"error": "Missing query or image"}), 400
 
     app.logger.info(f"JSON request {request_id}: {user_query[:50]}...")
 
-    # Create task and add to queue
-    task = RequestTask(request_id, user_query, 'json')
+    task = RequestTask(request_id, (user_query, user_image), 'json')
     
     try:
         await asyncio.wait_for(request_queue.put(task), timeout=5.0)
@@ -247,7 +257,28 @@ async def search_json(anything=None):
         return jsonify({"error": "Server overloaded, try again later"}), 503
     
     try:
-        final_response = await asyncio.wait_for(task.result_future, timeout=180)  # 3 min
+        # Unpack user_query and user_image for the pipeline
+        async def run_pipeline():
+            uq, ui = task.user_query if isinstance(task.user_query, tuple) else (task.user_query, None)
+            final_result_content = []
+            async for chunk in run_elixposearch_pipeline(uq, ui, event_id=None):
+                lines = chunk.splitlines()
+                event_type = None
+                data_lines = []
+
+                for line in lines:
+                    if line.startswith("event:"):
+                        event_type = line.replace("event:", "").strip()
+                    elif line.startswith("data:"):
+                        data_lines.append(line.replace("data:", "").strip())
+
+                data_text = "\n".join(data_lines)
+                if data_text and event_type in ["final", "final-part"]:
+                    final_result_content.append(data_text)
+            return "\n".join(final_result_content).strip() or "No results found"
+
+        final_response = await asyncio.wait_for(run_pipeline(), timeout=180)
+
     except asyncio.TimeoutError:
         final_response = "Request timed out"
         app.logger.error(f"Request {request_id} timed out")
@@ -259,59 +290,6 @@ async def search_json(anything=None):
         return jsonify([{"message": {"role": "assistant", "content": final_response}}])
     else:
         return jsonify({"result": final_response})
-
-
-
-
-@app.route("/v1/chat/completions", methods=["GET", "POST"])
-async def openai_chat_completions():
-    request_id = f"chat-{uuid.uuid4().hex[:8]}"
-    update_request_stats()
-    
-    if request.method == "POST":
-        data = await request.get_json(force=True, silent=True) or {}
-        messages = data.get("messages", [])
-    else:
-        query = request.args.get("query") or request.args.get("message") or ""
-        messages = [{"role": "user", "content": query}] if query else []
-
-    if not messages or not isinstance(messages, list):
-        return jsonify({"error": "Missing or invalid messages"}), 400
-
-    user_query = ""
-    for msg in reversed(messages):
-        if msg.get("role") == "user":
-            user_query = msg.get("content", "")
-            break
-
-    if not user_query:
-        return jsonify({"error": "No user message found"}), 400
-
-    task = RequestTask(request_id, user_query, 'chat')
-    
-    try:
-        await asyncio.wait_for(request_queue.put(task), timeout=5.0)
-    except asyncio.TimeoutError:
-        return jsonify({"error": "Server overloaded, try again later"}), 503
-    
-    try:
-        final_response = await asyncio.wait_for(task.result_future, timeout=180)
-    except asyncio.TimeoutError:
-        final_response = "Request timed out"
-    except Exception as e:
-        final_response = f"Error: {e}"
-
-    return jsonify({
-        "id": f"chatcmpl-{request_id}",
-        "object": "chat.completion",
-        "created": int(time.time()),
-        "model": "elixpo-search",
-        "choices": [{
-            "index": 0,
-            "message": {"role": "assistant", "content": final_response},
-            "finish_reason": "stop"
-        }]
-    })
 
 # Ultra-fast status endpoint
 @app.route("/status", methods=["GET"])

@@ -9,7 +9,7 @@ import stat
 import shutil
 import os
 from urllib.parse import urlparse, parse_qs, unquote, quote
-
+import json
 
 def extract_imgurl(href):
     if not href:
@@ -27,7 +27,7 @@ def remove_readonly(func, path, _):
     except Exception as e:
         print(f"[!] Failed to delete: {path} → {e}")
 
-class GoogleSearchAgent:
+class GoogleSearchAgentImage:
     def __init__(self):
         self.playwright = None
         self.browser = None
@@ -70,15 +70,113 @@ class GoogleSearchAgent:
         )
         return context
 
+    async def search_images(self, query, max_images):
+        source_image_map = {}
+        os.makedirs(self.save_dir, exist_ok=True)
+        search_url = f"https://www.google.com/search?tbm=isch&q={quote(query)}"
+        page = self.browser.pages[0] if self.browser.pages else await self.browser.new_page()
+
+        await page.goto(search_url, timeout=60000)
+        await page.wait_for_selector('.ob5Hkd', timeout=15000)
+        await page.wait_for_timeout(2000)
+
+        blocks = await page.query_selector_all('.ob5Hkd')
+
+        for i, block in enumerate(blocks):
+            if i >= max_images:
+                break
+
+            try:
+                await block.scroll_into_view_if_needed()
+                await block.click()
+                await page.wait_for_timeout(1000)
+
+                # Get cleaned image link
+                image_url = None
+                link_el = await block.query_selector('a')
+                if link_el:
+                    link_href = await link_el.get_attribute('href')
+                    image_url = extract_imgurl(link_href)
+
+                # Get source from sidebar
+                source_link_el = await page.query_selector(".h11UTe > a")
+                if source_link_el:
+                    source_href = await source_link_el.get_attribute("href")
+                    if source_href and image_url:
+                        if source_href in source_image_map:
+                            if image_url not in source_image_map[source_href]:
+                                source_image_map[source_href].append(image_url)
+                        else:
+                            source_image_map[source_href] = [image_url]
+
+            except Exception as e:
+                print(f"[!] Error processing image {i}: {e}")
+                continue
+        
+        # Convert to a flattened string
+        result_json_str = json.dumps(source_image_map, indent=2)
+        return result_json_str
+
+
+    async def close(self):
+        if self.context:
+            await self.context.close()
+        if self.browser:
+            await self.browser.close()
+        if self.playwright:
+            await self.playwright.stop()
+
+        # Delete user data after browser closes
+        if os.path.exists(self.user_data_dir):
+            try:
+                shutil.rmtree(self.user_data_dir, onerror=remove_readonly)
+                print(f"[INFO] Deleted user data folder: {self.user_data_dir}")
+            except Exception as e:
+                print(f"[ERROR] Could not remove user data folder: {e}")
+
+        print("[INFO] GoogleSearchAgent closed.")
+
+
+
+
+class GoogleSearchAgentText:
+    def __init__(self):
+        self.playwright = None
+        self.browser = None
+        self.context = None
+        self.query_count = 0
+        print("[INFO] GoogleSearchAgent ready and warmed up.")
+
+    async def start(self):
+        self.playwright = await async_playwright().start()
+        self.browser = await self.playwright.chromium.launch(headless=True, args=[
+            "--disable-blink-features=AutomationControlled",
+        ])
+        self.context = await self._new_context()
+
+    async def _new_context(self):
+        context = await self.browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/114.0.0.0 Safari/537.36",
+            viewport={'width': 1280, 'height': 800},
+            java_script_enabled=True,
+            locale="en-US"
+        )
+        await context.add_init_script(
+            """Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"""
+        )
+        return context
+
     async def search(self, query, max_links=5):
         blacklist = [
             "maps.google.", "support.google.", "accounts.google.", "policies.google.",
             "images.google.", "google.com/preferences", "https://www.instagram.com/reel",
-            "https://www.instagram.com/p", "youtube.com/shorts", "youtube.com/live",
+            "https://www.instagram.com/p", "youtube.com/shorts", "youtube.com/live" "youtube.com/watch", "youtube.com",
             "https://www.facebook.com/", "https://www.facebook.com/p"
         ]
         try:
-            # Every 50 queries, refresh context to prevent RAM leaks
+
             if self.query_count >= 50:
                 print("[INFO] Resetting browser context to avoid leaks.")
                 await self.context.close()
@@ -107,55 +205,6 @@ class GoogleSearchAgent:
         except Exception as e:
             print("❌ Google search failed:", e)
             return []
-        
-    async def search_images(self, query, max_images):
-        cleaned_links = []
-        cleaned_sources = []
-        os.makedirs(self.save_dir, exist_ok=True)
-        search_url = f"https://www.google.com/search?tbm=isch&q={quote(query)}"
-        page = self.browser.pages[0] if self.browser.pages else await self.browser.new_page()
-
-        await page.goto(search_url, timeout=60000)
-        await page.wait_for_selector('.ob5Hkd', timeout=15000)
-        await page.wait_for_timeout(2000)
-
-        # Get all result blocks
-        blocks = await page.query_selector_all('.ob5Hkd')
-        for i, block in enumerate(blocks):
-            if i >= max_images:
-                break
-
-            try:
-                await block.scroll_into_view_if_needed()
-                await block.click()
-                await page.wait_for_timeout(1000)
-
-                link_el = await block.query_selector('a')
-                if link_el:
-                    link_href = await link_el.get_attribute('href')
-                    cleaned_href = extract_imgurl(link_href)
-                    if cleaned_href and cleaned_href not in cleaned_links:
-                        cleaned_links.append(cleaned_href)
-
-            except Exception as e:
-                print(f"[!] Error processing image {i}: {e}")
-                continue
-
-        extra_blocks = await page.query_selector_all('[jscontroller="N8Q1ib"]')
-        for i, block in enumerate(extra_blocks):
-            if i >= max_images:
-                break
-            try:
-                anchor = await block.query_selector('a')
-                if anchor:
-                    href = await anchor.get_attribute('href')
-                    img_source = extract_imgurl(href)
-                    if img_source and img_source not in cleaned_sources:
-                        cleaned_sources.append(img_source)
-            except Exception as e:
-                print(f"[!] Error extracting from jscontroller block: {e}")
-
-        return cleaned_links, cleaned_sources
 
     async def close(self):
         if self.context:
@@ -164,16 +213,8 @@ class GoogleSearchAgent:
             await self.browser.close()
         if self.playwright:
             await self.playwright.stop()
-
-        # Delete user data after browser closes
-        if os.path.exists(self.user_data_dir):
-            try:
-                shutil.rmtree(self.user_data_dir, onerror=remove_readonly)
-                print(f"[INFO] Deleted user data folder: {self.user_data_dir}")
-            except Exception as e:
-                print(f"[ERROR] Could not remove user data folder: {e}")
-
         print("[INFO] GoogleSearchAgent closed.")
+
 
         
 def mojeek_form_search(query):
@@ -283,7 +324,7 @@ async def web_search(query, google_agent):
     except Exception as e:
         print(f"[WARN] DuckDuckGo HTML search failed with error: {e}. Falling back to Mojeek.")
 
-    # Final Priority: Mojeek
+    
     try:
         mojeek_results = mojeek_form_search(query)
         if mojeek_results:
@@ -299,13 +340,13 @@ async def web_search(query, google_agent):
 
 
 
-async def image_search(query, google_agent):
+async def image_search(query, google_agent, max_images=10):
     print(f"[INFO] Running image search for: {query}")
     try:
-        results, sources = await google_agent.search_images(query, max_images=10)
+        results = await google_agent.search_images(query, max_images)
         if results:
             print(f"[INFO] Image search returned {len(results)} images.")
-            return results, sources
+            return results
         else:
             print("[INFO] No images found.")
             return []
@@ -318,36 +359,30 @@ async def image_search(query, google_agent):
 
 
 if __name__ == "__main__":
-    # print("\nDDGS:")
-    # for url in ddgs_search("the best sign language detection using cnn"):
-    #     print(url)
-    # print("\nGoogle no playwright:")
-    # for url in google_search_without_playwright("who is elixpo"):
-    #     print(url)  
-    # print("\nMOJEEK:")
-    # for urls in mojeek_form_search("sign language detection using cnn"):
-    #     print(urls)
 
     async def main():
-        agent = GoogleSearchAgent()
-        await agent.start()
+        agent_image = GoogleSearchAgentImage()
+        await agent_image.start()
         print("\nGoogle Search with Playwright:")
         queries = ["ballet dancer"]
         for query in queries:
             print(f"\nResults for: {query}")
-            results, sources = await agent.search_images(query, 10)
-            for link in results:
-                print(link)
-            for link in sources:
-                print(sources)
-        await agent.close()
+            results = await agent_image.search_images(query, 10)
+            print(results)
+        await agent_image.close()
+
+
+        # agent_text = GoogleSearchAgentText()
+        # await agent_text.start()
+        # print("\nGoogle Text Search with Playwright:")
+        # queries_text = ["ballet dancer"]
+        # for query in queries_text:
+        #     print(f"\nResults for: {query}")
+        #     results_text = await agent_text.search(query, 10)
+        #     print(results_text)
+        # await agent_text.close()
     
     asyncio.run(main())
     
-    # print("\nWeb Search")
-    # query = "Tell me something about quantum computing"
-    # results = web_search(query)
-    # print("Search results:")
-    # for link in results:
-    #     print(link)
+
 

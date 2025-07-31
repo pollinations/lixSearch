@@ -1,14 +1,29 @@
 import requests
 import base64
+import asyncio
 
-def generate_prompt_from_image(imageBase64: str) -> str:
+import requests
+
+async def generate_prompt_from_image(imageBase64: str) -> str:
     api_url = "https://text.pollinations.ai/openai"
     headers = {"Content-Type": "application/json"}
 
+    # Strong multi-perspective image analysis instruction
     instruction = (
-        "Describe the contents of this image in the form of a short, clear image search query. "
-        "Include objects, setting, mood, people, logos, colors, style — whatever stands out. "
-        "Make it search-friendly."
+        "You're an expert visual analyst. Given an image, describe it as a precise, "
+        "search-optimized query that captures the most identifiable, unique, and relevant aspects of the image. "
+        "Think of what someone might type into an image search engine to find this exact image or similar ones.\n\n"
+        "Prioritize:\n"
+        "- Recognizable subjects: recognize people (try to recognize and name them if possible; if famous, name them), animals, logos, brands\n"
+        "- Art style: oil painting, digital art, anime, blueprint, sketch, abstract, minimalist, etc.\n"
+        "- Objects and scene: nature, architecture, vehicles, furniture, urban, indoors, etc.\n"
+        "- Mood & aesthetics: serene, dramatic, retro, vaporwave, cyberpunk, cinematic, moody\n"
+        "- Colors and textures: pastel tones, vibrant neon, dark gritty, clean minimal\n"
+        "- Camera style or angle: close-up, aerial view, depth of field, wide shot\n"
+        "- Any cultural or thematic elements: Indian traditional art, Gothic, Japanese sumi-e, sci-fi tech, etc.\n\n"
+        "Avoid vague words. Be descriptive but concise. Don't assume, only describe what’s clearly visible. "
+        "If a person's face is clearly visible and recognizable, include their name. "
+        "Final output must be a **single-line image search query** optimized for clarity and relevance."
     )
 
     data = {
@@ -23,7 +38,7 @@ def generate_prompt_from_image(imageBase64: str) -> str:
             }
         ],
         "token": "fEWo70t94146ZYgk",
-        "max_tokens": 100
+        "max_tokens": 50
     }
 
     response = requests.post(api_url, headers=headers, json=data)
@@ -31,6 +46,39 @@ def generate_prompt_from_image(imageBase64: str) -> str:
     result = response.json()
     return result["choices"][0]["message"]["content"].strip()
 
+
+
+
+def replyFromImage(imageBase64: str, query: str) -> str:
+    api_url = "https://text.pollinations.ai/openai"
+    headers = {"Content-Type": "application/json"}
+
+    instruction = (
+        "You are a jolly assistant! First, analyze the image and understand what it is conveying, "
+        "while strictly following NSFW guidelines (do not describe or respond to inappropriate content). "
+        "Then, read the user's query and provide a friendly, helpful answer based on the image and the query. "
+        "Keep your tone light and cheerful!"
+    )
+
+    data = {
+        "model": "openai",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": instruction},
+                    {"type": "text", "text": query},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{imageBase64}"}}
+                ]
+            }
+        ],
+        "token": "fEWo70t94146ZYgk",
+    }
+
+    response = requests.post(api_url, headers=headers, json=data)
+    response.raise_for_status()
+    result = response.json()
+    return result["choices"][0]["message"]["content"].strip()
 
 def image_url_to_base64(image_url):
     response = requests.get(image_url)
@@ -40,8 +88,10 @@ def image_url_to_base64(image_url):
 
 
 
-
-image_url = "https://www.shutterstock.com/image-photo/ballerina-young-graceful-woman-ballet-600nw-2536595533.jpg" 
-image_base64 = image_url_to_base64(image_url)
-prompt = generate_prompt_from_image(image_base64)
-print(prompt)
+if __name__ == "__main__":
+    async def main():
+        image_url = "https://www.shutterstock.com/image-photo/ballerina-young-graceful-woman-ballet-600nw-2536595533.jpg" 
+        image_base64 = image_url_to_base64(image_url)
+        prompt = await generate_prompt_from_image(image_base64)
+        print(prompt)
+    asyncio.run(main()) 

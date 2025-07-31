@@ -121,6 +121,21 @@ tools = [
     {
         "type": "function",
         "function": {
+            "name": "replyFromImage",
+            "description": "Generates a friendly response based on an image and a user query.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "imageBase64": {"type": "string", "description": "The base64 encoded image string."},
+                    "query": {"type": "string", "description": "The user's query related to the image."}
+                },
+                "required": ["imageBase64", "query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "image_url_to_base64",
             "description": "Converts an image URL to a base64 encoded string.",
             "parameters": {
@@ -135,41 +150,13 @@ tools = [
     {
         "type": "function",
         "function": {
-            "name": "find_similarity",
-            "description": "Calculates the cosine similarity between two images given their base64 encoded strings.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "image1_base64": {"type": "string", "description": "Base64 encoded string of the first image."},
-                    "image2_base64": {"type": "string", "description": "Base64 encoded string of the second image."}
-                },
-                "required": ["image1_base64", "image2_base64"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "load_image",
-            "description": "Loads an image from a file path or PIL image and returns a tensor.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "image_path_or_pil": {"type": "string", "description": "File path to the image or a PIL Image object."}
-                },
-                "required": ["image_path_or_pil"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "image_search",
             "description": "Performs an image search using Google and returns up to 10 image URLs and their sources as lists.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "image_query": {"type": "string", "description": "The search query string for images."}
+                    "image_query": {"type": "string", "description": "The search query string for images."},
+                    "max_images" : {"type": "integer", "description": "The maximum number of images to return."}
                 },
                 "required": ["image_query"]
             }
