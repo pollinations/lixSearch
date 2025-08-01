@@ -32,29 +32,17 @@ class GoogleSearchAgentImage:
         self.playwright = None
         self.browser = None
         self.context = None
-        self.query_count = 0
-        self.user_data_dir = "playwright_user_data"
         self.save_dir = "downloaded_images"
-
-        # Remove previous session folder if exists
-        if os.path.exists(self.user_data_dir):
-            try:
-                shutil.rmtree(self.user_data_dir, onerror=remove_readonly)
-                print(f"[INFO] Cleared existing user data at: {self.user_data_dir}")
-            except Exception as e:
-                print(f"[ERROR] Failed to delete old user data: {e}")
-
-        print("[INFO] GoogleSearchAgent ready and warmed up.")
+        self.query_count = 0
+        print("[INFO] GoogleSearchAgentImage initialized.")
 
     async def start(self):
         self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch_persistent_context(
-            user_data_dir=self.user_data_dir,
+        self.browser = await self.playwright.chromium.launch(
             headless=True,
-            args=["--remote-debugging-port=9222", "--disable-blink-features=AutomationControlled"],
-            viewport={'width': 1280, 'height': 800},
-            locale="en-US",
+            args=["--disable-blink-features=AutomationControlled"],
         )
+        self.context = await self._new_context()
 
     async def _new_context(self):
         context = await self.browser.new_context(
@@ -73,32 +61,29 @@ class GoogleSearchAgentImage:
     async def search_images(self, query, max_images):
         source_image_map = {}
         os.makedirs(self.save_dir, exist_ok=True)
-        search_url = f"https://www.google.com/search?tbm=isch&q={quote(query)}"
-        page = self.browser.pages[0] if self.browser.pages else await self.browser.new_page()
 
+        page = await self.context.new_page()
+        search_url = f"https://www.google.com/search?tbm=isch&q={quote(query)}"
         await page.goto(search_url, timeout=60000)
+
         await page.wait_for_selector('.ob5Hkd', timeout=15000)
         await page.wait_for_timeout(2000)
-
         blocks = await page.query_selector_all('.ob5Hkd')
 
         for i, block in enumerate(blocks):
             if i >= max_images:
                 break
-
             try:
                 await block.scroll_into_view_if_needed()
                 await block.click()
                 await page.wait_for_timeout(1000)
 
-                # Get cleaned image link
                 image_url = None
                 link_el = await block.query_selector('a')
                 if link_el:
                     link_href = await link_el.get_attribute('href')
                     image_url = extract_imgurl(link_href)
 
-                # Get source from sidebar
                 source_link_el = await page.query_selector(".h11UTe > a")
                 if source_link_el:
                     source_href = await source_link_el.get_attribute("href")
@@ -112,11 +97,10 @@ class GoogleSearchAgentImage:
             except Exception as e:
                 print(f"[!] Error processing image {i}: {e}")
                 continue
-        
-        # Convert to a flattened string
+
+        await page.close()
         result_json_str = json.dumps(source_image_map, indent=2)
         return result_json_str
-
 
     async def close(self):
         if self.context:
@@ -125,17 +109,7 @@ class GoogleSearchAgentImage:
             await self.browser.close()
         if self.playwright:
             await self.playwright.stop()
-
-        # Delete user data after browser closes
-        if os.path.exists(self.user_data_dir):
-            try:
-                shutil.rmtree(self.user_data_dir, onerror=remove_readonly)
-                print(f"[INFO] Deleted user data folder: {self.user_data_dir}")
-            except Exception as e:
-                print(f"[ERROR] Could not remove user data folder: {e}")
-
-        print("[INFO] GoogleSearchAgent closed.")
-
+        print("[INFO] GoogleSearchAgentImage closed.")
 
 
 

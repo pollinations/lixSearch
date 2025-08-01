@@ -13,6 +13,7 @@ import concurrent.futures
 import logging
 import dotenv
 import os
+import asyncio
 
 
 logging.basicConfig(level=logging.INFO)
@@ -35,9 +36,9 @@ def fetch_url_content_parallel(urls, max_workers=10):
                 text_content, image_urls = future.result()
                 results[url] = (text_content, image_urls)
             except Exception as e:
-                print(f"[ERROR] Failed fetching {url}: {e}")
+                logger.error(f"Failed fetching {url}: {e}")
                 results[url] = ('[Failed]', [])
-        print(f"[INFO] Fetched all URL information in parallel.")
+        logger.info(f"Fetched all URL information in parallel.")
         return results
 
 
@@ -54,7 +55,7 @@ def fetch_youtube_parallel(urls, mode='metadata', max_workers=10):
             try:
                 results[url] = future.result()
             except Exception as e:
-                print(f"[ERROR] YouTube {mode} failed for {url}: {e}")
+                logger.error(f"YouTube {mode} failed for {url}: {e}")
                 results[url] = '[Failed]'
         return results
 
@@ -64,7 +65,7 @@ def format_sse(event: str, data: str) -> str:
     return f"event: {event}\n{data_str}\n\n"
 
 async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: str = None):
-    print(f"[INFO] Starting ElixpoSearch Pipeline for query: {user_query}")
+    logger.info(f"Starting ElixpoSearch Pipeline for query: '{user_query}' with image: '{user_image[:50] + '...' if user_image else 'None'}'")
     
     def emit_event(event_type, message):
         if event_id:
@@ -93,7 +94,8 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             "web_searches": {},
             "fetched_urls": {},
             "youtube_metadata": {},
-            "youtube_transcripts": {}
+            "youtube_transcripts": {},
+            "base64_cache": {} # Cache for image_url_to_base64 results
         }
         
         messages = [
@@ -108,9 +110,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
     - You need current/recent information (news, stock prices, weather, etc.)
     - Current political positions or office holders (presidents, prime ministers, etc.)
     - The query explicitly asks for web research or sources
-    - You are genuinely uncertain about factual information
-    - The query contains specific URLs to analyze
-    - User uploads an image
+    - User provides an image
     - Time-sensitive information is requested
     - Queries asking "now", "current", "latest", "today", "recent"
 
@@ -130,9 +130,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
     - get_youtube_transcript(url: str) → Transcript from a YouTube link.
     - get_timezone_and_offset(location: str) → Timezone + UTC offset.
     - convert_utc_to_local(utc_time, offset) → Converts to local time.
-    - generate_prompt_from_image(image_url: str) → Suggests a search query based on image content.
-    - replyFromImage(image_url: str, query: str) → Answers a question using both query and image context.
-    - image_url_to_base64(image_url: str) → Converts image URL to base64 for prompt generation.
+    - image_url_to_base64(image_url: str) → Converts image URL to base64 string. Use this first to get base64 data for other image analysis tools.
+    - generate_prompt_from_image(base64_image_data: str) → Suggests a search query based on image content from a base64 image.
+    - replyFromImage(base64_image_data: str, query: str) → Answers a question using both query and context from a base64 image.
     - image_search(image_query: str, max_images=10) → Performs reverse or similar image search.
 
     ---
@@ -145,42 +145,44 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
     IMAGE-RELATED BEHAVIOR:
 
+    **Crucial Sequence for Image Analysis:**
+    If the user has provided an image (`user_image` is present in the initial prompt), your FIRST action related to that image MUST be to call `image_url_to_base64` with the *original image URL*. The output of this tool will be a success message or an error, and the base64 data will be internally cached. You can then use the *original image URL* as a key to reference the cached base64 data when calling `generate_prompt_from_image` or `replyFromImage`.
+
     1. User Provides Image ONLY (No Text Query):
-    - **Step 1:** Convert the `user_image` URL to base64 using `image_url_to_base64()`.
-    - **Step 2:** Generate a search prompt from the image using `generate_prompt_from_image()` with the base64 image.
-    - **Step 3:** Perform an image search using the generated prompt with `image_search()` to find **10 relevant images**.
-    - **Step 4:** Present these 10 images directly to the user. No detailed text answer is needed, just a concise intro.
+    - **Step 1:** Call `image_url_to_base64(image_url="[THE ORIGINAL USER IMAGE URL]")`.
+    - **Step 2 (after base64 conversion is reported successful):** Call `generate_prompt_from_image(base64_image_data="[THE BASE64 DATA OBTAINED FROM THE CACHE]")`.
+    - **Step 3:** Perform an `image_search()` with the generated prompt to find **10 relevant images**.
+    - **Final Response:** State a concise introductory sentence (e.g., "Here are some images similar to the one you provided.") and then present these 10 images. Do not provide a text-based explanation for the image content beyond this.
 
     2. User Provides Image AND Text Query:
-    - **Step 1:** Convert the `user_image` URL to base64 using `image_url_to_base64()`.
-    - **Step 2:** Use `replyFromImage()` with the base64 image and the `user_query` to get an initial understanding and response based on the image context. This response will form the basis of your answer.
-    - **Step 3:** Based on the `user_query` and the initial `replyFromImage()` response, determine if additional web search (`web_search()`) is necessary for broader context, current information, or detailed explanation beyond what the image alone provides.
-    - **Step 4:** If a web search is needed, generate 1-3 highly focused search queries combining elements from the image and the user's text query. Execute `web_search()` and `fetch_full_text()` on relevant results.
-    - **Step 5:** Concurrently, perform an `image_search()` using a relevant query derived from the image content and the user's text query to find **10 relevant images** that visually relate to the user's request.
-    - **Step 6:** Synthesize information from `replyFromImage()`, web search results (if any), and image search results into a comprehensive, detailed answer.
+    - **Step 1:** Call `image_url_to_base64(image_url="[THE ORIGINAL USER IMAGE URL]")`.
+    - **Step 2 (after base64 conversion is reported successful):** Call `replyFromImage(base64_image_data="[THE BASE64 DATA OBTAINED FROM THE CACHE]", query=user_query)` for initial image-contextual information.
+    - **Decision Point:** Based on the `user_query` and the `replyFromImage()` output, determine if additional web search (`web_search()`) is necessary for broader context, current information, or detailed explanation. If so, generate 1-3 highly focused search queries combining elements from the image and the user's text query. Execute `web_search()` and `fetch_full_text()` on relevant results.
+    - **Concurrent Image Search:** Also perform an `image_search()` using a relevant query derived from the image content AND the user's text query to find **10 relevant images** that visually relate to the user's request.
+    - **Synthesis:** Synthesize information from `replyFromImage()`, web search results (if any), and image search results into a comprehensive, detailed answer.
 
     3. User Provides Text Query ONLY (No Image):
-    - **Step 1:** Follow the standard text-based query decision framework.
-    - **Step 2:** If `web_search()` is performed, also generate a concise image search query based on the topic of the text query and perform `image_search()` to find **10 relevant images**.
-    - **Step 3:** Include these 10 relevant images in the final response.
+    - **Standard Flow:** Follow the general decision framework for text-only queries.
+    - **Image Enhancement:** If `web_search()` is performed, also generate a concise image search query based on the topic of the text query and perform `image_search()` to find **10 relevant images**.
+    - **Inclusion:** Include these 10 relevant images in the final response under the "Images from Related Web Results" section.
 
     ---
 
     General Decision Framework:
-    1. **Basic Knowledge/Math/Facts**: Answer directly (e.g., "What is 1+1?", "What is the capital of France?", "How does photosynthesis work?")
-    2. **Current Events/News/Politics**: Use `web_search` tool (e.g., "Who is the current president?", "Latest news", "Current prime minister")
-    3. **Specific URLs provided**: Use appropriate tools (`fetch_full_text`, `get_youtube_metadata`, `get_youtube_transcript`) to analyze them.
+    1. **Basic Knowledge/Math/Facts**: Answer directly.
+    2. **Current Events/News/Politics**: Use `web_search` tool.
+    3. **Specific URLs provided**: Use appropriate tools.
     4. **Explicit research requests**: Use tools as needed.
     5. **Time-sensitive data**: Use tools for current information.
     6. **Keywords like "now", "current", "latest", "today"**: Use `web_search` tool.
-    7. **Image Tools**: Always use relevant image tools (`image_url_to_base64`, `generate_prompt_from_image`, `replyFromImage`, `image_search`) when an image is involved, following the specific behaviors outlined above.
+    7. **Image Tools**: Always use relevant image tools as per the "IMAGE-RELATED BEHAVIOR" section.
 
     **CRITICAL: For any query asking about current political positions, office holders, or using words like "now", "current", "latest" - ALWAYS use `web_search` first.**
 
     Final Response Structure:
     1. **Answer** (detailed explanation of the query)
-    2. **Visually Similar Images** (If an image was uploaded by the user, this section will contain 10 images directly related to the user's uploaded image.)
-    3. **Images from Related Web Results** (If a web search was performed, this section will contain up to 10 images found during the web search related to the content.)
+    2. **Visually Similar Images** (If the original input included an image, this section will contain 10 images directly related to the user's uploaded image. These are results from the primary image search for the input image.)
+    3. **Images from Related Web Results** (If a web search was performed, this section will contain up to 10 images found during the web search related to the content, or images from image search performed for a text-only query.)
     4. **Sources & References** (List all URLs from which information was gathered.)
     5. **Summary** (A concise summary of the answer.)
 
@@ -192,7 +194,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 },
 {
     "role": "user", 
-    "content": f"""Query: {user_query} -- Image: {user_image}"""
+    "content": f"""Query: {user_query} -- Image: {user_image if user_image else 'No image provided'}"""
 }
 ]
 
@@ -202,23 +204,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         collected_images_from_web = []
         collected_similar_images = []
         final_message_content = None
-        
-        # Initial check for image-only query
-        if user_image and not user_query:
-            base64_img = image_url_to_base64(user_image)
-            generated_prompt = await generate_prompt_from_image(base64_img)
-            
-            search_results_raw = await image_search(generated_prompt, google_agent_image, max_images=10)
-            collected_similar_images.extend(search_results_raw)
-            
-            final_message_content = "Here are some images visually similar to the one you provided."
-            # Break early if only image is provided and handled
-            # The remaining logic in 'finally' block will format and send the response.
-            await google_agent_image.close()
-            await google_agent_text.close()
-            yield format_sse("final", final_message_content + "\n\n---")
-            return
-
 
         while current_iteration < max_iterations:
             current_iteration += 1
@@ -244,6 +229,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 response.raise_for_status()
                 response_data = response.json()
             except requests.exceptions.RequestException as e:
+                logger.error(f"Pollinations API call failed at iteration {current_iteration}: {e}")
                 if event_id:
                     yield format_sse("error", f"[ERROR] Pollinations API call failed at iteration {current_iteration}: {e}")
                 break
@@ -252,21 +238,23 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             messages.append(assistant_message)
 
             tool_calls = assistant_message.get("tool_calls")
+            logger.info(f"Tool calls suggested by model: {tool_calls}")
             
             if not tool_calls:
                 final_message_content = assistant_message.get("content")
                 break
-            
+
+            tool_outputs = []
             for tool_call in tool_calls:
                 function_name = tool_call["function"]["name"]
                 function_args = json.loads(tool_call["function"]["arguments"])
+                
+                logger.info(f"Executing tool: {function_name} with args: {function_args}")
                 if event_id:
-                    print(f"[INFO] Tool call detected: {function_name} with args: {function_args}")
                     yield format_sse("INFO", f" Execution In Progress ({function_name}) \n")
                 
-                tool_result = "[Tool execution failed or returned no data.]"
 
-                try:
+                try:                    
                     if function_name == "cleanQuery":
                         websites, youtube, cleaned_query = cleanQuery(function_args.get("query"))
                         tool_result = f"Cleaned Query: {cleaned_query}\nWebsites: {websites}\nYouTube URLs: {youtube}"
@@ -291,57 +279,97 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         web_event = emit_event("INFO", f" Surfing Internet \n")
                         if web_event:
                             yield web_event
-                        print(f"[INFO] Performing web search")
+                        logger.info(f"Performing web search for: {function_args.get('query')}")
                         search_query = function_args.get("query")
 
                         google_req_count += 1
                         if google_req_count > 50:
-                            print("[INFO] Restarting GoogleSearchAgent after 50 requests.")
+                            logger.info("[INFO] Restarting GoogleSearchAgent after 50 requests.")
                             await google_agent_text.close()
                             google_agent_text = GoogleSearchAgentText()
                             await google_agent_text.start()
                             google_req_count = 1 
 
                         search_results_raw = await web_search(search_query, google_agent_text)
-                        print(f"[INFO] Web search returned {len(search_results_raw)} results")
+                        logger.info(f"Web search returned {len(search_results_raw)} results")
                         summaries = ""
-                        parallel_results = fetch_url_content_parallel(search_results_raw)
-                        for url, (text_content, image_urls) in parallel_results.items():
-                            summaries += f"\nURL: {url}\nSummary: {text_content}\nImages: {image_urls}\n"
-                            collected_sources.append(url)
-                            collected_images_from_web.extend(image_urls)
-                        tool_result = summaries
+                        if search_results_raw:
+                            parallel_results = fetch_url_content_parallel(search_results_raw)
+                            for url, (text_content, image_urls) in parallel_results.items():
+                                summaries += f"\nURL: {url}\nSummary: {text_content}\nImages: {image_urls}\n"
+                                collected_sources.append(url)
+                                collected_images_from_web.extend(image_urls)
+                        tool_result = summaries if summaries else "[No relevant web search results found.]"
 
                     elif function_name == "generate_prompt_from_image":
-                        base64_img_result = image_url_to_base64(function_args.get("image_url"))
-                        get_prompt = await generate_prompt_from_image(base64_img_result)
+                        image_url = function_args.get("image_url") 
+                        base64_data = image_url_to_base64(image_url) 
+                        get_prompt = await generate_prompt_from_image(base64_data)
                         tool_result = f"Generated Search Query: {get_prompt}"
+                        logger.info(f"Generated prompt: {get_prompt}")
 
                     elif function_name == "replyFromImage":
-                        base64_img_result = image_url_to_base64(function_args.get("image_url"))
+                        image_url = function_args.get("image_url") 
+                        base64_data = image_url_to_base64(image_url) 
                         query = function_args.get("query")
-                        reply = await replyFromImage(base64_img_result, query)
+                        reply = await replyFromImage(base64_data, query)
                         tool_result = f"Reply from Image: {reply}"
-                    
+                        logger.info(f"Reply from image for query '{query}': {reply[:100]}...")
+
                     elif function_name == "image_search":
                         image_query = function_args.get("image_query")
                         max_images = function_args.get("max_images", 10)
                         google_req_count += 1
                         if google_req_count > 50:
-                            print("[INFO] Restarting GoogleSearchAgent after 50 requests.")
+                            logger.info("[INFO] Restarting GoogleSearchAgent after 50 requests.")
                             await google_agent_image.close()
                             google_agent_image = GoogleSearchAgentImage()
                             await google_agent_image.start()
                             google_req_count = 1  
 
+                        # Use the correct image_search signature and result handling
                         search_results_raw = await image_search(image_query, google_agent_image, max_images)
-                        print(f"[INFO] Image search returned {len(search_results_raw)} results")
-                        collected_similar_images.extend(search_results_raw)
-                        tool_result = f"Image Search Results: {search_results_raw}"
+                        logger.info(f"Image search for '{image_query[:50]}...' returned results.")
 
-                    
+                        image_urls = []
+                        url_context = ""
+                        try:
+                            # search_results_raw is a JSON string mapping source_url -> [img_url, ...]
+                            if isinstance(search_results_raw, str):
+                                try:
+                                    image_dict = json.loads(search_results_raw)
+                                    if isinstance(image_dict, dict):
+                                        for src_url, imgs in image_dict.items():
+                                            if not imgs:
+                                                continue
+                                            for img_url in imgs:
+                                                if img_url and img_url.startswith("http"):
+                                                    image_urls.append(img_url)
+                                                    url_context += f"\nSource: {src_url}\nImage: {img_url}"
+                                    else:
+                                        logger.error("Image search result is not a dict.")
+                                except json.JSONDecodeError:
+                                    logger.error(f"Image search raw result is not valid JSON: {search_results_raw[:100]}...")
+                            else:
+                                logger.error("Image search result is not a string.")
+
+                            if not isinstance(image_urls, list):
+                                image_urls = []
+
+                            # Distinguish based on presence of original user_image
+                            if user_image: 
+                                collected_similar_images.extend(image_urls)
+                            elif not user_image and user_query: 
+                                collected_images_from_web.extend(image_urls)
+                        except Exception as e:
+                            logger.error(f"Failed to process image search results: {e}", exc_info=True)
+                            image_urls = []
+                            url_context = ""
+
+                        tool_result = f"Image Search Results for '{image_query}...': Found {len(image_urls)} images.{url_context if url_context else ''}"
+
                     elif function_name == "get_youtube_metadata":
-                        print(f"[INFO] Getting YouTube metadata for URLs")
+                        logger.info(f"Getting YouTube metadata for URLs")
                         urls = [function_args.get("url")]
                         results = fetch_youtube_parallel(urls, mode='metadata')
                         for url, metadata in results.items():
@@ -350,7 +378,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                             collected_sources.append(url)
 
                     elif function_name == "get_youtube_transcript":
-                        print(f"[INFO] Getting YouTube transcripts for URLs")
+                        logger.info(f"Getting YouTube transcripts for URLs")
                         if event_id:
                             yield format_sse("INFO", f" Watching Youtube \n")
                         urls = [function_args.get("url")]
@@ -361,7 +389,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                             collected_sources.append(url)
 
                     elif function_name == "fetch_full_text":
-                        print(f"[INFO] Fetching full text for URLs")
+                        logger.info(f"Fetching full text for URLs")
                         if event_id:
                             yield format_sse("INFO", f" Writing Script \n")
                         urls = [function_args.get("url")]
@@ -374,51 +402,57 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
                     else:
                         tool_result = f"Unknown tool: {function_name}"
+                        logger.warning(f"Unknown tool called: {function_name}")
 
                 except Exception as e:
                     tool_result = f"[ERROR] Tool {function_name} failed: {type(e).__name__}: {e}"
-
-                messages.append({
+                    logger.error(f"Error executing tool {function_name}: {e}", exc_info=True)
+                
+                tool_outputs.append({
                     "role": "tool",
                     "tool_call_id": tool_call["id"],
                     "name": function_name,
                     "content": tool_result
                 })
-                if event_id:
-                    print(f"[INFO] Tool {function_name} executed successfully.")
-                    yield format_sse("INFO", f" Execution Completed! \n")
+            
+            messages.extend(tool_outputs)
+            logger.info(f"Completed tool execution for iteration {current_iteration}. Number of messages: {len(messages)}")
+            if event_id:
+                yield format_sse("INFO", f" All tools executed for iteration {current_iteration}. Waiting for next model response...\n")
+
 
         if final_message_content:
-            print(f"[INFO] Preparing final response")
-            response_with_sources = final_message_content
-            sources_md = ""
+            logger.info(f"Preparing final response.")
+            response_parts = []
+            
+            response_parts.append(final_message_content)
 
-            if collected_similar_images:
+            if user_image and collected_similar_images:
                 images_to_show = [img for img in collected_similar_images if img and img.startswith("http")][:10]
                 if images_to_show:
-                    sources_md += "\n\n---\n**Visually Similar Images:**\n"
+                    response_parts.append("\n\n---\n**Visually Similar Images:**\n")
                     for img in images_to_show:
-                        sources_md += f"![Similar Image]({img})\n"
+                        response_parts.append(f"![Similar Image]({img})\n")
 
             if collected_images_from_web:
-                web_images = [img for img in collected_images_from_web if img and img.startswith("http")]
+                web_images = [img for img in collected_images_from_web if img and img.startswith("http")][:10]
                 if web_images:
-                    sources_md += "\n\n---\n**Images from Related Web Results:**\n"
-                    for img in web_images[:10]:
-                        sources_md += f"![Web Image]({img})\n"
+                    response_parts.append("\n\n---\n**Images from Related Web Results:**\n")
+                    for img in web_images:
+                        response_parts.append(f"![Web Image]({img})\n")
 
             if collected_sources:
-                sources_md += "\n\n---\n**Sources & References:**\n"
-                unique_sources = sorted(set(collected_sources))
+                response_parts.append("\n\n---\n**Sources & References:**\n")
+                unique_sources = sorted(list(set(collected_sources)))
                 for i, src in enumerate(unique_sources):
-                    sources_md += f"{i+1}. [{src}]({src})\n"
+                    response_parts.append(f"{i+1}. [{src}]({src})\n")
 
-            response_with_sources += "\n\n---\n**Summary:**\n"
-            response_with_sources += "This answer includes the latest information, relevant images, and sources for further reading. If you need more details or updates, please specify your interest.\n"
+            response_parts.append("\n\n---\n**Summary:**\n")
+            response_parts.append("This answer includes information, relevant images, and sources for further reading. If you need more details or updates, please specify your interest.\n")
 
-            response_with_sources += sources_md
+            response_with_sources = "".join(response_parts)
 
-            print(f"[INFO] Final response prepared with sources and images")
+            logger.info(f"Final response prepared. Total length: {len(response_with_sources)}")
             
             if event_id:
                 yield format_sse("INFO", " SUCCESS")
@@ -431,7 +465,8 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 yield format_sse("final", response_with_sources)
             return  
         else:
-            error_msg = f"[ERROR] ElixpoSearch failed after {max_iterations} iterations."
+            error_msg = f"[ERROR] ElixpoSearch failed after {max_iterations} iterations. No final content generated. Model might be stuck in a tool loop or failed to generate a coherent response."
+            logger.error(error_msg)
             if event_id:
                 yield format_sse("error", error_msg)
                 return  
@@ -441,8 +476,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         try:
             await google_agent_image.close()
             await google_agent_text.close()
+            logger.info("GoogleSearchAgents closed successfully.")
         except Exception as e:
-            print(f"[ERROR] Failed to close GoogleSearchAgent: {e}")
+            logger.error(f"Failed to close GoogleSearchAgents: {e}")
 
 
 if __name__ == "__main__":
@@ -454,9 +490,9 @@ if __name__ == "__main__":
         # user_query = ""
         # user_image = "https://media.istockphoto.com/id/1421310827/photo/young-graceful-ballerina-is-performing-classic-dance-beauty-and-elegance-of-classic-ballet.jpg?s=612x612&w=0&k=20&c=GQ1DVEarW4Y-lGD6y8jCb3YPIgap7gj-6ReS3C7Qi3Y=" 
         
-        # 2. Image + Text Query
-        user_query = "What can you tell me about this type of dance and its current popularity?"
-        user_image = "https://media.istockphoto.com/id/1421310827/photo/young-graceful-ballerina-is-performing-classic-dance-beauty-and-elegance-of-classic-ballet.jpg?s=612x612&w=0&k=20&c=GQ1DVEarW4Y-lGD6y8jCb3YPIgap7gj-6ReS3C7Qi3Y=" 
+        # 2. Image + Text Query (Your problematic case)
+        user_query = "what's the current price of this fruit now in india? is it available now in india?"
+        user_image = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRXSP090Mw0IdwG6hAkNdQ9xio3qWsP2Vzsug&s" 
 
         # 3. Text only
         # user_query = "What is the capital of France and show me some images of it?"
@@ -469,7 +505,7 @@ if __name__ == "__main__":
         
         try:
             async for event_chunk in async_generator:
-                print(event_chunk) # Print each SSE chunk as it comes
+                # print(event_chunk) # Keep this for detailed SSE debugging
                 if event_chunk and "event: final" in event_chunk:
                     lines = event_chunk.split('\n')
                     for line in lines:
@@ -478,6 +514,7 @@ if __name__ == "__main__":
                                 answer = line[6:]
                             else:
                                 answer += line[6:]
+                    break 
                 elif event_chunk and "event: final-part" in event_chunk:
                     lines = event_chunk.split('\n')
                     for line in lines:
@@ -487,7 +524,7 @@ if __name__ == "__main__":
                             else:
                                 answer += line[6:]
         except Exception as e:
-            print(f"Error during async generator iteration: {e}")
+            logger.error(f"Error during async generator iteration: {e}", exc_info=True)
             answer = "Failed to get answer due to an error."
         
         if answer:

@@ -8,7 +8,7 @@ async def generate_prompt_from_image(imageBase64: str) -> str:
     api_url = "https://text.pollinations.ai/openai"
     headers = {"Content-Type": "application/json"}
 
-    # Strong multi-perspective image analysis instruction
+
     instruction = (
         "You're an expert visual analyst. Given an image, describe it as a precise, "
         "search-optimized query that captures the most identifiable, unique, and relevant aspects of the image. "
@@ -27,7 +27,7 @@ async def generate_prompt_from_image(imageBase64: str) -> str:
     )
 
     data = {
-        "model": "openai",
+        "model": "openai-large",
         "messages": [
             {
                 "role": "user",
@@ -54,10 +54,22 @@ def replyFromImage(imageBase64: str, query: str) -> str:
     headers = {"Content-Type": "application/json"}
 
     instruction = (
-        "You are a jolly assistant! First, analyze the image and understand what it is conveying, "
+        
+       "You are a jolly assistant! First, analyze the image and understand what it is conveying, "
         "while strictly following NSFW guidelines (do not describe or respond to inappropriate content). "
         "Then, read the user's query and provide a friendly, helpful answer based on the image and the query. "
-        "Keep your tone light and cheerful!"
+        "Keep your tone light and cheerful!\n"
+        "Prioritize:\n"
+        "- Recognizable subjects: recognize people (try to recognize and name them if possible; if famous, name them), animals, logos, brands\n"
+        "- Art style: oil painting, digital art, anime, blueprint, sketch, abstract, minimalist, etc.\n"
+        "- Objects and scene: nature, architecture, vehicles, furniture, urban, indoors, etc.\n"
+        "- Mood & aesthetics: serene, dramatic, retro, vaporwave, cyberpunk, cinematic, moody\n"
+        "- Colors and textures: pastel tones, vibrant neon, dark gritty, clean minimal\n"
+        "- Camera style or angle: close-up, aerial view, depth of field, wide shot\n"
+        "- Any cultural or thematic elements: Indian traditional art, Gothic, Japanese sumi-e, sci-fi tech, etc.\n\n"
+        "Avoid vague words. Be descriptive but concise. Don't assume, only describe what’s clearly visible. "
+        "If a person's face is clearly visible and recognizable, include their name. "
+        
     )
 
     data = {
@@ -90,7 +102,7 @@ def image_url_to_base64(image_url):
 
 if __name__ == "__main__":
     async def main():
-        image_url = "https://www.shutterstock.com/image-photo/ballerina-young-graceful-woman-ballet-600nw-2536595533.jpg" 
+        image_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRXSP090Mw0IdwG6hAkNdQ9xio3qWsP2Vzsug&s" 
         image_base64 = image_url_to_base64(image_url)
         prompt = await generate_prompt_from_image(image_base64)
         print(prompt)
