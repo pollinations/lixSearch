@@ -50,7 +50,7 @@ async def generate_prompt_from_image(imgURL: str) -> str:
 
 
 
-def replyFromImage(imgURL: str, query: str) -> str:
+async def replyFromImage(imgURL: str, query: str) -> str:
     imageBase64 = image_url_to_base64(imgURL)  
     api_url = "https://text.pollinations.ai/openai"
     headers = {"Content-Type": "application/json"}

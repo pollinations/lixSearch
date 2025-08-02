@@ -130,20 +130,57 @@ async def startup():
     app.logger.info("Started 8 request processing workers")
 
 
-@app.route("/search/sse", methods=["POST"])
-async def search_sse():
-    data = await request.get_json(force=True, silent=True) or {}
 
+
+def extract_query_and_image(data: dict) -> tuple[str, str | None, bool]:
+    """
+    Extracts user_query and user_image from request data. Returns (query, image_url, is_openai_format).
+    """
     user_query = ""
-    user_image = data.get("image") or data.get("user_image") or data.get("image_url") or None
+    user_image = None
+    is_openai_chat = False
+
     messages = data.get("messages", [])
     if messages and isinstance(messages, list):
         for msg in reversed(messages):
             if msg.get("role") == "user":
-                user_query = msg.get("content", "").strip()
+                content = msg.get("content", "")
+                if isinstance(content, list):  # OpenAI-style with multiple parts
+                    for part in content:
+                        if part.get("type") == "text":
+                            user_query += part.get("text", "").strip() + " "
+                        elif part.get("type") == "image_url" and not user_image:
+                            user_image = part.get("image_url", {}).get("url", None)
+                    user_query = user_query.strip()
+                else:  # Old style: plain string content
+                    user_query = content.strip()
+                is_openai_chat = True
                 break
+
     if not user_query:
         user_query = data.get("query") or data.get("message") or data.get("prompt") or ""
+
+    if not user_image:
+        user_image = data.get("image") or data.get("user_image") or data.get("image_url") or None
+
+    return user_query.strip(), user_image, is_openai_chat
+
+
+
+@app.route("/search/sse", methods=["POST", "GET"])
+async def search_sse(forwarded_data=None):
+    if forwarded_data is not None:
+        data = forwarded_data
+    elif request.method == "GET":
+        args = request.args
+        stream_flag = args.get("stream", "true").lower() == "true"
+        user_query = args.get("query", "").strip()
+        user_image = args.get("image") or args.get("image_url") or None
+        data = {"query": user_query, "image": user_image}
+    else:
+        data = await request.get_json(force=True, silent=True) or {}
+
+    user_query, user_image, _ = extract_query_and_image(data)
 
     request_id = f"sse-{uuid.uuid4().hex[:8]}"
     event_id = f"elixpo-{int(time.time() * 1000)}-{random.randint(1000, 9999)}"
@@ -152,10 +189,8 @@ async def search_sse():
     app.logger.info(f"SSE request {request_id}: {user_query[:50]}...")
 
     if len(active_requests) >= 15:
-        return Response(
-            'data: {"error": "Server overloaded, try again later"}\n\n',
-            content_type="text/event-stream"
-        )
+        return Response('data: {"error": "Server overloaded, try again later"}\n\n',
+                        content_type="text/event-stream")
 
     async def event_stream():
         try:
@@ -180,22 +215,20 @@ async def search_sse():
                     data_text = "\n".join(data_lines)
                     if data_text:
                         json_data = {
-                            "choices": [
-                                {"delta": {"content": data_text}}
-                            ]
+                            "choices": [{"delta": {"content": data_text}}]
                         }
-                        yield f'data: {json.dumps(json_data)}\n\n'
+                        yield f"data: {json.dumps(json_data)}\n\n"
 
                     if event_type == "final":
                         break
 
                     await asyncio.sleep(0.01)
 
-            yield 'data: [DONE]\n\n'
+            yield "data: [DONE]\n\n"
 
         except Exception as e:
             app.logger.error(f"SSE error for {request_id}: {e}", exc_info=True)
-            yield f'data: {json.dumps({"error": str(e)})}\n\n'
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
         finally:
             active_requests.pop(request_id, None)
             global_stats["successful_requests"] += 1
@@ -203,61 +236,46 @@ async def search_sse():
     return Response(event_stream(), content_type="text/event-stream")
 
 
-
 @app.route('/search', methods=['GET', 'POST'])
 @app.route('/search/<path:anything>', methods=['GET', 'POST'])
 async def search_json(anything=None):
-    is_openai_chat = False
     request_id = f"json-{uuid.uuid4().hex[:8]}"
-    
     update_request_stats()
 
-    user_image = None
-
-    if request.method == "POST":
-        data = await request.get_json(force=True, silent=True) or {}
-        stream_flag = data.get("stream", False)
-        user_query = ""
-        messages = data.get("messages", [])
-        if messages and isinstance(messages, list):
-            for msg in reversed(messages):
-                if msg.get("role") == "user":
-                    user_query = msg.get("content", "").strip()
-                    is_openai_chat = True
-                    break
-
-        if not user_query:
-            user_query = data.get("query") or data.get("message") or data.get("prompt") or ""
-        user_image = data.get("image") or data.get("user_image") or data.get("image_url") or None
-    else:
+    if request.method == "GET":
         args = request.args
         stream_flag = args.get("stream", "false").lower() == "true"
         user_query = args.get("query", "").strip()
-        user_image = args.get("image") or args.get("user_image") or args.get("image_url") or None
+        user_image = args.get("image") or args.get("image_url") or None
+        data = {"query": user_query, "image": user_image}
+    else:
+        data = await request.get_json(force=True, silent=True) or {}
+        stream_flag = data.get("stream", False)
+
+    user_query, user_image, is_openai_chat = extract_query_and_image(data)
 
     if stream_flag:
-        data = {
+        # Forward to SSE
+        sse_data = {
             "messages": [{"role": "user", "content": user_query}] if user_query else [],
             "image": user_image,
             "stream": True
         }
-        request._cached_json = data
-        return await search_sse()
+
+        return await search_sse(forwarded_data=sse_data)
 
     if not user_query and not user_image:
         return jsonify({"error": "Missing query or image"}), 400
 
     app.logger.info(f"JSON request {request_id}: {user_query[:50]}...")
-
     task = RequestTask(request_id, (user_query, user_image), 'json')
-    
+
     try:
         await asyncio.wait_for(request_queue.put(task), timeout=5.0)
     except asyncio.TimeoutError:
         return jsonify({"error": "Server overloaded, try again later"}), 503
-    
+
     try:
-        # Unpack user_query and user_image for the pipeline
         async def run_pipeline():
             uq, ui = task.user_query if isinstance(task.user_query, tuple) else (task.user_query, None)
             final_result_content = []
@@ -275,6 +293,7 @@ async def search_json(anything=None):
                 data_text = "\n".join(data_lines)
                 if data_text and event_type in ["final", "final-part"]:
                     final_result_content.append(data_text)
+
             return "\n".join(final_result_content).strip() or "No results found"
 
         final_response = await asyncio.wait_for(run_pipeline(), timeout=180)
@@ -290,6 +309,7 @@ async def search_json(anything=None):
         return jsonify([{"message": {"role": "assistant", "content": final_response}}])
     else:
         return jsonify({"result": final_response})
+
 
 # Ultra-fast status endpoint
 @app.route("/status", methods=["GET"])

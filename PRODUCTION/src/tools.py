@@ -126,7 +126,7 @@ tools = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "imageBase64": {"type": "string", "description": "The URL of the image"},
+                    "imageURL": {"type": "string", "description": "The URL of the image"},
                     "query": {"type": "string", "description": "The user's query related to the image."}
                 },
                 "required": ["imageURL", "query"]
