@@ -206,7 +206,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         3. **Images from Related Web Results** (if web search or text-based image search was done)
         4. **Sources & References**
         5. **Summary**
-        6. **Punchline** (Always end with this)
+        6. Write the punchline, just casually like a part of the response don't make a different heading for that
 
         Tone:
         - Professional, clear, and confident.
