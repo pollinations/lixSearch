@@ -139,6 +139,7 @@ def extract_query_and_image(data: dict) -> tuple[str, str | None, bool]:
     user_query = ""
     user_image = None
     is_openai_chat = False
+    image_count = 0
 
     messages = data.get("messages", [])
     if messages and isinstance(messages, list):
@@ -158,10 +159,15 @@ def extract_query_and_image(data: dict) -> tuple[str, str | None, bool]:
                 break
 
     if not user_query:
-        user_query = data.get("query") or data.get("message") or data.get("prompt") or ""
+        user_query = data.get("query") or ""
+        if user_image:
+            image_count += 1
 
     if not user_image:
-        user_image = data.get("image") or data.get("user_image") or data.get("image_url") or None
+        user_image = data.get("image") or None
+    
+    if image_count > 1:
+        return user_query.strip(), "__MULTIPLE_IMAGES__", is_openai_chat
 
     return user_query.strip(), user_image, is_openai_chat
 
@@ -263,7 +269,9 @@ async def search_json(anything=None):
         }
 
         return await search_sse(forwarded_data=sse_data)
-
+    if user_image == "__MULTIPLE_IMAGES__":
+        return jsonify({"error": "Only one image can be processed per request. Please submit a single image."}), 400
+    
     if not user_query and not user_image:
         return jsonify({"error": "Missing query or image"}), 400
 
