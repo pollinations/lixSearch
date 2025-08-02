@@ -326,12 +326,18 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         tool_result = summaries if summaries else "[No relevant web search results found.]"
 
                     elif function_name == "generate_prompt_from_image":
+                        web_event = emit_event("INFO", f" Watching Images! \n")
+                        if web_event:
+                            yield web_event
                         image_url = function_args.get("imageURL")  
                         get_prompt = await generate_prompt_from_image(image_url)
                         tool_result = f"Generated Search Query: {get_prompt}"
                         logger.info(f"Generated prompt: {get_prompt}")
 
                     elif function_name == "replyFromImage":
+                        web_event = emit_event("INFO", f" Understanding Images \n")
+                        if web_event:
+                            yield web_event
                         image_url = function_args.get("imageURL") 
                         query = function_args.get("query")
                         reply = await replyFromImage(image_url, query)
@@ -339,6 +345,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         logger.info(f"Reply from image for query '{query}': {reply[:100]}...")
 
                     elif function_name == "image_search":
+                        web_event = emit_event("INFO", f" Surfing Images \n")
+                        if web_event:
+                            yield web_event
                         image_query = function_args.get("image_query")
                         max_images = function_args.get("max_images", 10)
                         google_req_count += 1
@@ -367,7 +376,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                                             for img_url in imgs:
                                                 if img_url and img_url.startswith("http"):
                                                     image_urls.append(img_url)
-                                                    url_context += f"\nSource: {src_url}\nImage: {img_url}"
+                                                    url_context += f"\t{img_url}"
                                     else:
                                         logger.error("Image search result is not a dict.")
                                 except json.JSONDecodeError:
@@ -386,8 +395,8 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                             logger.error(f"Failed to process image search results: {e}", exc_info=True)
                             image_urls = []
                             url_context = ""
-
-                        tool_result = f"Image Search Results for '{image_query}...': Found {len(image_urls)} images.{url_context if url_context else ''}"
+                        print(url_context)
+                        tool_result = f"{url_context if url_context else ''}"
 
                     elif function_name == "get_youtube_metadata":
                         logger.info(f"Getting YouTube metadata for URLs")
@@ -513,7 +522,7 @@ if __name__ == "__main__":
         
         # 2. Image + Text Query (Your problematic case)
         user_query = "what's the current price of mango now in india? is it available now in india?"
-        user_image = None 
+        user_image = "https://media.istockphoto.com/id/1019835828/photo/mango-and-leaf-isolated-white-background.jpg?s=612x612&w=0&k=20&c=_nmOBzO9mGEitT2rUvO1xAX9jwL5mHYI8AFRbYeyy-A="
 
         # 3. Text only
         # user_query = "What is the capital of France and show me some images of it?"
