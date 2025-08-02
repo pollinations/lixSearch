@@ -112,9 +112,9 @@ tools = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "imageBase64": {"type": "string", "description": "The base64 encoded image string."}
+                    "imageURL": {"type": "string", "description": "The URL of the image"}
                 },
-                "required": ["imageBase64"]
+                "required": ["imageURL"]
             }
         },
     },
@@ -126,24 +126,10 @@ tools = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "imageBase64": {"type": "string", "description": "The base64 encoded image string."},
+                    "imageBase64": {"type": "string", "description": "The URL of the image"},
                     "query": {"type": "string", "description": "The user's query related to the image."}
                 },
-                "required": ["imageBase64", "query"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "image_url_to_base64",
-            "description": "Converts an image URL to a base64 encoded string.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "image_url": {"type": "string", "description": "The URL of the image to convert."}
-                },
-                "required": ["image_url"]
+                "required": ["imageURL", "query"]
             }
         }
     },

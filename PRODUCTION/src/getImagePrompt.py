@@ -4,7 +4,8 @@ import asyncio
 
 import requests
 
-async def generate_prompt_from_image(imageBase64: str) -> str:
+async def generate_prompt_from_image(imgURL: str) -> str:
+    imageBase64 = image_url_to_base64(imgURL)   
     api_url = "https://text.pollinations.ai/openai"
     headers = {"Content-Type": "application/json"}
 
@@ -49,7 +50,8 @@ async def generate_prompt_from_image(imageBase64: str) -> str:
 
 
 
-def replyFromImage(imageBase64: str, query: str) -> str:
+def replyFromImage(imgURL: str, query: str) -> str:
+    imageBase64 = image_url_to_base64(imgURL)  
     api_url = "https://text.pollinations.ai/openai"
     headers = {"Content-Type": "application/json"}
 
@@ -103,7 +105,6 @@ def image_url_to_base64(image_url):
 if __name__ == "__main__":
     async def main():
         image_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRXSP090Mw0IdwG6hAkNdQ9xio3qWsP2Vzsug&s" 
-        image_base64 = image_url_to_base64(image_url)
-        prompt = await generate_prompt_from_image(image_base64)
+        prompt = await generate_prompt_from_image(image_url)
         print(prompt)
     asyncio.run(main()) 

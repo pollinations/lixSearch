@@ -4,7 +4,7 @@ from clean_query import cleanQuery
 from search import web_search, GoogleSearchAgentText, GoogleSearchAgentImage, image_search
 from getYoutubeDetails import get_youtube_metadata, get_youtube_transcript
 from scrape import fetch_full_text
-from getImagePrompt import generate_prompt_from_image, image_url_to_base64, replyFromImage
+from getImagePrompt import generate_prompt_from_image, replyFromImage
 from tools import tools
 from datetime import datetime, timezone
 from getTimeZone import get_timezone_and_offset, convert_utc_to_local
@@ -95,108 +95,132 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             "fetched_urls": {},
             "youtube_metadata": {},
             "youtube_transcripts": {},
-            "base64_cache": {} # Cache for image_url_to_base64 results
+            "base64_cache": {} 
         }
         
         messages = [
-{
-    "role": "system",
-    "content": f"""
-    Mission: Answer the user's query with reliable, well-researched, and well-explained information.
-    
-    **CRITICAL: Answer directly if you know the answer to a question (basic facts, math, general knowledge) without using tools.**
-    
-    Use tools only when:
-    - You need current/recent information (news, stock prices, weather, etc.)
-    - Current political positions or office holders (presidents, prime ministers, etc.)
-    - The query explicitly asks for web research or sources
-    - User provides an image
-    - Time-sensitive information is requested
-    - Queries asking "now", "current", "latest", "today", "recent"
+        {
+        "role": "system",
+        "content": f"""
+        Mission: Answer the user's query with reliable, well-researched, and well-explained information.
 
-    Your answers must prioritize:
-    - Clarity and correctness
-    - Concise explanations
-    - Markdown formatting
-    - Relevant citations if sources are used
+        **CRITICAL: Answer directly if you know the answer to a question (basic facts, math, general knowledge) without using tools.**
 
-    ---
+        Use tools only when:
+        - You need current/recent information (news, stock prices, weather, etc.)
+        - Current political positions or office holders (presidents, prime ministers, etc.)
+        - The query explicitly asks for web research or sources
+        - User provides an image
+        - Time-sensitive information is requested
+        - Queries asking "now", "current", "latest", "today", "recent"
 
-    Available Tools:
-    - cleanQuery(query: str) → Extracts URLs and cleaned user query.
-    - web_search(query: str) → Returns websites and summaries (no full text).
-    - fetch_full_text(url: str) → Extracts full main content and images.
-    - get_youtube_metadata(url: str) → Metadata from a YouTube link.
-    - get_youtube_transcript(url: str) → Transcript from a YouTube link.
-    - get_timezone_and_offset(location: str) → Timezone + UTC offset.
-    - convert_utc_to_local(utc_time, offset) → Converts to local time.
-    - image_url_to_base64(image_url: str) → Converts image URL to base64 string. Use this first to get base64 data for other image analysis tools.
-    - generate_prompt_from_image(base64_image_data: str) → Suggests a search query based on image content from a base64 image.
-    - replyFromImage(base64_image_data: str, query: str) → Answers a question using both query and context from a base64 image.
-    - image_search(image_query: str, max_images=10) → Performs reverse or similar image search.
+        Your answers must prioritize:
+        - Clarity and correctness
+        - Concise explanations
+        - Markdown formatting
+        - Relevant citations if sources are used
 
-    ---
+        ---
+        
+        Available Tools:
+        - cleanQuery(query: str)
+        - web_search(query: str)
+        - fetch_full_text(url: str)
+        - get_youtube_metadata(url: str)
+        - get_youtube_transcript(url: str)
+        - get_timezone_and_offset(location: str)
+        - convert_utc_to_local(utc_time, offset)
+        - generate_prompt_from_image(imgURL: str)
+        - replyFromImage(imgURL: str, query: str)
+        - image_search(image_query: str, max_images=10)
 
-    Context:
-    Current UTC Date: {current_utc_date}  
-    Current UTC Time: {current_utc_time}
+        ---
+        
+        Context:
+        Current UTC Date: {current_utc_date}  
+        Current UTC Time: {current_utc_time}
 
-    ---
+        ---
 
-    IMAGE-RELATED BEHAVIOR:
+        IMAGE-RELATED BEHAVIOR:
 
-    **Crucial Sequence for Image Analysis:**
-    If the user has provided an image (`user_image` is present in the initial prompt), your FIRST action related to that image MUST be to call `image_url_to_base64` with the *original image URL*. The output of this tool will be a success message or an error, and the base64 data will be internally cached. You can then use the *original image URL* as a key to reference the cached base64 data when calling `generate_prompt_from_image` or `replyFromImage`.
+        **Crucial Sequence for Image Analysis:**
 
-    1. User Provides Image ONLY (No Text Query):
-    - **Step 1:** Call `image_url_to_base64(image_url="[THE ORIGINAL USER IMAGE URL]")`.
-    - **Step 2 (after base64 conversion is reported successful):** Call `generate_prompt_from_image(base64_image_data="[THE BASE64 DATA OBTAINED FROM THE CACHE]")`.
-    - **Step 3:** Perform an `image_search()` with the generated prompt to find **10 relevant images**.
-    - **Final Response:** State a concise introductory sentence (e.g., "Here are some images similar to the one you provided.") and then present these 10 images. Do not provide a text-based explanation for the image content beyond this.
+        1. User Provides Image ONLY (No Text Query):
+        - Step 1: Call `generate_prompt_from_image()`.
+        - Step 2: Perform an `image_search()` with the generated prompt to find **10 relevant images**.
+        - Final Response: Say "Here are some images similar to the one you provided." Then show the images. Avoid explaining the image content unless asked.
 
-    2. User Provides Image AND Text Query:
-    - **Step 1:** Call `image_url_to_base64(image_url="[THE ORIGINAL USER IMAGE URL]")`.
-    - **Step 2 (after base64 conversion is reported successful):** Call `replyFromImage(base64_image_data="[THE BASE64 DATA OBTAINED FROM THE CACHE]", query=user_query)` for initial image-contextual information.
-    - **Decision Point:** Based on the `user_query` and the `replyFromImage()` output, determine if additional web search (`web_search()`) is necessary for broader context, current information, or detailed explanation. If so, generate 1-3 highly focused search queries combining elements from the image and the user's text query. Execute `web_search()` and `fetch_full_text()` on relevant results.
-    - **Concurrent Image Search:** Also perform an `image_search()` using a relevant query derived from the image content AND the user's text query to find **10 relevant images** that visually relate to the user's request.
-    - **Synthesis:** Synthesize information from `replyFromImage()`, web search results (if any), and image search results into a comprehensive, detailed answer.
+        2. User Provides Image AND Text Query:
+        - If web search is necessary:  
+        - Call `generate_prompt_from_image()` for image context.  
+        - Combine that context with the user query to perform a `web_search()` and fetch with `fetch_full_text()`.  
+        - Use those to inform a complete response.  
+        - If web search is **not** needed:  
+        - Call `replyFromImage()` for combined insight.  
+        - In both cases:  
+        - Also perform `image_search()` using a query that mixes visual + text query intent to return **10 matching images**.
 
-    3. User Provides Text Query ONLY (No Image):
-    - **Standard Flow:** Follow the general decision framework for text-only queries.
-    - **Image Enhancement:** If `web_search()` is performed, also generate a concise image search query based on the topic of the text query and perform `image_search()` to find **10 relevant images**.
-    - **Inclusion:** Include these 10 relevant images in the final response under the "Images from Related Web Results" section.
+        3. User Provides Text Query ONLY (No Image):
+        - Follow standard logic:
+        - Answer directly if native knowledge suffices.
+        - Otherwise, use `web_search()` for reliable info.
+        - Additionally:
+        - Perform `image_search()` with a search-friendly variant of the text query.
+        - Return 10 matching images.
 
-    ---
+        ---
+        
+        Understanding & Multi-Query Handling:
 
-    General Decision Framework:
-    1. **Basic Knowledge/Math/Facts**: Answer directly.
-    2. **Current Events/News/Politics**: Use `web_search` tool.
-    3. **Specific URLs provided**: Use appropriate tools.
-    4. **Explicit research requests**: Use tools as needed.
-    5. **Time-sensitive data**: Use tools for current information.
-    6. **Keywords like "now", "current", "latest", "today"**: Use `web_search` tool.
-    7. **Image Tools**: Always use relevant image tools as per the "IMAGE-RELATED BEHAVIOR" section.
+        For any **user query containing multiple distinct sub-questions or requests**, process and answer **each part independently**:
+        - Parse and understand the **true intent** behind every segment.
+        - Perform individual **searches and tool calls** if needed for each.
+        - Respond **clearly and separately** to each, even within one message.
 
-    **CRITICAL: For any query asking about current political positions, office holders, or using words like "now", "current", "latest" - ALWAYS use `web_search` first.**
+        For every `image_search()`:
+        - Always include the **10 relevant images** clearly under **"Visually Similar Images"** or **"Images from Related Web Results"**.
+        - Never skip image rendering when applicable.
 
-    Final Response Structure:
-    1. **Answer** (detailed explanation of the query)
-    2. **Visually Similar Images** (If the original input included an image, this section will contain 10 images directly related to the user's uploaded image. These are results from the primary image search for the input image.)
-    3. **Images from Related Web Results** (If a web search was performed, this section will contain up to 10 images found during the web search related to the content, or images from image search performed for a text-only query.)
-    4. **Sources & References** (List all URLs from which information was gathered.)
-    5. **Summary** (A concise summary of the answer.)
+        If multiple image searches are done:
+        - **Label results appropriately** so the user knows which query or subquery they belong to.
 
-    Tone:
-    Professional, clear, confident, and detailed. Ensure all relevant information is covered.
+        End every response with a brief, clever **punchline or signoff** — light, witty, or memorable (but still relevant).
 
-    **Answer in English, unless explicitly asked to use another language.**
-    """
-},
-{
-    "role": "user", 
-    "content": f"""Query: {user_query} -- Image: {user_image if user_image else 'No image provided'}"""
-}
-]
+        ---
+
+        General Decision Framework:
+        1. Basic Knowledge/Math/Facts → Direct Answer
+        2. Current Events/News → Use `web_search`
+        3. Specific URLs → Use tools
+        4. Explicit Research → Use tools
+        5. Time-Sensitive → Use tools
+        6. Keywords like "now", "latest", "recent" → Use `web_search`
+        7. Image Present → Follow IMAGE-RELATED BEHAVIOR
+
+        ---
+        
+        Final Response Structure:
+        1. **Answer**
+        2. **Visually Similar Images** (only if input had image)
+        3. **Images from Related Web Results** (if web search or text-based image search was done)
+        4. **Sources & References**
+        5. **Summary**
+        6. **Punchline** (Always end with this)
+
+        Tone:
+        - Professional, clear, and confident.
+        - Balance detail and brevity.
+        - **Answer in English**, unless told otherwise.
+        """
+    },
+    {
+        "role": "user", 
+        "content": f"""Query: {user_query} -- Image: {user_image if user_image else 'No image provided'}"""
+    }
+    ]
+
+
 
         max_iterations = 7
         current_iteration = 0
@@ -302,17 +326,15 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         tool_result = summaries if summaries else "[No relevant web search results found.]"
 
                     elif function_name == "generate_prompt_from_image":
-                        image_url = function_args.get("image_url") 
-                        base64_data = image_url_to_base64(image_url) 
-                        get_prompt = await generate_prompt_from_image(base64_data)
+                        image_url = function_args.get("imageURL")  
+                        get_prompt = await generate_prompt_from_image(image_url)
                         tool_result = f"Generated Search Query: {get_prompt}"
                         logger.info(f"Generated prompt: {get_prompt}")
 
                     elif function_name == "replyFromImage":
-                        image_url = function_args.get("image_url") 
-                        base64_data = image_url_to_base64(image_url) 
+                        image_url = function_args.get("imageURL") 
                         query = function_args.get("query")
-                        reply = await replyFromImage(base64_data, query)
+                        reply = await replyFromImage(image_url, query)
                         tool_result = f"Reply from Image: {reply}"
                         logger.info(f"Reply from image for query '{query}': {reply[:100]}...")
 
@@ -356,7 +378,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                             if not isinstance(image_urls, list):
                                 image_urls = []
 
-                            # Distinguish based on presence of original user_image
                             if user_image: 
                                 collected_similar_images.extend(image_urls)
                             elif not user_image and user_query: 
@@ -491,8 +512,8 @@ if __name__ == "__main__":
         # user_image = "https://media.istockphoto.com/id/1421310827/photo/young-graceful-ballerina-is-performing-classic-dance-beauty-and-elegance-of-classic-ballet.jpg?s=612x612&w=0&k=20&c=GQ1DVEarW4Y-lGD6y8jCb3YPIgap7gj-6ReS3C7Qi3Y=" 
         
         # 2. Image + Text Query (Your problematic case)
-        user_query = "what's the current price of this fruit now in india? is it available now in india?"
-        user_image = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRXSP090Mw0IdwG6hAkNdQ9xio3qWsP2Vzsug&s" 
+        user_query = "what's the current price of mango now in india? is it available now in india?"
+        user_image = None 
 
         # 3. Text only
         # user_query = "What is the capital of France and show me some images of it?"
