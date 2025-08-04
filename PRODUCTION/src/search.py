@@ -162,6 +162,11 @@ class GoogleSearchAgentText:
 
             page = await self.context.new_page()
             await page.goto(f"https://www.google.com/search?q={query}", timeout=20000)
+            # Print all <a> tags' outer HTML for debugging
+            a_tags = await page.query_selector_all('a')
+            for idx, a_tag in enumerate(a_tags):
+                outer_html = await a_tag.evaluate('(el) => el.outerHTML')
+                print(f"[DEBUG] <a> tag {idx}: {outer_html}")
             await page.wait_for_selector('a[jsname]')
             links = page.locator('a[jsname]')
             results = []
