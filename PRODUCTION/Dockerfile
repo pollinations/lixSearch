@@ -10,9 +10,6 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
-RUN pip install playwright && playwright install chromium &&  playwright install-deps && pip install ddgs
 RUN apt-get update && apt-get install -y \
     wget \
     ca-certificates \
@@ -37,6 +34,10 @@ RUN apt-get update && apt-get install -y \
     libxss1 \
     libxtst6 \
     && rm -rf /var/lib/apt/lists/*
+RUN pip install --upgrade pip
+RUN pip install -r requirements.txt
+RUN pip install playwright && playwright install chromium &&  playwright install-deps && pip install ddgs
+
 COPY . .
 
 EXPOSE 5000

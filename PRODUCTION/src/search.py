@@ -40,7 +40,7 @@ class GoogleSearchAgentImage:
         self.playwright = await async_playwright().start()
         self.browser = await self.playwright.chromium.launch(
             headless=True,
-            args=["--disable-blink-features=AutomationControlled"],
+            args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
         )
         self.context = await self._new_context()
 
@@ -125,6 +125,7 @@ class GoogleSearchAgentText:
         self.playwright = await async_playwright().start()
         self.browser = await self.playwright.chromium.launch(headless=True, args=[
             "--disable-blink-features=AutomationControlled",
+            "--no-sandbox"
         ])
         self.context = await self._new_context()
 
