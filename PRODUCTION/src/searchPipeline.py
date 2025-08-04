@@ -19,7 +19,8 @@ import asyncio
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("elixpo")
 dotenv.load_dotenv()
-
+google_agent_text = GoogleSearchAgentText()
+google_agent_image = GoogleSearchAgentImage()
 POLLINATIONS_TOKEN=os.getenv("TOKEN")
 MODEL=os.getenv("MODEL")
 REFRRER=os.getenv("REFERRER")
@@ -64,7 +65,12 @@ def format_sse(event: str, data: str) -> str:
     data_str = ''.join(f"data: {line}\n" for line in lines)
     return f"event: {event}\n{data_str}\n\n"
 
+
+
+
+
 async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: str = None):
+    global google_agent_text, google_agent_image  
     logger.info(f"Starting ElixpoSearch Pipeline for query: '{user_query}' with image: '{user_image[:50] + '...' if user_image else 'None'}'")
     
     def emit_event(event_type, message):
@@ -76,12 +82,13 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
     if initial_event:
         yield initial_event
     
-    google_agent_text = GoogleSearchAgentText()
-    google_agent_image = GoogleSearchAgentImage()
 
     try:
-        await google_agent_text.start()
-        await google_agent_image.start()
+        if not getattr(google_agent_text, "is_running", False):
+            await google_agent_text.start()
+        if not getattr(google_agent_image, "is_running", False):
+            await google_agent_image.start()
+
         google_req_count = 0  
 
         current_utc_datetime = datetime.now(timezone.utc)
@@ -502,12 +509,8 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             else:
                 print(error_msg)
     finally:
-        try:
-            await google_agent_image.close()
-            await google_agent_text.close()
-            logger.info("GoogleSearchAgents closed successfully.")
-        except Exception as e:
-            logger.error(f"Failed to close GoogleSearchAgents: {e}")
+        logger.info("Search Completed")
+
 
 
 if __name__ == "__main__":
