@@ -68,8 +68,7 @@ def format_sse(event: str, data: str) -> str:
 
 
 async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: str = None):
-    google_agent_text = GoogleSearchAgentText()
-    google_agent_image = GoogleSearchAgentImage()
+
 
     logger.info(f"Starting ElixpoSearch Pipeline for query: '{user_query}' with image: '{user_image[:50] + '...' if user_image else 'None'}'")
     
@@ -90,7 +89,8 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             await google_agent_image.start()
 
         google_req_count = 0  
-
+        google_agent_text = GoogleSearchAgentText()
+        google_agent_image = GoogleSearchAgentImage()
         current_utc_datetime = datetime.now(timezone.utc)
         current_utc_time = current_utc_datetime.strftime("%H:%M UTC")
         current_utc_date = current_utc_datetime.strftime("%Y-%m-%d")
@@ -146,7 +146,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         Context:
         Current UTC Date: {current_utc_date}  
         Current UTC Time: {current_utc_time}
-
+        Include time and date if the query involves time-sensitive information or current events.
         ---
 
         IMAGE-RELATED BEHAVIOR:
