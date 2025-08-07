@@ -7,7 +7,7 @@ from scrape import fetch_full_text
 from getImagePrompt import generate_prompt_from_image, replyFromImage
 from tools import tools
 from datetime import datetime, timezone
-from getTimeZone import get_timezone_and_offset, convert_utc_to_local
+from getTimeZone import get_local_time
 import random
 import concurrent.futures
 import logging
@@ -142,15 +142,19 @@ agent_manager = GoogleAgentManager()
 def fetch_url_content_parallel(urls, max_workers=10):
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(fetch_full_text, url): url for url in urls}
-        results = {}
+        results = ""
         for future in concurrent.futures.as_completed(futures):
             url = futures[future]
             try:
                 text_content = future.result()
-                results[url] = (text_content)
+                # Remove all escape sequences and newlines from text_content
+                clean_text = str(text_content).encode('unicode_escape').decode('utf-8')
+                clean_text = clean_text.replace('\\n', ' ').replace('\\r', ' ').replace('\\t', ' ')
+                clean_text = ''.join(c for c in clean_text if c.isprintable())
+                results += f"\nURL: {url}\nText Preview: {clean_text.strip()}"
             except Exception as e:
                 logger.error(f"Failed fetching {url}: {e}")
-                results[url] = ('[Failed]', [])
+                results += f"\nURL: {url}\n Failed to fetch content of this URL"
         logger.info(f"Fetched all URL information in parallel.")
         return results
 
@@ -194,9 +198,10 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         # Ensure agents are initialized
         await agent_manager.initialize()
         
-        current_utc_datetime = datetime.now(timezone.utc)
-        current_utc_time = current_utc_datetime.strftime("%H:%M UTC")
-        current_utc_date = current_utc_datetime.strftime("%Y-%m-%d")
+        # Get current UTC time for internal context (not exposed to user)
+        current_utc_time = datetime.now(timezone.utc)
+        
+
         headers = {"Content-Type": "application/json"}
 
         memoized_results = {
@@ -238,8 +243,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         - fetch_full_text(url: str)
         - get_youtube_metadata(url: str)
         - get_youtube_transcript(url: str)
-        - get_timezone_and_offset(location: str)
-        - convert_utc_to_local(utc_time, offset)
+        - get_local_time(location: str)
         - generate_prompt_from_image(imgURL: str)
         - replyFromImage(imgURL: str, query: str)
         - image_search(image_query: str, max_images=10)
@@ -248,7 +252,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
         Context:
         Use system UTC context only for internal calculations. When asked for local time in a city or country, always provide the accurate local time in the user-friendly format (like 8:15 PM in Kolkata), without exposing UTC values or system metadata. Be confident and correct in every time-based response.
-
+        {current_utc_time}
         ---
 
         IMAGE-RELATED BEHAVIOR:
@@ -316,7 +320,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         },
     {
         "role": "user", 
-        "content": f"""Query: {user_query} -- Image: {user_image if user_image else 'No image provided'}"""
+        "content": f"""Query: {user_query} -- Image: {user_image if user_image else ''}"""
     }
     ]
 
@@ -381,21 +385,14 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         websites, youtube, cleaned_query = cleanQuery(function_args.get("query"))
                         tool_result = f"Cleaned Query: {cleaned_query}\nWebsites: {websites}\nYouTube URLs: {youtube}"
 
-                    elif function_name == "get_timezone_and_offset":
+                    elif function_name == "get_local_time":
                         location_name = function_args.get("location_name")
                         if location_name in memoized_results["timezone_info"]:
                             tool_result = memoized_results["timezone_info"][location_name]
                         else:
-                            offset_str = get_timezone_and_offset(location_name)
-                            local_datetime_str = convert_utc_to_local(current_utc_datetime, offset_str)
-                            tool_result = f"Location: {location_name}\nUTC Offset: {offset_str}\nLocal Date & Time: {local_datetime_str}"
+                            localTime = get_local_time(location_name)
+                            tool_result = f"Location: {location_name}\n {localTime}"
                             memoized_results["timezone_info"][location_name] = tool_result
-
-                    elif function_name == "convert_utc_to_local":
-                        utc_dt_str = function_args.get("utc_datetime")
-                        utc_offset = function_args.get("utc_offset_hours")
-                        utc_dt_obj = datetime.fromisoformat(utc_dt_str.replace('Z', '+00:00'))
-                        tool_result = convert_utc_to_local(utc_dt_obj, utc_offset).strftime('%Y-%m-%d %H:%M:%S')
 
                     elif function_name == "web_search":
                         web_event = emit_event("INFO", f" Surfing Internet \n")
@@ -404,7 +401,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         logger.info(f"Performing web search for: {function_args.get('query')}")
                         search_query = function_args.get("query")
 
-                        # Use global agent manager
+                        
                         google_agent_text = await agent_manager.get_text_agent()
                         await agent_manager.increment_text_count()
 
@@ -413,10 +410,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         summaries = ""
                         if search_results_raw:
                             parallel_results = fetch_url_content_parallel(search_results_raw)
-                            for url, (text_content) in parallel_results.items():
-                                summaries += f"\nURL: {url}\nSummary: {text_content}\n"
-                                collected_sources.append(url)
-                        tool_result = summaries if summaries else "[No relevant web search results found.]"
+                        tool_result = parallel_results if parallel_results else "[No relevant web search results found.]"
 
                     elif function_name == "generate_prompt_from_image":
                         web_event = emit_event("INFO", f" Watching Images! \n")
@@ -517,10 +511,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                             yield format_sse("INFO", f" Writing Script \n")
                         urls = [function_args.get("url")]
                         parallel_results = fetch_url_content_parallel(urls)
-                        for url, (text_content) in parallel_results.items():
-                            tool_result = f"URL: {url}\nText Preview: {text_content}..."
-                            collected_sources.append(url)
-                            memoized_results["fetched_urls"][url] = tool_result
+                        tool_result = parallel_results if parallel_results else "[No content fetched from URL]"
 
                     else:
                         tool_result = f"Unknown tool: {function_name}"
@@ -538,6 +529,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 })
             
             messages.extend(tool_outputs)
+            print(messages)
             logger.info(f"Completed tool execution for iteration {current_iteration}. Number of messages: {len(messages)}")
             if event_id:
                 yield format_sse("INFO", f" All tools executed for iteration {current_iteration}. Waiting for next model response...\n")
@@ -629,7 +621,7 @@ if __name__ == "__main__":
         # user_image = "https://media.istockphoto.com/id/1421310827/photo/young-graceful-ballerina-is-performing-classic-dance-beauty-and-elegance-of-classic-ballet.jpg?s=612x612&w=0&k=20&c=GQ1DVEarW4Y-lGD6y8jCb3YPIgap7gj-6ReS3C7Qi3Y=" 
         
         # 2. Image + Text Query (Your problematic case)
-        user_query = "can you tell me what's the latest news from india"
+        user_query = "hi"
         user_image = None
 
         # 3. Text only
@@ -671,6 +663,9 @@ if __name__ == "__main__":
             print("\n--- No answer received ---")
     
     asyncio.run(main())
+    # content = fetch_url_content_parallel(["https://www.geeksforgeeks.org/operating-systems/implementation-of-contiguous-memory-management-techniques/"])
+    # print(content)
+
     try:
         asyncio.get_event_loop().close()
     except Exception:
