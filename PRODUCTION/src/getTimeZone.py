@@ -47,8 +47,38 @@ def convert_utc_to_local(utc_datetime: datetime, offset_str: str):
     return local_time.strftime("%H:%M on %Y-%m-%d")
 
 
+def get_local_time(location_name: str):
+    try:
+        # Geocode the location
+        geolocator = Nominatim(user_agent="elixposearch-timezone")
+        location = geolocator.geocode(location_name, timeout=10)
+
+        if not location:
+            return f"❌ Could not find the location: '{location_name}'."
+
+        # Get timezone from coordinates
+        tf = TimezoneFinder()
+        timezone_str = tf.timezone_at(lat=location.latitude, lng=location.longitude)
+
+        if not timezone_str:
+            return f"❌ Could not determine the timezone for '{location_name}'."
+
+        # Get current time in that timezone
+        tz = pytz.timezone(timezone_str)
+        local_time = datetime.now(tz)
+
+        # Format output: 8:15 PM on 2025-08-07
+        time_str = local_time.strftime("%I:%M %p on %Y-%m-%d")
+        city = location_name.split("/")[-1].title()
+
+        return f"🕒 The current time in {city} is {time_str} with the utc time being {local_time.strftime('%H:%M')} UTC."
+
+    except Exception as e:
+        return f"⚠️ Error while getting time for '{location_name}': {str(e)}"
+
+
 
 if __name__ == "__main__":
     location = "Kolkata/Asia"
-    utc_offset = get_timezone_and_offset(location)
+    utc_offset = get_local_time(location)
     print(f"[DEBUG] Timezone for {location}: {timezone}, Offset: {utc_offset}")
