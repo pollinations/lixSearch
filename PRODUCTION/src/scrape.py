@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 import re
 from conditional_print import conditional_print
-from config import SCRAPE_IMAGE, MAX_TOTAL_SCRAPE_WORD_COUNT, scrape_website_show_log, MAX_IMAGES_TO_INCLUDE
+from config import SCRAPE_IMAGE, MAX_TOTAL_SCRAPE_WORD_COUNT, scrape_website_show_log
 
 
 def fetch_full_text(
@@ -74,44 +74,9 @@ def fetch_full_text(
         return "", []
 
 
-def is_likely_image_url_heuristic(url):
-    if not url:
-        return False
-    lower_url = url.lower()
-    path_part = urlparse(url).path
-
-    # File extension check
-    if not any(path_part.endswith(ext) for ext in ['.png', '.jpg', '.jpeg']):
-        return False
-
-    # Exclude common small/unwanted patterns
-    if any(keyword in lower_url for keyword in ['/icon/', '/logo/', '/loader/', '/sprite/', '/thumbnail/', '/small/', '/avatar/', '/advert', '/ad_/', 'pixel', '1x1', 'badge', 'button']):
-        return False
-
-    # Exclude tiny images via URL hints
-    size_patterns = [
-        r'/(\d+)x(\d+)/',
-        r'-(\d+)x(\d+)\.',
-        r'width=(\d+)&',
-        r'height=(\d+)&',
-        r'&w=(\d+)',
-        r'&h=(\d+)'
-    ]
-    min_dim_threshold = 150
-    for pattern in size_patterns:
-        matches = re.findall(pattern, lower_url)
-        dims = [int(d) for group in matches for d in group if d.isdigit()]
-        if dims and any(dim < min_dim_threshold for dim in dims):
-            return False
-
-    return True
-
-
 if __name__ == "__main__":
     test_url = "https://www.hindustantimes.com/india-news/bengal-woman-trying-to-escape-drunk-eve-teasers-dies-in-road-accident-101740391266434.html"
-    text, images = fetch_full_text(test_url)
+    text = fetch_full_text(test_url)
     print("\n--- Extracted Text ---\n")
     print(text)
-    print("\n--- Extracted Images ---\n")
-    for img in images:
-        print(img)
+

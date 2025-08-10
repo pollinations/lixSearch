@@ -1,54 +1,46 @@
-from timezonefinderL import TimezoneFinder
+from timezonefinder import TimezoneFinder
 from geopy.geocoders import Nominatim
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 import pytz
 
 
-def get_timezone_and_offset(location_name: str):
+def get_local_time(location_name: str):
     try:
+        # Geocode the location
         geolocator = Nominatim(user_agent="elixposearch-timezone")
         location = geolocator.geocode(location_name, timeout=10)
 
         if not location:
-            print("[INFO] Could not find the location.")
-            return None, None
+            return f"❌ Could not find the location: '{location_name}'."
 
+        # Get timezone from coordinates
         tf = TimezoneFinder()
         timezone_str = tf.timezone_at(lat=location.latitude, lng=location.longitude)
 
         if not timezone_str:
-            print("[INFO] Could not find timezone for these coordinates.")
-            return None, None
+            return f"❌ Could not determine the timezone for '{location_name}'."
 
-        timezone = pytz.timezone(timezone_str)
-        now = datetime.utcnow()
-        offset_seconds = timezone.utcoffset(now).total_seconds()
-        offset_hours = int(offset_seconds // 3600)
-        offset_minutes = int((offset_seconds % 3600) // 60)
+        # Get current time in that timezone
+        tz = pytz.timezone(timezone_str)
+        local_time = datetime.now(tz)
 
-        # Format as UTC+05:30 or UTC-04:00
-        sign = "+" if offset_seconds >= 0 else "-"
-        offset_str = f"UTC{sign}{abs(offset_hours):02d}:{abs(offset_minutes):02d}"
+        # Convert local time to UTC
+        utc_time = local_time.astimezone(pytz.utc)
 
-        return offset_str
+        # Clean city/region name for readability
+        city = timezone_str.split("/")[-1].replace("_", " ")
+
+        # Format times
+        local_time_str = local_time.strftime("%I:%M %p on %Y-%m-%d")
+        utc_time_str = utc_time.strftime("%H:%M UTC")
+
+        return f"🕒 The current time in {city} is {local_time_str}, and that corresponds to {utc_time_str}."
 
     except Exception as e:
-        print(f"[ERROR] Failed to get timezone for {location_name}: {e}")
-        return None, None
-
-def convert_utc_to_local(utc_datetime: datetime, offset_str: str):
-    sign = 1 if '+' in offset_str else -1
-    parts = offset_str.replace('UTC', '').replace('+', '').replace('-', '').split(':')
-    hours = int(parts[0])
-    minutes = int(parts[1])
-
-    delta = timedelta(hours=hours * sign, minutes=minutes * sign)
-    local_time = utc_datetime + delta
-    return local_time.strftime("%H:%M on %Y-%m-%d")
-
+        return f"⚠️ Error while getting time for '{location_name}': {str(e)}"
 
 
 if __name__ == "__main__":
-    location = "Kolkata/Asia"
-    utc_offset = get_timezone_and_offset(location)
-    print(f"[DEBUG] Timezone for {location}: {timezone}, Offset: {utc_offset}")
+    location = "Asia/Kolkata"
+    result = get_local_time(location)
+    print(result)

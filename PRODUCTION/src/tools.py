@@ -72,35 +72,14 @@ tools = [
     {
         "type": "function",
         "function": {
-            "name": "get_timezone_and_offset",
-            "description": "Returns the timezone and UTC offset for a given location.",
+            "name": "get_local_time",
+            "description": "Returns the current local time and UTC time and location for a given location.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "location": {"type": "string", "description": "The location for which to get the timezone and offset."}
+                    "location_name": {"type": "string", "description": "The name of the location to get the time for."}
                 },
-                "required": ["location"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "convert_utc_to_local",
-            "description": "Converts a UTC datetime to local time using a UTC offset string (e.g., 'UTC+05:30'). Returns the local time as a formatted string.",
-            "parameters": {
-            "type": "object",
-            "properties": {
-                "utc_datetime": {
-                "type": "string",
-                "description": "The UTC datetime in ISO 8601 format (e.g., '2024-06-01T12:00:00')."
-                },
-                "offset_str": {
-                "type": "string",
-                "description": "The UTC offset string (e.g., 'UTC+05:30' or 'UTC-04:00')."
-                }
-            },
-            "required": ["utc_datetime", "offset_str"]
+                "required": ["location_name"]
             }
         }
     },

@@ -1,31 +1,27 @@
 from quart import Quart, request, jsonify, Response
 from quart_cors import cors
-import asyncio
 import time
 import random
 import logging
 import sys
 import uuid
-from searchPipeline import run_elixposearch_pipeline
+from searchPipeline import initialize_google_agents, shutdown_google_agents, run_elixposearch_pipeline
+import asyncio
+import threading
 import hypercorn.asyncio
 import json
 from hypercorn.config import Config
 from getYoutubeDetails import get_youtube_transcript
 from collections import deque
 from datetime import datetime, timedelta
+import atexit
 
-app = Quart(__name__)
-app = cors(app, allow_origin="*")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s', stream=sys.stdout)
-app.logger.setLevel(logging.INFO)
 
-# Increased concurrency settings
 request_queue = asyncio.Queue(maxsize=100) 
 processing_semaphore = asyncio.Semaphore(15)  
 active_requests = {}
-
-# Global stats for monitoring
 global_stats = {
     "total_requests": 0,
     "successful_requests": 0,
@@ -52,8 +48,9 @@ class RequestTask:
         self.timestamp = time.time()
         self.start_processing_time = None
 
+
+
 async def process_request_worker():
-    """Background worker for NON-SSE requests only"""
     while True:
         try:
             task = await asyncio.wait_for(request_queue.get(), timeout=1.0)
@@ -68,9 +65,7 @@ async def process_request_worker():
                 active_requests[task.request_id] = task
                 
                 try:
-                    # For JSON/Chat, collect final result
                     final_result_content = []
-                    # Unpack user_query and user_image for the pipeline
                     uq, ui = task.user_query if isinstance(task.user_query, tuple) else (task.user_query, None)
                     async for chunk in run_elixposearch_pipeline(uq, ui, event_id=None):
                         lines = chunk.splitlines()
@@ -117,25 +112,11 @@ async def process_request_worker():
             await asyncio.sleep(0.1)
 
 def update_request_stats():
-    """Update global request statistics"""
     global_stats["total_requests"] += 1
     global_stats["last_request_time"] = time.time()
 
-# Start more background workers for better concurrency
-@app.before_serving
-async def startup():
-    # Start 8 worker tasks (increased from 3)
-    for i in range(8):
-        asyncio.create_task(process_request_worker())
-    app.logger.info("Started 8 request processing workers")
-
-
-
 
 def extract_query_and_image(data: dict) -> tuple[str, str | None, bool]:
-    """
-    Extracts user_query and user_image from request data. Returns (query, image_url, is_openai_format).
-    """
     user_query = ""
     user_image = None
     is_openai_chat = False
@@ -172,6 +153,32 @@ def extract_query_and_image(data: dict) -> tuple[str, str | None, bool]:
     return user_query.strip(), user_image, is_openai_chat
 
 
+
+
+
+
+
+
+
+# --------------------------------------------- INITIALIZE APP-------------------------------------------------
+app = Quart(__name__)
+app = cors(app, allow_origin="*")
+app.logger.setLevel(logging.INFO)
+
+
+@app.before_serving
+async def startup():
+    """Initialize Google agents when the app starts"""
+    await initialize_google_agents()
+    for i in range(8):
+        asyncio.create_task(process_request_worker())
+    app.logger.info("Started 8 request processing workers")
+
+@app.after_serving
+async def shutdown():
+    """Cleanup function for app shutdown"""
+    await shutdown_google_agents()
+    app.logger.info("Google agents closed on application shutdown")
 
 @app.route("/search/sse", methods=["POST", "GET"])
 async def search_sse(forwarded_data=None):
@@ -284,28 +291,8 @@ async def search_json(anything=None):
         return jsonify({"error": "Server overloaded, try again later"}), 503
 
     try:
-        async def run_pipeline():
-            uq, ui = task.user_query if isinstance(task.user_query, tuple) else (task.user_query, None)
-            final_result_content = []
-            async for chunk in run_elixposearch_pipeline(uq, ui, event_id=None):
-                lines = chunk.splitlines()
-                event_type = None
-                data_lines = []
-
-                for line in lines:
-                    if line.startswith("event:"):
-                        event_type = line.replace("event:", "").strip()
-                    elif line.startswith("data:"):
-                        data_lines.append(line.replace("data:", "").strip())
-
-                data_text = "\n".join(data_lines)
-                if data_text and event_type in ["final", "final-part"]:
-                    final_result_content.append(data_text)
-
-            return "\n".join(final_result_content).strip() or "No results found"
-
-        final_response = await asyncio.wait_for(run_pipeline(), timeout=180)
-
+        # Wait for the worker to process the task
+        final_response = await asyncio.wait_for(task.result_future, timeout=180)
     except asyncio.TimeoutError:
         final_response = "Request timed out"
         app.logger.error(f"Request {request_id} timed out")
@@ -319,7 +306,6 @@ async def search_json(anything=None):
         return jsonify({"result": final_response})
 
 
-# Ultra-fast status endpoint
 @app.route("/status", methods=["GET"])
 async def status():
     current_time = time.time()
@@ -354,13 +340,11 @@ async def transcript():
     limit = transcript_rate_limit["limit"]
     reqs = transcript_rate_limit["requests"]
 
-    # Remove requests outside the window
     while reqs and (now - reqs[0]).total_seconds() > window:
         reqs.popleft()
     if len(reqs) >= limit:
         return jsonify({"error": "Rate limit exceeded. Max 20 requests per minute."}), 429
     reqs.append(now)
-    # --- End rate limiting logic ---
 
     video_url = request.args.get("url") or request.args.get("video_url")
     video_id = request.args.get("id") or request.args.get("video_id")
@@ -370,7 +354,6 @@ async def transcript():
     if not video_url and video_id:
         video_url = f"https://youtu.be/{video_id}"
 
-    # Fetch transcript (sync function, so run in executor)
     loop = asyncio.get_event_loop()
     transcript_text = await loop.run_in_executor(
         None, lambda: get_youtube_transcript(video_url)
