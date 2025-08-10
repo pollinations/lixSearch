@@ -5,7 +5,7 @@ import random
 import logging
 import sys
 import uuid
-from searchPipeline import initialize_google_agents, shutdown_google_agents, run_elixposearch_pipeline
+from searchPipeline import run_elixposearch_pipeline
 import asyncio
 import threading
 import hypercorn.asyncio
@@ -168,17 +168,10 @@ app.logger.setLevel(logging.INFO)
 
 @app.before_serving
 async def startup():
-    """Initialize Google agents when the app starts"""
-    await initialize_google_agents()
     for i in range(8):
         asyncio.create_task(process_request_worker())
     app.logger.info("Started 8 request processing workers")
 
-@app.after_serving
-async def shutdown():
-    """Cleanup function for app shutdown"""
-    await shutdown_google_agents()
-    app.logger.info("Google agents closed on application shutdown")
 
 @app.route("/search/sse", methods=["POST", "GET"])
 async def search_sse(forwarded_data=None):

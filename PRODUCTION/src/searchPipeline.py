@@ -1,7 +1,7 @@
 import requests
 import json
 from clean_query import cleanQuery
-from yahooSearch import YahooSearchAgentText, YahooSearchAgentImage
+from yahooSearch import YahooSearchAgentText, YahooSearchAgentImage, ddgs_search, mojeek_form_search, ddgs_search_module_search
 from getYoutubeDetails import get_youtube_metadata, get_youtube_transcript
 from scrape import fetch_full_text
 from getImagePrompt import generate_prompt_from_image, replyFromImage
@@ -41,7 +41,6 @@ class SearchAgentManager:
         self.used_ports = set()
         
     def _get_random_port(self):
-        """Get a random unused port"""
         while True:
             port = random.randint(self.port_range_start, self.port_range_end)
             if port not in self.used_ports:
@@ -49,36 +48,28 @@ class SearchAgentManager:
                 return port
     
     def _release_port(self, port):
-        """Release a port back to the pool"""
         self.used_ports.discard(port)
     
     async def get_text_search_result(self, query, max_links=10):
-        """Get text search results with agent management and queueing"""
         async with self.text_lock:
-            # If we have available slots, create agent immediately
+            # Try Yahoo first
             if self.active_text_agents < self.max_concurrent_agents:
                 self.active_text_agents += 1
                 port = self._get_random_port()
-                
                 try:
-                    logger.info(f"Creating new text agent on port {port} for query: {query}")
+                    logger.info(f"Creating new Yahoo text agent on port {port} for query: {query}")
                     agent = YahooSearchAgentText(custom_port=port)
                     await agent.start()
-                    
-                    # Add random delay to simulate human behavior
                     await asyncio.sleep(random.uniform(1, 3))
-                    
                     results = await agent.search(query, max_links)
-                    logger.info(f"Text search completed for '{query}' with {len(results)} results")
-                    
-                    return results
-                    
+                    if results:
+                        logger.info(f"Yahoo search completed for '{query}' with {len(results)} results")
+                        return results
+                    else:
+                        logger.warning(f"Yahoo search returned no results for '{query}'. Trying DDGS fallback.")
                 except Exception as e:
-                    logger.error(f"Text search failed for '{query}': {e}")
-                    return []
-                    
+                    logger.error(f"Yahoo search failed for '{query}': {e}. Trying DDGS fallback.")
                 finally:
-                    # Always clean up
                     try:
                         await agent.close()
                     except:
@@ -86,11 +77,38 @@ class SearchAgentManager:
                     self.active_text_agents -= 1
                     self._release_port(port)
                     logger.info(f"Text agent on port {port} closed. Active agents: {self.active_text_agents}")
-            
             else:
                 logger.warning(f"Max concurrent text agents reached ({self.max_concurrent_agents}). Queueing request for: {query}")
                 await asyncio.sleep(random.uniform(2, 5))
                 return await self.get_text_search_result(query, max_links)
+
+        # Fallback 1: DDGS
+        try:
+            logger.info(f"Trying DDGS fallback for: {query}")
+            ddgs_results = ddgs_search_module_search(query)
+            if ddgs_results:
+                logger.info(f"DDGS fallback returned {len(ddgs_results)} results for '{query}'")
+                return ddgs_results[:max_links]
+            else:
+                logger.warning(f"DDGS fallback returned no results for '{query}'. Trying Mojeek fallback.")
+        except Exception as e:
+            logger.error(f"DDGS fallback failed for '{query}': {e}. Trying Mojeek fallback.")
+
+        # Fallback 2: Mojeek
+        try:
+            logger.info(f"Trying Mojeek fallback for: {query}")
+            mojeek_results = mojeek_form_search(query)
+            if mojeek_results:
+                logger.info(f"Mojeek fallback returned {len(mojeek_results)} results for '{query}'")
+                return mojeek_results[:max_links]
+            else:
+                logger.warning(f"Mojeek fallback returned no results for '{query}'.")
+        except Exception as e:
+            logger.error(f"Mojeek fallback failed for '{query}': {e}")
+
+        logger.error(f"All search engines failed for query: '{query}'")
+        return []
+                    
     
     async def get_image_search_result(self, query, max_images=10):
         """Get image search results with agent management and queueing"""

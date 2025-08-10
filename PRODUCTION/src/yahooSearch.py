@@ -5,7 +5,12 @@ import shutil
 import stat
 import threading
 from urllib.parse import quote
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright  #type: ignore
+from duckduckgo_search import DDGS #type: ignore
+import requests
+from time import sleep
+from bs4 import BeautifulSoup
+
 from config import MAX_LINKS_TO_TAKE, isHeadless
 
 
@@ -326,6 +331,78 @@ async def image_search(query, max_images=10):
 def get_port_status():
     """Get current port manager status"""
     return port_manager.get_status()
+
+
+        
+def mojeek_form_search(query):
+    url = "https://www.mojeek.com/search"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+        "Referer": "https://www.mojeek.com/",
+        "Accept": "text/html"
+    }
+    params = {"q": query}
+
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+        results = soup.select("ul.results-standard li")
+        links = []
+
+        for r in results[:MAX_LINKS_TO_TAKE]:
+            title_tag = r.select_one("a.title")
+            if title_tag and title_tag.has_attr("href"):
+                links.append(title_tag["href"])
+
+        return links
+
+    except requests.exceptions.RequestException as e:
+        print("❌ Mojeek request failed:", e)
+        return []
+
+def ddgs_search(query):
+    url = "https://html.duckduckgo.com/html/"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+    }
+    data = {"q": query}
+
+    try:
+        response = requests.post(url, data=data, headers=headers, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        links = []
+        for h2 in soup.select("h2.result__title a[href^='http']"):
+            href = h2.get("href")
+            if (
+                href
+                and href.startswith("http")
+                and not href.startswith("https://duckduckgo.com/y.js?")
+            ):
+                links.append(href)
+
+        print(f"[INFO] DDG search completed with {len(links)} results.")
+        return links[:MAX_LINKS_TO_TAKE]
+
+    except Exception as e:
+        print("❌ DDG search failed:", e)
+        return []
+
+
+def ddgs_search_module_search(query):
+    results = []
+    try:
+        with DDGS() as ddgs:
+            for entry in ddgs.text(query, max_results=MAX_LINKS_TO_TAKE):
+                url = entry.get("href") or entry.get("link")
+                if url and url.startswith("http"):
+                    results.append(url)
+        print(f"[INFO] DDG search returned {len(results)} links")
+    except Exception as e:
+        print("❌ DDG search failed:", e)
+    return results
 
 # --------------------------------------------
 # Run Example

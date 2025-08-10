@@ -1,8 +1,8 @@
 import requests
 from time import sleep
 from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright
-from duckduckgo_search import DDGS
+from playwright.async_api import async_playwright #type: ignore
+from duckduckgo_search import DDGS #type: ignore
 from config import MAX_LINKS_TO_TAKE, isHeadless
 import asyncio
 import stat
