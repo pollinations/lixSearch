@@ -438,7 +438,13 @@ if __name__ == "__main__":
             
             # Random delay between searches (2-5 seconds)
             await asyncio.sleep(random.uniform(2, 5))
-    
+
+        # Example image search for the same query
+        print(f"\n{'-'*50}")
+        print(f"Image searching for: {query}")
+        print('-'*50)
+        image_results = await image_search(query, max_images=10)
+        print(f"Image Results: {image_results}")
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

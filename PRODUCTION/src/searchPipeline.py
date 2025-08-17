@@ -595,8 +595,8 @@ if __name__ == "__main__":
     import asyncio
     
     async def main():
-        user_query = "what is the latest news from the indian cricket"
-        user_image = None
+        user_query = "who built this?"
+        user_image = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/Tour_Eiffel_Wikimedia_Commons_%28cropped%29.jpg/500px-Tour_Eiffel_Wikimedia_Commons_%28cropped%29.jpg"
         
         event_id = None 
 

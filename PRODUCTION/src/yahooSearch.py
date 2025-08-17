@@ -228,7 +228,7 @@ class YahooSearchAgentImage:
             self.playwright = await async_playwright().start()
             self.context = await self.playwright.chromium.launch_persistent_context(
                 user_data_dir=f"/tmp/chrome-user-data-{self.custom_port}",
-                headless=isHeadless,
+                headless=False,
                 args=[
                     f"--remote-debugging-port={self.custom_port}",
                     "--disable-blink-features=AutomationControlled",
@@ -271,9 +271,9 @@ class YahooSearchAgentImage:
             await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
             await page.wait_for_timeout(random.randint(1000, 2000))
 
-            await page.wait_for_selector("li img", timeout=15000)
+            await page.wait_for_selector("li > a.redesign-img > img", timeout=15000)
 
-            img_elements = await page.query_selector_all("li img")
+            img_elements = await page.query_selector_all("li > a.redesign-img > img")
             for img in img_elements[:max_images]:
                 src = await img.get_attribute("data-src") or await img.get_attribute("src")
                 if src and src.startswith("http"):
@@ -409,24 +409,34 @@ def ddgs_search_module_search(query):
 # --------------------------------------------
 if __name__ == "__main__":
     async def main():
-        queries = ["ballet dancer"]
+        queries = ["Eiffel Tower Paris wide shot daytime clear blue sky lush green Champ de Mars tourism architecture landmark"]
         for q in queries:
-            print(f"\n{'='*50}")
-            print(f"Searching Yahoo for: {q}")
-            print('='*50)
+            # print(f"\n{'='*50}")
+            # print(f"Searching Yahoo for: {q}")
+            # print('='*50)
             
-            # Show port status before search
+            # # Show port status before search
+            # status = get_port_status()
+            # print(f"Port status before search: {status}")
+            
+            # text_results = await web_search(q)
+            # print("Text results:", text_results[:3])  # Show first 3 results
+            
+            # # Show port status after search
+            # status = get_port_status()
+            # print(f"Port status after search: {status}")
+            
+            # # Add delay between searches
+            # await asyncio.sleep(2)
+
+            print(f"\n{'-'*50}")
+            print(f"Searching Yahoo Images for: {q}")
+            print('-'*50)
+            image_results = await image_search(q, max_images=5)
+            print("Image results:", image_results)  # Show all image URLs
+
+            # Show port status after image search
             status = get_port_status()
-            print(f"Port status before search: {status}")
-            
-            text_results = await web_search(q)
-            print("Text results:", text_results[:3])  # Show first 3 results
-            
-            # Show port status after search
-            status = get_port_status()
-            print(f"Port status after search: {status}")
-            
-            # Add delay between searches
-            await asyncio.sleep(2)
+            print(f"Port status after image search: {status}")
 
     asyncio.run(main())
