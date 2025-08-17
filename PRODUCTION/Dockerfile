@@ -12,7 +12,10 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
-RUN pip install playwright && playwright install chromium &&  playwright install-deps && pip install ddgs
+RUN pip install playwright 
+RUN playwright install chromium 
+RUN playwright install-deps  
+RUN pip install ddgs
 
 COPY . .
 
