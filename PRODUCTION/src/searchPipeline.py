@@ -169,7 +169,7 @@ agent_manager = SearchAgentManager(max_concurrent_agents=10)
 
 # Standalone search functions for backward compatibility
 async def web_search(query, agent=None):
-    return await agent_manager.get_text_search_result(query, max_links=10)
+    return await agent_manager.get_text_search_result(query, max_links=5)
 
 async def image_search(query, agent=None, max_images=10):
     return await agent_manager.get_image_search_result(query, max_images)
@@ -410,10 +410,11 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         search_query = function_args.get("query")
 
                         search_results_raw = await web_search(search_query)
+                        collected_sources.extend([url for url in search_results_raw if url and url.startswith("http")])
                         logger.info(f"Web search returned {len(search_results_raw)} results")
                         if search_results_raw:
                             parallel_results = fetch_url_content_parallel(search_results_raw)
-                        tool_result = parallel_results if parallel_results else "[No relevant web search results found.]"
+                        tool_result = f"{parallel_results} for the URLs {collected_sources}" if parallel_results else "[No relevant web search results found.]"
 
                     elif function_name == "generate_prompt_from_image":
                         web_event = emit_event("INFO", f" Watching Images! \n")
