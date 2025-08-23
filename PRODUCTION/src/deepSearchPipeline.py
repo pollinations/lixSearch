@@ -54,7 +54,7 @@ async def run_deep_research_pipeline(user_query: str, user_image: str, event_id:
         collected_sources = []
         collected_images_from_web = []
         collected_similar_images = []
-        
+
         memoized_results = {
             "timezone_info": {},
             "web_searches": {},
@@ -65,7 +65,7 @@ async def run_deep_research_pipeline(user_query: str, user_image: str, event_id:
         }
 
         system_prompt = f"""
-Mission: Perform deep research on the user's query by decomposing it into 3-5 sub-tasks using available tools.
+Mission: Perform deep research on the user's query by decomposing it into 2-3 sub-tasks using available tools.
 CRITICAL: If you know the answer directly (basic facts, math, general knowledge), answer without research.
 Otherwise, for each sub-task:
 - Use available tools to gather comprehensive information
@@ -104,25 +104,26 @@ Final Response Format:
 All output must be detailed, well-researched, and properly cited.
 """
 
+        # Handle image only
         if user_image and not user_query.strip():
             prompt = await generate_prompt_from_image(user_image)
             image_results = await image_search(prompt, max_images=10)
-            collected_similar_images.extend(image_results[:10])
+            collected_similar_images.extend(json.loads(image_results).get("yahoo_source_0", [])[:10] if image_results else [])
             answer = f"**Image Analysis:**\n{prompt}"
             final_event = emit_event("FINAL_ANSWER", answer, 1, "yes", 100, "finish")
             if final_event:
                 yield final_event
             return
 
+        # Step 1: Decompose query into sub-tasks
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Query: {user_query} {'Image: ' + user_image if user_image else ''}"}
         ]
-
         planning_payload = {
             "model": MODEL,
             "messages": messages + [
-                {"role": "user", "content": "Break down this query into 3-5 detailed research sub-tasks. For each task, specify what tools should be used and what information to gather."}
+                {"role": "user", "content": "Break down this query into 2-3 detailed research sub-tasks. For each task, specify what tools should be used and what information to gather."}
             ],
             "tools": tools,
             "tool_choice": "auto",
@@ -131,84 +132,73 @@ All output must be detailed, well-researched, and properly cited.
             "private": True,
             "seed": random.randint(1000, 9999)
         }
-        
         planning_resp = requests.post(POLLINATIONS_ENDPOINT, headers=headers, json=planning_payload)
         planning_resp.raise_for_status()
         planning_tasks = planning_resp.json()["choices"][0]["message"]["content"]
-        
         tasks = [line.strip(" .") for line in planning_tasks.split("\n") if line.strip() and line[0].isdigit()]
         if not tasks:
             tasks = [planning_tasks.strip()]
         logger.info(f"Decomposed into {len(tasks)} tasks: {tasks}")
 
+        # Step 2: For each sub-task, run a searchPipeline-like loop
         for task_num, task in enumerate(tasks, 1):
             progress = int((task_num - 1) / len(tasks) * 100)
-            
             task_start_event = emit_event("INFO", f"Starting Task {task_num}: {task}", task_num, "no", progress, "event")
             if task_start_event:
                 yield task_start_event
 
-            task_payload = {
-                "model": MODEL,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Research sub-task: {task}\nOriginal query: {user_query}"}
-                ],
-                "tools": tools,
-                "tool_choice": "auto",
-                "token": POLLINATIONS_TOKEN,
-                "referrer": REFRRER,
-                "private": True,
-                "seed": random.randint(1000, 9999)
-            }
-
-            max_tool_iterations = 5
-            current_iteration = 0
-            task_messages = [
+            subtask_messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Research sub-task: {task}\nOriginal query: {user_query}"}
             ]
+            collected_sources_this_task = []
+            collected_images_this_task = []
+            final_message_content = None
 
-            while current_iteration < max_tool_iterations:
-                current_iteration += 1
-                
-                iteration_event = emit_event("INFO", f"Task {task_num} - Research Iteration {current_iteration}", task_num, "no", progress, "event")
+            max_iterations = 5
+            for iteration in range(max_iterations):
+                iteration_event = emit_event("INFO", f"Task {task_num} - Research Iteration {iteration+1}", task_num, "no", progress, "event")
                 if iteration_event:
                     yield iteration_event
 
+                payload = {
+                    "model": MODEL,
+                    "messages": subtask_messages,
+                    "tools": tools,
+                    "tool_choice": "auto",
+                    "token": POLLINATIONS_TOKEN,
+                    "referrer": REFRRER,
+                    "private": True,
+                    "seed": random.randint(1000, 9999)
+                }
+
                 try:
-                    response = requests.post(POLLINATIONS_ENDPOINT, headers=headers, json={
-                        "model": MODEL,
-                        "messages": task_messages,
-                        "tools": tools,
-                        "tool_choice": "auto",
-                        "token": POLLINATIONS_TOKEN,
-                        "referrer": REFRRER,
-                        "private": True,
-                        "seed": random.randint(1000, 9999)
-                    })
+                    response = requests.post(POLLINATIONS_ENDPOINT, headers=headers, json=payload)
                     response.raise_for_status()
                     response_data = response.json()
                 except Exception as e:
                     logger.error(f"API call failed for task {task_num}: {e}")
+                    if hasattr(e, 'response') and e.response is not None:
+                        logger.error(f"API error response text: {e.response.text}")
+                    elif 'response' in locals() and hasattr(response, 'text'):
+                        logger.error(f"API error response text: {response.text}")
                     break
 
                 assistant_message = response_data["choices"][0]["message"]
-                task_messages.append(assistant_message)
-                tool_calls = assistant_message.get("tool_calls")
+                if not assistant_message.get("content"):
+                    assistant_message["content"] = "Processing tool calls for this sub-task."
+                subtask_messages.append(assistant_message)
 
+                tool_calls = assistant_message.get("tool_calls")
                 if not tool_calls:
+                    final_message_content = assistant_message.get("content")
                     break
 
                 tool_outputs = []
                 for tool_call in tool_calls:
                     function_name = tool_call["function"]["name"]
                     function_args = json.loads(tool_call["function"]["arguments"])
-                    
                     logger.info(f"Task {task_num}: Executing tool {function_name}")
-                    tool_event = emit_event("INFO", f"Task {task_num}: Using {function_name}", task_num, "no", progress, "event")
-                    if tool_event:
-                        yield tool_event
 
                     try:
                         if function_name == "cleanQuery":
@@ -221,92 +211,96 @@ All output must be detailed, well-researched, and properly cited.
                                 tool_result = memoized_results["timezone_info"][location_name]
                             else:
                                 localTime = get_local_time(location_name)
-                                tool_result = f"Location: {location_name}\n{localTime}"
+                                tool_result = f"Location: {location_name}\n {localTime}"
                                 memoized_results["timezone_info"][location_name] = tool_result
 
                         elif function_name == "web_search":
                             search_query = function_args.get("query")
                             search_results_raw = await web_search(search_query)
                             urls = [url for url in search_results_raw if url and url.startswith("http")]
-                            collected_sources.extend(urls)
-                            
-                            surfing_event = emit_event("SURFING_WEB", f"Task {task_num}: Found {len(urls)} URLs", task_num, "no", progress, "event")
-                            if surfing_event:
-                                yield surfing_event
-                                
+                            collected_sources_this_task.extend(urls)
                             if urls:
-                                parallel_results = fetch_url_content_parallel(urls)
-                                url_texts = [(url, parallel_results) for url in urls if parallel_results]
-                                
-                                if url_texts:
-                                    doc_texts = [t[1] for t in url_texts]
-                                    try:
-                                        top_chunks = retrieve_top_k(doc_texts, search_query, k=min(3, len(doc_texts)))
-                                        context = "\n\n".join(top_chunks)
-                                        tool_result = f"Web search results for '{search_query}':\n{context}"
-                                    except Exception as e:
-                                        tool_result = f"Web search results: {parallel_results}"
-                                else:
-                                    tool_result = "No relevant web results found."
+                                url_texts = fetch_url_content_parallel(urls)
+                                # Split results into blocks per URL for embedding filtering
+                                doc_blocks = []
+                                for url in urls:
+                                    # Try to extract the block for this URL
+                                    start = url_texts.find(f"URL: {url}")
+                                    if start != -1:
+                                        end = url_texts.find("URL: ", start + 5)
+                                        block = url_texts[start:end] if end != -1 else url_texts[start:]
+                                        doc_blocks.append(block)
+                                # Use embeddings to select the most relevant blocks
+                                top_chunks = retrieve_top_k(doc_blocks, search_query, k=3)
+                                context = "\n\n".join(top_chunks)
+                                if len(context) > 6000:
+                                    context = context[:6000] + "..."
+                                tool_result = f"Web search results for '{search_query}':\n{context}"
                             else:
                                 tool_result = "No URLs found in search results."
+
+                        elif function_name == "fetch_full_text":
+                            url = function_args.get("url")
+                            text = fetch_full_text(url)
+                            top_chunks = retrieve_top_k([text], task, k=1)
+                            context = top_chunks[0][:2000] if top_chunks else text[:2000]
+                            tool_result = f"Fetched content for {url}:\n{context}"
 
                         elif function_name == "generate_prompt_from_image":
                             image_url = function_args.get("imageURL")
                             get_prompt = await generate_prompt_from_image(image_url)
-                            tool_result = f"Image Analysis: {get_prompt}"
+                            tool_result = f"Generated Search Query: {get_prompt}"
 
                         elif function_name == "replyFromImage":
                             image_url = function_args.get("imageURL")
                             query = function_args.get("query")
                             reply = await replyFromImage(image_url, query)
-                            tool_result = f"Image Response: {reply}"
+                            tool_result = f"Reply from Image: {reply}"
 
                         elif function_name == "image_search":
                             image_query = function_args.get("image_query")
                             max_images = function_args.get("max_images", 10)
                             search_results_raw = await image_search(image_query, max_images=max_images)
-                            
                             image_urls = []
-                            if isinstance(search_results_raw, str):
-                                try:
+                            url_context = ""
+                            try:
+                                if isinstance(search_results_raw, str):
                                     image_dict = json.loads(search_results_raw)
                                     if isinstance(image_dict, dict):
                                         for src_url, imgs in image_dict.items():
-                                            if imgs:
-                                                for img_url in imgs:
-                                                    if img_url and img_url.startswith("http"):
-                                                        image_urls.append(img_url)
-                                except json.JSONDecodeError:
-                                    pass
-                            
-                            if user_image and user_query.strip():
-                                collected_images_from_web.extend(image_urls[:5])
-                            elif user_image and not user_query.strip():
-                                collected_similar_images.extend(image_urls[:10])
-                            elif not user_image and user_query.strip():
-                                collected_images_from_web.extend(image_urls[:10])
-                            
-                            tool_result = f"Found {len(image_urls)} relevant images for '{image_query}'"
+                                            if not imgs:
+                                                continue
+                                            for img_url in imgs:
+                                                if img_url and img_url.startswith("http"):
+                                                    image_urls.append(img_url)
+                                                    url_context += f"\t{img_url}"
+                                if user_image and user_query.strip():
+                                    collected_images_from_web.extend(image_urls[:5])
+                                elif user_image and not user_query.strip():
+                                    collected_similar_images.extend(image_urls[:10])
+                                elif not user_image and user_query.strip():
+                                    collected_images_from_web.extend(image_urls[:10])
+                            except Exception as e:
+                                logger.error(f"Failed to process image search results: {e}", exc_info=True)
+                                image_urls = []
+                                url_context = ""
+                            tool_result = f"The relevant image URLs are {url_context}\n\n"
 
                         elif function_name == "get_youtube_metadata":
                             urls = [function_args.get("url")]
                             results = fetch_youtube_parallel(urls, mode='metadata')
                             for url, metadata in results.items():
                                 tool_result = json.dumps(metadata)
-                                collected_sources.append(url)
+                                memoized_results["youtube_metadata"][url] = tool_result
+                                collected_sources_this_task.append(url)
 
                         elif function_name == "get_youtube_transcript":
                             urls = [function_args.get("url")]
                             results = fetch_youtube_parallel(urls, mode='transcript')
                             for url, transcript in results.items():
-                                tool_result = f"YouTube Transcript: {transcript if transcript else 'No transcript available'}"
-                                collected_sources.append(url)
-
-                        elif function_name == "fetch_full_text":
-                            urls = [function_args.get("url")]
-                            parallel_results = fetch_url_content_parallel(urls)
-                            tool_result = parallel_results if parallel_results else "No content fetched"
+                                tool_result = f"YouTube Transcript for {url}:\n{transcript if transcript else '[No transcript available]'}..."
+                                memoized_results["youtube_transcripts"][url] = tool_result
+                                collected_sources_this_task.append(url)
 
                         else:
                             tool_result = f"Unknown tool: {function_name}"
@@ -322,25 +316,24 @@ All output must be detailed, well-researched, and properly cited.
                         "content": tool_result
                     })
 
-                task_messages.extend(tool_outputs)
+                subtask_messages.extend(tool_outputs)
 
-            progress = int(task_num / len(tasks) * 100)
-            stage = "summary" if task_num < len(tasks) else "finish"
-            
-            final_task_message = task_messages[-2] if len(task_messages) > 1 else {"content": "Research completed"}
-            task_summary = final_task_message.get("content", "Task completed")
-            
+            # After all iterations for this task, emit summary
             summary_event = emit_event(
                 "TASK_SUMMARY",
-                f"### Task {task_num} Complete: {task}\n\n{task_summary}",
+                f"### Task {task_num} Complete: {task}\n\n{final_message_content or subtask_messages[-1].get('content', 'Task completed')}",
                 task_num,
                 "intermediate" if task_num < len(tasks) else "yes",
-                progress,
-                stage
+                int(task_num / len(tasks) * 100),
+                "summary" if task_num < len(tasks) else "finish"
             )
             if summary_event:
                 yield summary_event
 
+            collected_sources.extend(collected_sources_this_task)
+            collected_images_from_web.extend(collected_images_this_task)
+
+        # Final synthesis
         final_payload = {
             "model": MODEL,
             "messages": messages + [
@@ -351,7 +344,7 @@ All output must be detailed, well-researched, and properly cited.
             "private": True,
             "seed": random.randint(1000, 9999)
         }
-        
+
         try:
             loop = asyncio.get_event_loop()
             final_resp = await loop.run_in_executor(None, lambda: requests.post(POLLINATIONS_ENDPOINT, headers=headers, json=final_payload))
@@ -388,7 +381,7 @@ All output must be detailed, well-researched, and properly cited.
             final_event = emit_event("FINAL_ANSWER", final_response, len(tasks), "yes", 100, "finish")
             if final_event:
                 yield final_event
-                
+
         except Exception as e:
             logger.error(f"Final synthesis failed: {e}")
             error_event = emit_event("ERROR", f"Final synthesis failed: {e}", len(tasks), "yes", 100, "error")
@@ -413,3 +406,4 @@ if __name__ == "__main__":
                 print(event_chunk)
         except Exception as e:
             print(f"Error: {e}")
+    asyncio.run(main())
