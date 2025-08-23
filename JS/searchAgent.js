@@ -11,8 +11,7 @@ marked.setOptions({
     }
 });
 
-// const SERVER_URL = "http://127.0.0.1:5000";
-const SERVER_URL = "https://search.pollinations.ai";
+const SERVER_URL = "http://127.0.0.1:5000";
 const input = document.getElementById('queryInput');
 const submitButton = document.getElementById('submitButton');
 const sseFeed = document.getElementById('sseFeed');
@@ -22,10 +21,10 @@ const classicBtn = document.getElementById('classicBtn');
 const chatBtn = document.getElementById('chatBtn');
 const imageUrlInput = document.getElementById('imageUrlInput');
 const statusMessage = document.getElementById('sseFeed');
+const deepToggle = document.getElementById('deepToggle');
 
 let useChatApi = false;
 let hasReachedSuccess = false;
-
 
 function clearOutputs() {
     sseFeed.innerHTML = '';
@@ -87,6 +86,16 @@ function renderFinalOutput(markdown) {
     finalOutput.innerHTML = tempDiv.innerHTML;
 }
 
+function buildPayload(query, imageUrl) {
+    let content = [];
+    if (query) content.push({ type: "text", text: query });
+    if (imageUrl) content.push({ type: "image_url", image_url: { url: imageUrl } });
+    return {
+        stream: sseToggle.checked,
+        messages: [{ role: "user", content }],
+        deep: deepToggle.checked // <-- Add this line
+    };
+}
 
 function doSearch() {
     clearOutputs();
@@ -95,41 +104,19 @@ function doSearch() {
     input.value = '';
     imageUrlInput.value = '';
 
-    let chatPayload;
-    if (useChatApi) {
-        chatPayload = {
-            stream: sseToggle.checked,
-            messages: [{ role: "user", content: query }]
-        };
-        if (imageUrl) {
-            chatPayload.image = imageUrl;
-        }
-    } else {
-        chatPayload = {
-            stream: sseToggle.checked,
-            messages: [{
-                role: "user",
-                content: [
-                    { type: "text", text: query }
-                ]
-            }]
-        };
-        if (imageUrl) {
-            chatPayload.messages[0].content.push({
-                type: "image_url",
-                image_url: { url: imageUrl }
-            });
-        }
-    }
+    let payload = buildPayload(query, imageUrl);
 
     if (sseToggle.checked) {
         sseFeed.style.display = 'flex';
-        const finalChunks = [];
+        let taskChunks = [];
+        let finalMarkdown = '';
+        let hasSuccess = false;
+        let hasError = false;
 
-        fetch(`${SERVER_URL}/search`, {
+        fetch(`${SERVER_URL}/search/sse`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(chatPayload)
+            body: JSON.stringify(payload)
         })
         .then(response => {
             if (!response.ok) throw new Error("Network error");
@@ -142,84 +129,80 @@ function doSearch() {
                 buffer += decoder.decode(value, { stream: true });
                 let lines = buffer.split('\n');
                 buffer = lines.pop();
-            
+
                 lines.forEach(line => {
                     if (line.startsWith('data:')) {
                         let data = line.slice(5).trim();
-            
                         if (data === '[DONE]') {
                             esClose();
                         } else {
                             try {
                                 const parsed = JSON.parse(data);
+                                if (parsed.error) {
+                                    updateStatus(parsed.error, 'error');
+                                    hasError = true;
+                                }
                                 const delta = parsed?.choices?.[0]?.delta?.content;
-            
                                 if (delta) {
-                                    if (!hasReachedSuccess) {
-                                        if (delta.trim() === 'SUCCESS') {
-                                            hasReachedSuccess = true;
-                                        } else {
-                                            updateStatus(delta, 'info');
+                                    // Check for <TASK>...</TASK> and SUCCESS
+                                    if (!hasSuccess) {
+                                        // Extract all <TASK>...</TASK> blocks
+                                        const taskMatches = [...delta.matchAll(/<TASK>([\s\S]*?)<\/TASK>/g)];
+                                        taskMatches.forEach(match => {
+                                            taskChunks.push(match[1]);
+                                            // Optionally, show in sseFeed
+                                            const div = document.createElement('div');
+                                            div.innerText = match[1];
+                                            sseFeed.appendChild(div);
+                                        });
+                                        // Check for SUCCESS marker
+                                        if (delta.includes('SUCCESS')) {
+                                            hasSuccess = true;
+                                            // Everything after SUCCESS is final markdown
+                                            const successIndex = delta.indexOf('SUCCESS');
+                                            finalMarkdown += delta.slice(successIndex + 'SUCCESS'.length);
                                         }
                                     } else {
-                                        finalChunks.push(delta);
+                                        // After SUCCESS, accumulate for final markdown
+                                        finalMarkdown += delta;
                                     }
-                                } else {
-                                    updateStatus(data, 'info'); // fallback
                                 }
                             } catch (e) {
-                                updateStatus(data, 'info'); // fallback for raw
+                                updateStatus(data, 'info');
                             }
                         }
                     }
                 });
-            
+
                 return reader.read().then(processChunk);
             }
-            
+
             function esClose() {
                 statusMessage.classList.add('hidden');
-                const joined = finalChunks.join('');
-                if (joined.trim()) {
-                    renderFinalOutput(joined);
+                if (finalMarkdown.trim() && !hasError) {
+                    renderFinalOutput(finalMarkdown);
                 }
             }
 
-            
             return reader.read().then(processChunk);
         })
         .catch(e => {
             updateStatus(`[ERROR] ${e.toString()}`, "error");
             finalOutput.innerHTML = `<span class="text-red-400">[ERROR] ${e.toString()}</span>`;
         });
-    }
-
-    else if (useChatApi) {
-        finalOutput.innerHTML = '<span class="text-gray-400">Loading (Chat API)...</span>';
-        fetch(`${SERVER_URL}/v1/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(chatPayload)
-        })
-        .then(r => r.json())
-        .then(data => showResult('Chat API', data))
-        .catch(e => showResult('Chat API', { error: e.toString() }));
-    }
-
-    else {
+    } else {
         sseFeed.style.display = 'none';
         finalOutput.innerHTML = '<span class="text-gray-400">Loading...</span>';
         fetch(`${SERVER_URL}/search`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(chatPayload)
+            body: JSON.stringify(payload)
         })
         .then(r => r.json())
         .then(data => showResult('POST', data))
         .catch(e => showResult('POST', { error: e.toString() }));
     }
 }
-
 
 submitButton.onclick = (e) => {
     e.preventDefault();
