@@ -24,5 +24,10 @@ docker network prune -f
 # Remove all build cache
 docker builder prune -af
 
+minikube delete --all --purge
+
+docker system prune -a --volumes --force
+
+
 echo "✅ Cleanup complete. Current disk usage:"
 docker system df
