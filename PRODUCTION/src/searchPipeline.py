@@ -38,7 +38,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             return format_sse(event_type, message)
         return None
 
-    initial_event = emit_event("INFO", " <TASK>Decomposing Request</TASK>")
+    initial_event = emit_event("INFO", "<TASK>Decomposing Request</TASK>")
     if initial_event:
         yield initial_event
     
