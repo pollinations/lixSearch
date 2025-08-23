@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: elixpo-search
 spec:
-  replicas: 2
+  replicas: 10
   selector:
     matchLabels:
       app: elixpo-search
@@ -14,7 +14,8 @@ spec:
     spec:
       containers:
         - name: elixpo-search
-          image: elixpo/elixpo-search:latest  
+          image: elixpo/elixpo-search:latest
+          imagePullPolicy: Always  
           ports:
             - containerPort: 5000
           envFrom:
