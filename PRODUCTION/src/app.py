@@ -6,6 +6,7 @@ import logging
 import sys
 import uuid
 from searchPipeline import run_elixposearch_pipeline
+from deepSearchPipeline import run_deep_research_pipeline
 import asyncio
 import threading
 import hypercorn.asyncio
@@ -184,11 +185,13 @@ async def search_sse(forwarded_data=None):
         stream_flag = args.get("stream", "true").lower() == "true"
         user_query = args.get("query", "").strip()
         user_image = args.get("image") or args.get("image_url") or None
-        data = {"query": user_query, "image": user_image}
+        deep_flag = args.get("deep", "false").lower() == "true"
+        data = {"query": user_query, "image": user_image, "deep": deep_flag}
     else:
         data = await request.get_json(force=True, silent=True) or {}
 
     user_query, user_image, _ = extract_query_and_image(data)
+    deep_flag = data.get("deep", False)
 
     # OpenAI-style chunking fields
     chat_id = f"chatcmpl-{uuid.uuid4()}"
@@ -199,7 +202,7 @@ async def search_sse(forwarded_data=None):
     event_id = f"elixpo-{int(time.time() * 1000)}-{random.randint(1000, 9999)}"
 
     update_request_stats()
-    app.logger.info(f"SSE request {request_id}: {user_query[:50]}...")
+    app.logger.info(f"SSE request {request_id}: {user_query[:50]}... (deep={deep_flag})")
 
     if len(active_requests) >= 15:
         return Response('data: {"error": "Server overloaded, try again later"}\n\n',
@@ -215,20 +218,44 @@ async def search_sse(forwarded_data=None):
 
             first_chunk = True
             async with processing_semaphore:
-                async for chunk in run_elixposearch_pipeline(user_query, user_image, event_id):
+                # Choose pipeline based on deep_flag
+                if deep_flag:
+                    pipeline = run_deep_research_pipeline
+                else:
+                    pipeline = run_elixposearch_pipeline
+
+                async for chunk in pipeline(user_query, user_image, event_id):
                     lines = chunk.splitlines()
                     event_type = None
                     data_lines = []
+                    stage = None
+                    progress = None
+                    finished = None
+                    task_num = None
 
                     for line in lines:
                         if line.startswith("event:"):
                             event_type = line.replace("event:", "").strip()
+                        elif line.startswith("stage:"):
+                            stage = line.replace("stage:", "").strip()
+                        elif line.startswith("progress:"):
+                            try:
+                                progress = int(line.replace("progress:", "").strip())
+                            except Exception:
+                                progress = None
+                        elif line.startswith("finished:"):
+                            finished = line.replace("finished:", "").strip()
+                        elif line.startswith("task:"):
+                            try:
+                                task_num = int(line.replace("task:", "").strip())
+                            except Exception:
+                                task_num = None
                         elif line.startswith("data:"):
                             data_lines.append(line.replace("data:", "").strip())
 
                     data_text = "\n".join(data_lines)
+                    # Always include progress and stage
                     if data_text:
-                        # OpenAI streaming chunk format
                         chunk_obj = {
                             "id": chat_id,
                             "object": "chat.completion.chunk",
@@ -241,19 +268,26 @@ async def search_sse(forwarded_data=None):
                                 "finish_reason": None
                             }]
                         }
+                        meta = {}
+                        meta["progress"] = progress if progress is not None else 0
+                        meta["stage"] = stage if stage is not None else "event"
+                        if task_num is not None:
+                            meta["task"] = task_num
+                        if finished is not None:
+                            meta["finished"] = finished
+                        chunk_obj["choices"][0]["delta"]["elixpo_meta"] = meta
+
                         if first_chunk:
                             chunk_obj["choices"][0]["delta"]["role"] = "assistant"
                             first_chunk = False
-                            # Send initial role chunk (content empty)
                             yield f"data: {json.dumps(chunk_obj)}\n\n"
-                            # Now send the actual content chunk
                             chunk_obj["choices"][0]["delta"] = {"content": data_text}
                         else:
                             chunk_obj["choices"][0]["delta"] = {"content": data_text}
                         yield f"data: {json.dumps(chunk_obj)}\n\n"
 
-                    if event_type == "final":
-                        # Send finish_reason chunk
+                    # Use event_type and/or finished to determine when to stop
+                    if event_type in ["final", "FINAL_ANSWER"] or (finished and finished.lower() == "yes"):
                         finish_obj = {
                             "id": chat_id,
                             "object": "chat.completion.chunk",
@@ -283,6 +317,7 @@ async def search_sse(forwarded_data=None):
 
     return Response(event_stream(), content_type="text/event-stream")
 
+
 @app.route('/search', methods=['GET', 'POST'])
 @app.route('/search/<path:anything>', methods=['GET', 'POST'])
 async def search_json(anything=None):
@@ -294,19 +329,22 @@ async def search_json(anything=None):
         stream_flag = args.get("stream", "false").lower() == "true"
         user_query = args.get("query", "").strip()
         user_image = args.get("image") or args.get("image_url") or None
-        data = {"query": user_query, "image": user_image}
+        deep_flag = args.get("deep", "false").lower() == "true"
+        data = {"query": user_query, "image": user_image, "deep": deep_flag}
     else:
         data = await request.get_json(force=True, silent=True) or {}
         stream_flag = data.get("stream", False)
+        deep_flag = data.get("deep", False)
 
     user_query, user_image, _ = extract_query_and_image(data)
 
-    if stream_flag:
-        # Forward to SSE
+    if stream_flag or deep_flag:
+        # Forward to SSE, always stream for deep search
         sse_data = {
             "messages": [{"role": "user", "content": user_query}] if user_query else [],
             "image": user_image,
-            "stream": True
+            "stream": True,
+            "deep": deep_flag
         }
         return await search_sse(forwarded_data=sse_data)
 
@@ -316,7 +354,7 @@ async def search_json(anything=None):
     if not user_query and not user_image:
         return jsonify({"error": "Missing query or image"}), 400
 
-    app.logger.info(f"JSON request {request_id}: {user_query[:50]}...")
+    app.logger.info(f"JSON request {request_id}: {user_query[:50]}... (deep={deep_flag})")
     task = RequestTask(request_id, (user_query, user_image), 'json')
 
     try:
