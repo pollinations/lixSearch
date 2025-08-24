@@ -210,6 +210,10 @@ Final Response Format:
                                 memoized_results["timezone_info"][location] = tool_result
 
                         elif function_name == "web_search":
+                            if event_id:
+                                yield emit_event("INFO", f"<TASK>Web Search</TASK>", task_num, "no", progress, "event")
+                            if event_id:
+                                yield emit_event("INFO", f"<TASK>1 min please!</TASK>", task_num, "no", progress, "event")
                             query = function_args.get("query")
                             urls = await web_search(query)
                             collected_sources.extend(urls)
@@ -219,6 +223,8 @@ Final Response Format:
                             tool_result = f"Web search results for '{query}':\n{context}"
 
                         elif function_name == "fetch_full_text":
+                            if event_id:
+                                yield emit_event("INFO", f"<TASK>Getting Detailed Information</TASK>", task_num, "no", progress, "event")
                             url = function_args.get("url")
                             text = fetch_full_text(url)
                             top_chunks = retrieve_top_k([text], task, k=1)
@@ -226,17 +232,23 @@ Final Response Format:
                             tool_result = f"Fetched content for {url}:\n{context}"
 
                         elif function_name == "generate_prompt_from_image":
+                            if event_id:
+                                yield emit_event("INFO", f"<TASK>Understanding Uploaded image... 15s please!</TASK>", task_num, "no", progress, "event")
                             image_url = function_args.get("imageURL")
                             prompt = await generate_prompt_from_image(image_url)
                             tool_result = f"Generated Search Query: {prompt}"
 
                         elif function_name == "replyFromImage":
+                            if event_id:
+                                yield emit_event("INFO", f"<TASK>Understanding Uploaded image... 15s please!</TASK>", task_num, "no", progress, "event")
                             image_url = function_args.get("imageURL")
                             query = function_args.get("query")
                             reply = await replyFromImage(image_url, query)
                             tool_result = f"Reply from Image: {reply}"
 
                         elif function_name == "get_youtube_metadata":
+                            if event_id:
+                                yield emit_event("INFO", f"<TASK>Getting youtube video information</TASK>", task_num, "no", progress, "event")
                             url = function_args.get("url")
                             results = fetch_youtube_parallel([url], mode='metadata')
                             tool_result = json.dumps(results.get(url, {}))
@@ -244,6 +256,8 @@ Final Response Format:
                             collected_sources.append(url)
 
                         elif function_name == "get_youtube_transcript":
+                            if event_id:
+                                yield emit_event("INFO", f"<TASK>Getting youtube video transcript</TASK>", task_num, "no", progress, "event")
                             url = function_args.get("url")
                             results = fetch_youtube_parallel([url], mode='transcript')
                             transcript = results.get(url, "")
@@ -252,6 +266,8 @@ Final Response Format:
                             collected_sources.append(url)
 
                         elif function_name == "image_search":
+                            if event_id:
+                                yield emit_event("INFO", f"<TASK>Searching for similar images! 1min please...</TASK>", task_num, "no", progress, "event")
                             query = function_args.get("image_query")
                             max_images = function_args.get("max_images", 10)
                             search_results_raw = await image_search(query, max_images=max_images)
@@ -413,9 +429,9 @@ Original Query: {user_query}
         
     except Exception as e:
         logger.error(f"Pipeline error: {e}", exc_info=True)
-        error_event = emit_event("ERROR", f"DeepResearch failed: {e}", 0, "yes", 0, "error")
+        error_event = emit_event("ERROR", f"<TASK>Oppsie, something went wrong</TASK>", 0, "yes", 0, "error")
         if error_event:
-            yield error_event
+            yield f"<TASK>Oppsie, something wrong happened!</TASK>"
         else:
             print(f"Error: {e}")
     finally:

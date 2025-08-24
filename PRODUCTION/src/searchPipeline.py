@@ -203,6 +203,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         web_event = emit_event("INFO", f"<TASK>Surfing Internet</TASK>")
                         if web_event:
                             yield web_event
+                        web_event = emit_event("INFO", f"<TASK>1 mins please!</TASK>")
                         logger.info(f"Performing web search for: {function_args.get('query')}")
                         search_query = function_args.get("query")
 
@@ -327,6 +328,8 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             logger.info(f"Completed tool execution for iteration {current_iteration}. Number of messages: {len(messages)}")
             if event_id:
                 yield format_sse("INFO", f"<TASK> Summarizing Findings </TASK>")
+            if event_id:
+                yield format_sse("INFO", f"<TASK>1 mins please!</TASK>")
 
         if not final_message_content and current_iteration >= max_iterations:
             # Force a comprehensive synthesis if we have gathered information but no final response

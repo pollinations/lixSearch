@@ -962,7 +962,7 @@ html, body {
 .plus-menu {
     position: absolute;
     bottom: calc(100% + 8px);
-    left: 0;
+    left: 20%;
     background-color: #1f1f1f;
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 12px;
@@ -1102,4 +1102,45 @@ html, body {
 
 .conversation-container::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.3);
+}
+
+.streaming-section {
+    background: linear-gradient(135deg, #1a1b1c 0%, #212223 100%);
+    color: #e0e0e0;
+    border-radius: 0.75rem;
+    padding: 1em 1.5em;
+    margin-bottom: 1em;
+    font-size: 0.98em;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid #2a2b2d;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    line-height: 1.5;
+    letter-spacing: 0.2px;
+    display: block;
+    position: relative;
+}
+.streaming-section.loading::after {
+    content: '●●●';
+    animation: dots 1.5s infinite;
+    color: #444ce7;
+    margin-left: 0.5rem;
+}
+
+.image-url-preview {
+    border-radius: 6px;
+    border: 1px solid #444;
+    max-width: 40px;
+    max-height: 40px;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+@keyframes dots {
+    0%, 20% { opacity: 0; }
+    50% { opacity: 1; }
+    100% { opacity: 0; }
 }
