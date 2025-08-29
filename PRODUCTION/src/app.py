@@ -5,8 +5,8 @@ import random
 import logging
 import sys
 import uuid
-from searchPipeline import run_elixposearch_pipeline
-from deepSearchPipeline import run_deep_research_pipeline
+from searchPipeline import run_elixposearch_pipeline, initialize_search_agents
+# from deepSearchPipeline import run_deep_research_pipeline
 import asyncio
 import threading
 import hypercorn.asyncio
@@ -169,6 +169,12 @@ app.logger.setLevel(logging.INFO)
 
 @app.before_serving
 async def startup():
+    try:
+        await initialize_search_agents()
+        app.logger.info("Search agents pre-warmed and ready for cold start")
+    except Exception as e:
+        app.logger.error(f"Failed to initialize search agents: {e}")
+        
     for i in range(8):
         asyncio.create_task(process_request_worker())
     app.logger.info("Started 8 request processing workers")
@@ -220,7 +226,7 @@ async def search_sse(forwarded_data=None):
             async with processing_semaphore:
                 # Choose pipeline based on deep_flag
                 if deep_flag:
-                    pipeline = run_deep_research_pipeline
+                    pipeline = run_elixposearch_pipeline
                 else:
                     pipeline = run_elixposearch_pipeline
 
