@@ -384,9 +384,9 @@ class YahooSearchAgentImage:
             await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
             await page.wait_for_timeout(random.randint(1000, 2000))
 
-            await page.wait_for_selector("li > a.redesign-img > img", timeout=15000)
+            await page.wait_for_selector("li > a.image-tile > img", timeout=15000)
 
-            img_elements = await page.query_selector_all("li > a.redesign-img > img")
+            img_elements = await page.query_selector_all("li > a.image-tile > img")
             for img in img_elements[:max_images]:
                 src = await img.get_attribute("data-src") or await img.get_attribute("src")
                 if src and src.startswith("http"):

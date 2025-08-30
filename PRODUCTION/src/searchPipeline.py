@@ -12,9 +12,12 @@ import dotenv
 import os
 import asyncio
 import concurrent.futures
+from model_client import parent_conn, p
 from functools import lru_cache
-from textEmbedModel import get_embedding_model, fast_web_search_with_embeddings
 from yahooSearch import agent_pool, image_search
+
+
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("elixpo")
@@ -35,7 +38,7 @@ async def initialize_search_agents():
     else:
         logger.info("Search agent pool already initialized")
 
-model = get_embedding_model()
+# model = get_embedding_model()
 
 @lru_cache(maxsize=100)
 def cached_web_search_key(query: str) -> str:
@@ -70,7 +73,10 @@ async def optimized_tool_execution(function_name: str, function_args: dict, memo
             if web_event:
                 yield web_event
             logger.info(f"Performing optimized web search for: {search_query}")
-            tool_result, source_urls = await fast_web_search_with_embeddings(search_query, model, max_concurrent=7)
+            parent_conn.send({"cmd": "search", "query": f"{search_query}", "max_chars": 2000})
+            response = parent_conn.recv()
+            tool_result = response.get("result")
+            source_urls = response.get("urls")
             memoized_results["web_searches"][cache_key] = tool_result
             if "current_search_urls" not in memoized_results:
                 memoized_results["current_search_urls"] = []
@@ -172,7 +178,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             return format_sse(event_type, message)
         return None
 
-    initial_event = emit_event("INFO", "<TASK>Initializing Search</TASK>")
+    initial_event = emit_event("INFO", "<TASK>Understanding Query</TASK>")
     if initial_event:
         yield initial_event
     try:
@@ -192,7 +198,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 "content": f"""
                 Mission: Provide comprehensive, detailed, and well-researched answers that synthesize ALL gathered information into rich content.
                 CRITICAL CONTENT REQUIREMENTS:
-                - Write detailed, substantive responses (minimum 1000 words for substantial topics)
+                - Write detailed, substantive responses (minimum 800 words for substantial topics)
                 - SYNTHESIZE information from all tools into the main answer content
                 - Include specific facts, data, statistics, examples from your research
                 - Structure responses with clear sections and detailed explanations
@@ -337,13 +343,12 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 "role": "user",
                 "content": f""" Provide me with a detailed aggregation of the -- {user_query}".
                 Requirements:
-                - Synthesize ALL information into a detailed response with max (5000 tokens) adjust if needed
+                - Synthesize ALL information into a detailed response with max (3000 tokens) adjust if needed
                 - Respond in proper markdown formatting
                 - Pack all the details
                 - Include specific facts and context from the research
                 - Structure with clear sections
                 - Include sources with a different section
-                - Included related searches with a different section
                 """
             }
             messages.append(synthesis_prompt)
@@ -354,7 +359,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 "referrer": REFRRER,
                 "private": True,
                 "seed": random.randint(1000, 9999),
-                "max_tokens": 5000
+                "max_tokens": 3000
             }
             try:
                 response = requests.post(POLLINATIONS_ENDPOINT, headers=headers, json=payload, timeout=25)

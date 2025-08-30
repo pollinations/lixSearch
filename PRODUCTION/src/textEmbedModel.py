@@ -15,12 +15,12 @@ import torch
 _model_cache = None
 _model_lock = threading.Lock()
 
-async def fast_web_search_with_embeddings(search_query: str, model: SentenceTransformer, max_concurrent: int = 5) -> tuple[str, list]:
+async def fast_web_search_with_embeddings(search_query: str, model: SentenceTransformer, max_concurrent: int = 5, max_chars: int = 2000) -> tuple[str, list]:
     try:
         search_results_raw = await web_search(search_query)
         if not search_results_raw:
             return "No search results found", []
-        content_dict = await fetch_all_content(search_results_raw[:max_concurrent])
+        content_dict = await fetch_all_content(search_results_raw[:max_concurrent], max_chars=max_chars)
         if not content_dict:
             return "No content could be fetched from search results", search_results_raw[:7]
         valid_urls = list(content_dict.keys())
@@ -44,7 +44,7 @@ async def fast_web_search_with_embeddings(search_query: str, model: SentenceTran
         return f"Search error: {str(e)[:100]}...", []
 
 
-async def fetch_content_async(session: aiohttp.ClientSession, url: str) -> Tuple[str, str]:
+async def fetch_content_async(session: aiohttp.ClientSession, url: str, max_chars: int) -> Tuple[str, str]:
     try:
         timeout = aiohttp.ClientTimeout(total=10)
         async with session.get(url, timeout=timeout) as response:
@@ -54,7 +54,7 @@ async def fetch_content_async(session: aiohttp.ClientSession, url: str) -> Tuple
                 # Extract visible text
                 text = " ".join([t.get_text(" ", strip=True) for t in soup.find_all(["p", "li", "h1", "h2", "h3", "div"])])
                 # Clean and limit text
-                text = " ".join(text.split())[:2000]  # Limit to ~1000 chars
+                text = " ".join(text.split())[:max_chars]  # Limit to ~2000 chars
                 print(f"[INFO] Successfully fetched content from {url} ({len(text)} chars)")
                 return url, text
             else:
@@ -64,7 +64,7 @@ async def fetch_content_async(session: aiohttp.ClientSession, url: str) -> Tuple
         print(f"[WARN] Could not fetch {url}: {e}")
         return url, ""
 
-async def fetch_all_content(urls: List[str]) -> Dict[str, str]:
+async def fetch_all_content(urls: List[str], max_chars: int) -> Dict[str, str]:
     """Fetch content from multiple URLs concurrently"""
     connector = aiohttp.TCPConnector(limit=10, limit_per_host=3)
     timeout = aiohttp.ClientTimeout(total=30)
@@ -74,7 +74,7 @@ async def fetch_all_content(urls: List[str]) -> Dict[str, str]:
         timeout=timeout,
         headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     ) as session:
-        tasks = [fetch_content_async(session, url) for url in urls]
+        tasks = [fetch_content_async(session, url, max_chars) for url in urls]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # Process results

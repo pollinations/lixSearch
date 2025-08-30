@@ -6,11 +6,13 @@ import logging
 import sys
 import uuid
 from searchPipeline import run_elixposearch_pipeline, initialize_search_agents
-# from deepSearchPipeline import run_deep_research_pipeline
+from deepSearchPipeline import run_deep_research_pipeline
 import asyncio
 import threading
 import hypercorn.asyncio
 import json
+import uuid
+import multiprocessing as mp
 from hypercorn.config import Config
 from getYoutubeDetails import get_youtube_transcript
 from collections import deque
@@ -19,7 +21,6 @@ import atexit
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s', stream=sys.stdout)
-
 request_queue = asyncio.Queue(maxsize=100) 
 processing_semaphore = asyncio.Semaphore(15)  
 active_requests = {}
@@ -218,7 +219,7 @@ async def search_sse(forwarded_data=None):
             async with processing_semaphore:
                 # Choose pipeline based on deep_flag
                 if deep_flag:
-                    pipeline = run_elixposearch_pipeline
+                    pipeline = run_deep_research_pipeline
                 else:
                     pipeline = run_elixposearch_pipeline
 
@@ -450,6 +451,6 @@ if __name__ == "__main__":
     config = Config()
     config.bind = ["0.0.0.0:5000"]
     config.use_reloader = False
-    config.workers = 1
+    config.workers = 10
     config.backlog = 1000  
     asyncio.run(hypercorn.asyncio.serve(app, config))
