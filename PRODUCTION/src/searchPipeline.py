@@ -192,7 +192,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 "content": f"""
                 Mission: Provide comprehensive, detailed, and well-researched answers that synthesize ALL gathered information into rich content.
                 CRITICAL CONTENT REQUIREMENTS:
-                - Write detailed, substantive responses (minimum 400-600 words for substantial topics)
+                - Write detailed, substantive responses (minimum 1000 words for substantial topics)
                 - SYNTHESIZE information from all tools into the main answer content
                 - Include specific facts, data, statistics, examples from your research
                 - Structure responses with clear sections and detailed explanations
@@ -214,7 +214,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 When you use tools, INTEGRATE the results into your main response content, don't just list sources.
                 Available Tools:
                 - cleanQuery(query: str)
-                - web_search(query: str) - Optimized for speed, limit to 1-2 searches
+                - web_search(query: str) - Optimized for speed, limit to 3-4 searches
                 - fetch_full_text(url: str)
                 - get_youtube_metadata(url: str)
                 - get_youtube_transcript(url: str)

@@ -128,7 +128,7 @@ def extract_query_and_image(data: dict) -> tuple[str, str | None, bool]:
         for msg in reversed(messages):
             if msg.get("role") == "user":
                 content = msg.get("content", "")
-                if isinstance(content, list):  # OpenAI-style with multiple parts
+                if isinstance(content, list):  
                     for part in content:
                         if part.get("type") == "text":
                             user_query += part.get("text", "").strip() + " "
@@ -154,14 +154,6 @@ def extract_query_and_image(data: dict) -> tuple[str, str | None, bool]:
     return user_query.strip(), user_image, is_openai_chat
 
 
-
-
-
-
-
-
-
-# --------------------------------------------- INITIALIZE APP-------------------------------------------------
 app = Quart(__name__)
 app = cors(app, allow_origin="*")
 app.logger.setLevel(logging.INFO)
