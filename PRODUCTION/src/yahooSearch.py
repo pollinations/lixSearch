@@ -72,13 +72,20 @@ def remove_readonly(func, path, _):
 
 async def handle_accept_popup(page):
     try:
-        accept_button = await page.wait_for_selector("button[type='submit']:has-text('Accept')", timeout=5000)
+        accept_button = await page.query_selector("button:has-text('Accept')")
+        # Try Spanish ("Aceptar todo" or "Aceptar")
+        if not accept_button:
+            accept_button = await page.query_selector("button:has-text('Aceptar todo')")
+        if not accept_button:
+            accept_button = await page.query_selector("button:has-text('Aceptar')")
+
         if accept_button:
             await accept_button.click()
             print("[INFO] Accepted cookie/privacy popup.")
             await asyncio.sleep(1)
-    except:
-        pass
+    except Exception as e:
+        print(f"[WARN] No accept popup found: {e}")
+
 
 class SearchAgentPool:
     def __init__(self, pool_size=1, max_tabs_per_agent=20):  # Changed from max_requests_per_agent

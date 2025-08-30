@@ -272,11 +272,12 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             try:
                 loop = asyncio.get_event_loop()
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(requests.post, POLLINATIONS_ENDPOINT, headers=headers, json=payload, timeout=20)
+                    future = executor.submit(requests.post, POLLINATIONS_ENDPOINT, headers=headers, json=payload, timeout=120)
                     response = await loop.run_in_executor(None, lambda: future.result())
                 response.raise_for_status()
                 response_data = response.json()
             except Exception as e:
+                
                 logger.error(f"Pollinations API call failed at iteration {current_iteration}: {e}")
                 if event_id:
                     yield format_sse("error", f"<TASK>Connection Error - Retrying</TASK>")
@@ -343,7 +344,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 "role": "user",
                 "content": f""" Provide me with a detailed aggregation of the -- {user_query}".
                 Requirements:
-                - Synthesize ALL information into a detailed response with max (3000 tokens) adjust if needed
+                - Synthesize ALL information into a detailed response with max (3000 words) adjust to less if needed
                 - Respond in proper markdown formatting
                 - Pack all the details
                 - Include specific facts and context from the research

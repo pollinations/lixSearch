@@ -1,7 +1,6 @@
 import requests
 import json
 from clean_query import cleanQuery
-from scrape import fetch_full_text
 from getImagePrompt import generate_prompt_from_image, replyFromImage
 from tools import tools
 from datetime import datetime, timezone
@@ -18,11 +17,10 @@ from utility import (
     storeDeepSearchQuery,
     getDeepSearchQuery,
     cleanDeepSearchQuery,
-    _deepsearch_store
 )
 from functools import lru_cache
-from yahooSearch import agent_pool, image_search
-from model_client import parent_conn, p
+from yahooSearch import image_search
+from model_client import parent_conn
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("elixpo")
@@ -38,7 +36,6 @@ def cached_web_search_key(query: str) -> str:
     return f"web_search_{hash(query)}"
 
 def format_sse(event: str, data: str, task_num: int = 0, finished: str = "no", progress: int = 0, stage: str = "info") -> str:
-    """Format Server-Sent Event (SSE) messages."""
     lines = data.splitlines()
     data_str = ''.join(f"data: {line}\n" for line in lines)
     return (
@@ -62,7 +59,7 @@ async def run_deep_research_pipeline(user_query: str, user_image: str, event_id:
         return None
 
     # --- INIT EVENT ---
-    initial_event = emit_event("INFO", "<TASK>Understanding Query</TASK>", 0, "no", 0, "info")
+    initial_event = emit_event("INFO", "<TASK>Initiating Deep Research Pipeline</TASK>", 0, "no", 0, "info")
     if initial_event:
         yield initial_event
 
@@ -74,7 +71,7 @@ async def run_deep_research_pipeline(user_query: str, user_image: str, event_id:
         collected_sources = []
         collected_images_from_web = []
         collected_similar_images = []
-        memoized_results = {"timezone_info": {}, "youtube_metadata": {}, "youtube_transcripts": {}, "web_searches": {}, "current_search_urls": []}
+        memoized_results = {"timezone_info": {}, "youtube_metadata": {}, "youtube_transcripts": {}, "web_searches": {}, "current_search_urls": {}}
 
         # --- SYSTEM PROMPT ---
         system_prompt = f"""
@@ -95,7 +92,7 @@ Available Tools:
 - get_local_time(location: str)
 - generate_prompt_from_image(imgURL: str)
 - replyFromImage(imgURL: str, query: str)
-- image_search(image_query: str, max_images=10)
+- image_search(image_query: str, max_images=5)
 ---
 Context:
 - Use system UTC internally only.
@@ -157,7 +154,7 @@ Final Response Format:
         # --- STEP 2: Sequential Sub-task Execution ---
         for task_num, task in enumerate(tasks, 1):
             progress = int((task_num - 1) / len(tasks) * 100)
-            yield emit_event("INFO", f"<TASK>Starting Task</TASK>", task_num, "no", progress, "event")
+            yield emit_event("INFO", f"<TASK>Understanding Query</TASK>", task_num, "no", progress, "event")
 
             subtask_messages = [
                 {"role": "system", "content": system_prompt},
@@ -167,7 +164,7 @@ Final Response Format:
             final_message_content = None
 
             for iteration in range(5):
-                yield emit_event("INFO", f"<TASK>Task Iteration</TASK>", task_num, "no", progress, "event")
+                yield emit_event("INFO", f"<TASK>One more round of judgement!</TASK>", task_num, "no", progress, "event")
 
                 payload = {
                     "model": MODEL,
@@ -219,7 +216,7 @@ Final Response Format:
                                 if cache_key in memoized_results["web_searches"]:
                                     logger.info(f"Using cached web search for: {search_query}")
                                     yield memoized_results["web_searches"][cache_key]
-                                web_event = emit_event("INFO", f"<TASK>Fast Internet Search</TASK>")
+                                web_event = emit_event("INFO", f"<TASK>Surfing:- {search_query}</TASK>")
                                 if web_event:
                                     yield web_event
                                 logger.info(f"Performing optimized web search for: {search_query}")
@@ -316,7 +313,7 @@ Final Response Format:
             # --- Emit Task Summary ---
             yield emit_event(
                 "TASK_SUMMARY",
-                f"<TASK>{final_message_content or 'Task completed.'}</TASK>",
+                f"{final_message_content or 'Task completed.'}",
                 task_num,
                 "intermediate" if task_num < len(tasks) else "yes",
                 int(task_num / len(tasks) * 100),
@@ -370,13 +367,13 @@ Available Tools Data:
             "model": MODEL,
             "messages": [
                 {"role": "system", "content": enhanced_system_prompt},
-                {"role": "user", "content": f"Based on all the comprehensive research conducted, write a detailed essay-style analysis answering: {user_query}. Include all relevant information discovered during research, provide proper context, and structure it as a comprehensive academic-style essay with clear sections and subsections."}
+                {"role": "user", "content": f"{user_query}."}
             ],
             "token": POLLINATIONS_TOKEN,
             "referrer": REFRRER,
             "private": True,
             "seed": random.randint(1000, 9999),
-            "max_tokens": 4000  # Increase token limit for longer responses
+            "max_tokens": 5000
         }
 
         try:
@@ -395,6 +392,10 @@ Available Tools Data:
             
             logger.info(f"Generated final answer with length: {len(final_answer)}")
             
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"Failed to generate final synthesis: {e}")
+            print("Pollinations API error response:", e.response.text)  
+            final_answer = f"Research completed for '{user_query}'. Due to a synthesis error, please review the individual task summaries above."
         except Exception as e:
             logger.error(f"Failed to generate final synthesis: {e}")
             final_answer = f"Research completed for '{user_query}'. Due to a synthesis error, please review the individual task summaries above."
@@ -420,7 +421,7 @@ Available Tools Data:
 
         final_response = "".join(response_parts)
         
-        # FIXED: Properly emit the final event
+        # Properly emit the final event
         logger.info(f"Emitting final response with length: {len(final_response)}")
         final_event = emit_event("FINAL_ANSWER", final_response, len(tasks), "yes", 100, "finish")
         if final_event:
@@ -428,7 +429,8 @@ Available Tools Data:
         else:
             # Fallback for non-SSE mode
             print(f"Final Response: {final_response}")
-            
+
+        # Always run cleanup and let the function finish naturally
         cleanDeepSearchQuery(event_id)
         
     except Exception as e:
