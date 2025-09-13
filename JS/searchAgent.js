@@ -1,6 +1,6 @@
 // Constants
 
-
+// conversationHistory = [];
 // DOM elements
 const messageInput = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
@@ -27,6 +27,9 @@ messageInput.addEventListener('keydown', function(event) {
 
 async function sendMessage(prompt) 
 {
+    messageInput.value = "";
+    // conversationHistory.push({ role: "user", content: prompt });
+    document.getElementById("conversation").scrollTop = document.getElementById("conversation").scrollHeight;
     const sectionUID = sectionHandler(prompt, null, "create");
     const response = await fetch(`${SERVER_URL}/search`, {
         method: "POST",
@@ -51,17 +54,21 @@ async function sendMessage(prompt)
         buffer = parts.pop(); 
 
         for (let part of parts) {
-            if (part.startsWith("event: end")) {
+            if (part.startsWith("data: [DONE]")) {
                 return;
             }
             const match = part.match(/^data:\s*(.*)$/m);
             if (match) {
-                const data = JSON.parse(match[1]);
-                if (data.status) {
-                    sectionHandler(prompt, sectionUID, "sseEvents", data.status);
-                } else if (data.choices) {
-                    const content = data.choices[0].message.content;
-                    // Separate main content and sources
+                let data;
+                data = JSON.parse(match[1]);
+                console.log(data);
+
+
+                if (data.choices && data.choices[0].delta.content.startsWith("<TASK>")) {
+                    sectionHandler(prompt, sectionUID, "sseEvents", data.choices && data.choices[0].delta.content);
+                } 
+                else if (data.choices) {
+                    const content = data.choices[0].delta.content;
                     const sourcesMatch = content.match(/\*\*Sources:\*\*([\s\S]*)/);
                     const imagesMatch = content.match(/\*\*Related Images:\*\*([\s\S]*)/);
                     let mainContent = content;
@@ -77,7 +84,7 @@ async function sendMessage(prompt)
                         }
                     } 
 
-                    if (imagesMatch) {
+                    else if (imagesMatch) {
                         mainContent = content.replace(/\*\*Related Images:\*\*[\s\S]*/i, '').trim();
                         const imagesText = imagesMatch[1];
                         const imageUrlRegex = /(https?:\/\/[^\s)]+)/g;
@@ -90,12 +97,19 @@ async function sendMessage(prompt)
                     else {
                         mainContent = content.trim();
                     }
-                    sectionHandler(prompt, sectionUID, "finalResponse", null, mainContent);
+                    
+                    if (mainContent != "") {
+                        sectionHandler(prompt, sectionUID, "finalResponse", null, mainContent);
+                    }
                     if (sources.length > 0) {
                         sectionHandler(prompt, sectionUID, "addSources", null, null, sources);
                     }
                     if (images.length > 0) {
                         sectionHandler(prompt, sectionUID, "addImages", null, null, null, images);
+                    }
+                    else if (mainContent == ""  )
+                    {
+                        return;
                     }
                 }
             }

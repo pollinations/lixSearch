@@ -11,7 +11,7 @@ function sectionHandler(prompt, sectionUID=null, action="create", sseText=null, 
         let initialSection = `
 
         <section id="${sectionUID}" class="conversationSection flex flex-col items-start mt-10 w-full h-auto ">
-                    <div class="query font-bold text-[2em] text-white p-3 rounded-lg break-words">
+                    <div class="query font-bold text-[2em] text-white rounded-lg break-words">
                         <p>${prompt}</p>
                     </div>
         </section>
@@ -28,7 +28,7 @@ function sectionHandler(prompt, sectionUID=null, action="create", sseText=null, 
     {
         document.getElementById(sectionUID).querySelectorAll(".response").forEach(el => el.remove());
         let sseEventsSection = `
-        <div class="response text-lg text-white p-3 rounded-lg  break-words">
+        <div class="response text-lg text-white rounded-lg mt-3 break-words">
                     <div class="loader w-full h-[60px] flex flex-row gap-2 animation-rotate">
                         <ion-icon name="sparkles" class="sparkleIcon text-[#888] text-[1.2em]"></ion-icon> 
                         <p class="SSEstatus text-m text-[#888]"> ${sseText} </p>
