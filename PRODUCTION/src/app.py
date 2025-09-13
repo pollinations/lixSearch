@@ -466,7 +466,7 @@ async def status():
     })
 
 
-@app.route("/test")
+@app.route("/test", methods=["GET"])
 async def testResponse():
     return jsonify({
         "choices" : [
