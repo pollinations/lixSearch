@@ -8,7 +8,6 @@ import uuid
 from searchPipeline import run_elixposearch_pipeline, initialize_search_agents
 from deepSearchPipeline import run_deep_research_pipeline
 import asyncio
-import threading
 import hypercorn.asyncio
 import json
 import uuid
@@ -16,9 +15,9 @@ import multiprocessing as mp
 from hypercorn.config import Config
 from getYoutubeDetails import get_youtube_transcript
 from collections import deque
-from datetime import datetime, timedelta
-import atexit
-
+from datetime import datetime
+import requests
+from bs4 import BeautifulSoup
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s', stream=sys.stdout)
 request_queue = asyncio.Queue(maxsize=100) 
@@ -152,7 +151,7 @@ def extract_query_and_image(data: dict) -> tuple[str, str | None, bool]:
                         elif part.get("type") == "image_url" and not user_image:
                             user_image = part.get("image_url", {}).get("url", None)
                     user_query = user_query.strip()
-                else:  # Old style: plain string content
+                else: 
                     user_query = content.strip()
                 is_openai_chat = True
                 break
@@ -187,6 +186,36 @@ async def startup():
     for i in range(8):
         asyncio.create_task(process_request_worker())
     app.logger.info("Started 8 request processing workers")
+
+
+@app.route("/metadata", methods=["GET"])
+def get_metadata():
+    if request.method == "GET":
+        url = request.args.get("url")
+    resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+    html = resp.text
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    metadata = {
+        "title": soup.title.string if soup.title else None,
+        "description": soup.find("meta", attrs={"name": "description"})["content"]
+            if soup.find("meta", attrs={"name": "description"}) else None,
+        "og_title": soup.find("meta", property="og:title")["content"]
+            if soup.find("meta", property="og:title") else None,
+        "og_description": soup.find("meta", property="og:description")["content"]
+            if soup.find("meta", property="og:description") else None,
+        "og_image": soup.find("meta", property="og:image")["content"]
+            if soup.find("meta", property="og:image") else None,
+    }
+
+    response = {
+        "url": url,
+        "metadata": metadata["description"]
+    }
+
+    return jsonify(response)
+
 
 
 @app.route("/search/sse", methods=["POST", "GET"])
