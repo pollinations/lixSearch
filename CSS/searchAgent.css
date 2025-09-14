@@ -115,7 +115,7 @@ html, body {
 .input-container {
     position: relative;
     background-color: #18191a;
-    padding: 16px;
+    padding: 5px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     z-index: 100;
 }
