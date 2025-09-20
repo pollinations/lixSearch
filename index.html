@@ -35,9 +35,9 @@
 
 
         <div class="conversation-container w-full h-full p-6 overflow-y-auto max-w-[85%] m-auto px-[16px] flex flex-col flex-[1] overflow-y-auto">
-            <div id="conversation" class="conversation flex flex-col w-full items-left gap-2">
-                <div class="initial-title hidden" id="initial-title">
-                    <h1>What do you want to search?</h1>
+            <div id="conversation" class="conversation max-w-[85%] m-auto py-[20px] min-h-[100%] flex flex-col gap-2">
+                <div class="initial-title flex items-center justify-center flex-1 text-center mb-[40px] hidden" id="initial-title">
+                    <h1 class="text-[32px] font-bold text-[#fff] m-0">What do you want to search?</h1>
                 </div>
 
                 <section id="secID583661719" class="conversationSection flex flex-col items-start mt-10 w-full h-auto ">
@@ -59,27 +59,40 @@
             </div>
         </div>
 
-        <div class="input-container relative bg-[#18191a] p-[5px] border-t-2 border-[#333] z-100 h-[15%]">
-            <div class="input-wrapper">
-                <input type="text" 
-                    id="messageInput" 
-                    placeholder="Search..." 
-                    value="what's the weather of kolkata"
-                >
-                <button id="sendBtn" class="send-btn">
+        <div class="input-container relative bg-transparent p-[5px] mb-2 w-full flex">
+        <div class="input-wrapper max-w-[768px] w-full h-[120px] m-auto flex flex-col items-left gap-2 bg-[#2a2b2d] rounded-[24px] px-3 py-2 border border-[#333] shadow-[0px_-10px_20px_#111] focus-within:border-[#444ce7] transition-colors">
+            <textarea
+            id="messageInput"
+            placeholder="Ask a follow-up..."
+            class="flex-grow bg-transparent resize-none text-white text-[1.2em] ml-2 mt-2 placeholder-gray-400 focus:outline-none px-1"
+            rows="1"
+            autocomplete="off"
+            spellcheck="false"
+            autocapitalize="off"
+            >hi</textarea>
+
+            <div class="flex items-center gap-2 text-gray-400 ml-2 justify-between">
+            <div class="leftSection flex items-center gap-5 pr-[5px] bg-[#191B1B] rounded-[8px]">
+                <ion-icon name="globe" class="text-[1.2em] cursor-pointer h-[20px] w-[20px] text-[#32aab5] border-2 border-[#32aab5] p-2 rounded-[10px] bg-[#0A2528]"></ion-icon>
+                <ion-icon name="construct-outline" class="text-[1.2em] cursor-pointer mr-[5px]"></ion-icon>
+                <ion-icon name="layers-outline" class="text-[1.2em] cursor-pointer mr-[5px]"></ion-icon>
+
+            </div>
+            
+            <div class="rightSection flex items-center gap-5">
+                <ion-icon name="hardware-chip-outline" class=" text-[1.5em] cursor-pointer hover:text-white"></ion-icon>
+                <ion-icon name="attach-outline" class=" text-[1.5em] cursor-pointer hover:text-white"></ion-icon>
+                <ion-icon name="mic-outline" class=" text-[1.5em] cursor-pointer hover:text-white"></ion-icon>
+                <button class="sendBtn text-white bg-[#444ce7] rounded-lg p-2" id="sendBtn">
                     <i data-lucide="arrow-up"></i>
                 </button>
             </div>
 
-            <div id="plusMenu" class="plus-menu hidden">
-                <div class="menu-item" data-action="deep_research">
-                    <i data-lucide="search"></i>
-                    <span>Deep research</span>
-                </div>
+
             </div>
-            <div class="footer">
-                <p>AI can make mistakes. Check important info.</p>
-            </div>
+        </div>
+        </div>
+
         </div>
 
         
