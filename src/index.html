@@ -34,25 +34,78 @@
             </div>
         </div>
 
-        <div class="sidebar absolute w-[15%] h-full flex flex-col bg-[#1F2121a1] backdrop-blur-[5px] left-[5%]">
+        <div class="sidebar home absolute w-[15%] h-full flex flex-col bg-[#1F2121a1] backdrop-blur-[5px] left-[5%]">
             <div class="sidebarName text-[1em] text-white px-[20px] py-5 flex h-[40px] w-full justify-between">
                 <p>Home</p>
                 <ion-icon name="lock-closed-outline" class=" text-[#555] mt-2 cursor-pointer transition-colors hover:text-[#fff]"></ion-icon>
             </div>
             <div class="spacer w-[85%] mx-auto mt-5 h-[2px] bg-[#333] "></div>
-            <span class="sectionTitle text-[#888] text-[0.9em] px-[20px] mt-2 font-bold">Library</span>
+            <span class="sectionTitle text-[#888] text-[0.9em] px-[20px] flex justify-between items-center mt-2 font-bold "> 
+                    <span class="text-ellipsis overflow-hidden whitespace-nowrap"> Library </span> 
+                    <ion-icon class="text-white transition-ease p-1 rounded-[5px] hover:bg-[#222] cursor-pointer" name="add"></ion-icon>
+                </span>
 
             <div class="preSearches w-full mt-2 flex flex-col gap-2 px-[20px] text-[#ccc] overflow-y-auto">
-                <span class="cursor-pointer hover:text-white transition-colors px-[10px] py-[2px] transition-ease hover:bg-[#333] rounded-[8px] text-ellipsis overflow-hidden whitespace-nowrap"> Hi </span>
-                <span class="cursor-pointer hover:text-white transition-colors px-[10px] py-[2px] transition-ease hover:bg-[#333] rounded-[8px] text-ellipsis overflow-hidden whitespace-nowrap"> What's the news about the latest </span>
+                <span class="cursor-pointer flex justify-between items-center px-2 hover:text-white transition-colors px-[10px] py-[2px] transition-ease hover:bg-[#333] rounded-[8px] text-ellipsis overflow-hidden whitespace-nowrap"> 
+                    <span class="text-ellipsis overflow-hidden whitespace-nowrap"> Hi </span> 
+                    <ion-icon class=" transition-ease p-1 rounded-[5px] hover:bg-[#222]" name="ellipsis-horizontal-outline"></ion-icon>
+                </span>
+                <span class="cursor-pointer flex justify-between items-center px-2 hover:text-white transition-colors px-[10px] py-[2px] transition-ease hover:bg-[#333] rounded-[8px] text-ellipsis overflow-hidden whitespace-nowrap"> 
+                    <span class="text-ellipsis overflow-hidden whitespace-nowrap"> Latest news  </span> 
+                    <ion-icon class=" transition-ease p-1 rounded-[5px] hover:bg-[#222]" name="ellipsis-horizontal-outline"></ion-icon>
+                </span>
             </div>
 
-            <span class="sectionTitle text-[#888] text-[0.9em] px-[20px] mt-2 font-bold">Pages </span>
+            <span class="sectionTitle text-[#888] text-[0.9em] px-[20px] flex justify-between items-center mt-2 font-bold "> 
+                    <span class="text-ellipsis overflow-hidden whitespace-nowrap"> Pages </span> 
+                    <ion-icon class="text-white transition-ease p-1 rounded-[5px] hover:bg-[#222] cursor-pointer" name="add"></ion-icon>
+                </span>
 
             <div class="preSearches w-full mt-2 flex flex-col gap-2 px-[20px] text-[#ccc] overflow-y-auto">
-                <span class="cursor-pointer hover:text-white transition-colors px-[10px] py-[2px] transition-ease hover:bg-[#333] rounded-[8px] text-ellipsis overflow-hidden whitespace-nowrap"> Bike Racing </span>
-                <span class="cursor-pointer hover:text-white transition-colors px-[10px] py-[2px] transition-ease hover:bg-[#333] rounded-[8px] text-ellipsis overflow-hidden whitespace-nowrap"> Contingency Planning is a secret tool </span>
+                <span class="cursor-pointer flex justify-between items-center px-2 hover:text-white transition-colors px-[10px] py-[2px] transition-ease hover:bg-[#333] rounded-[8px] text-ellipsis overflow-hidden whitespace-nowrap"> 
+                    <span class="text-ellipsis overflow-hidden whitespace-nowrap"> Bike Racing </span> 
+                    <ion-icon class=" transition-ease p-1 rounded-[5px] hover:bg-[#222]" name="ellipsis-horizontal-outline"></ion-icon>
+                </span>
+                <span class="cursor-pointer flex justify-between items-center px-2 hover:text-white transition-colors px-[10px] py-[2px] transition-ease hover:bg-[#333] rounded-[8px] text-ellipsis overflow-hidden whitespace-nowrap"> 
+                    <span class="text-ellipsis overflow-hidden whitespace-nowrap"> OS Writeup </span> 
+                    <ion-icon class=" transition-ease p-1 rounded-[5px] hover:bg-[#222]" name="ellipsis-horizontal-outline"></ion-icon>
+                </span>
             </div>
+
+        </div>
+
+        <div class="sidebar discover hidden absolute w-[15%] h-full flex flex-col bg-[#1F2121a1] backdrop-blur-[5px] left-[5%]">
+            <div class="sidebarName text-[1em] text-white px-[20px] py-5 flex h-[40px] w-full justify-between">
+                <p>Discover</p>
+                <ion-icon name="lock-closed-outline" class=" text-[#555] mt-2 cursor-pointer transition-colors hover:text-[#fff]"></ion-icon>
+            </div>
+            <div class="spacer w-[85%] mx-auto mt-5 h-[2px] bg-[#333] "></div>
+            <span class="sectionTitle text-[#888] text-[0.9em] px-[20px] mt-2 font-bold">Topics</span>
+
+            <div class="preSearches w-full mt-2 flex flex-col gap-2 px-[20px] text-[#ccc] overflow-y-auto">
+                <span class="cursor-pointer flex justify-start gap-2 items-center px-2 hover:text-white transition-colors px-[10px] py-[2px] transition-ease hover:bg-[#333] rounded-[8px] text-ellipsis overflow-hidden whitespace-nowrap"> 
+                    <ion-icon name="sparkles" class=""></ion-icon>
+                    <span class="text-ellipsis overflow-hidden whitespace-nowrap"> For You  </span> 
+                </span>
+                <span class="cursor-pointer flex justify-start gap-2 items-center px-2 hover:text-white transition-colors px-[10px] py-[2px] transition-ease hover:bg-[#333] rounded-[8px] text-ellipsis overflow-hidden whitespace-nowrap"> 
+                    <ion-icon name="laptop"></ion-icon>
+                    <span class="text-ellipsis overflow-hidden whitespace-nowrap"> Technology  </span> 
+                </span>
+                <span class="cursor-pointer flex justify-start gap-2 items-center px-2 hover:text-white transition-colors px-[10px] py-[2px] transition-ease hover:bg-[#333] rounded-[8px] text-ellipsis overflow-hidden whitespace-nowrap"> 
+                    <ion-icon name="card"></ion-icon>
+                    <span class="text-ellipsis overflow-hidden whitespace-nowrap"> Finance  </span> 
+                </span>
+                <span class="cursor-pointer flex justify-start gap-2 items-center px-2 hover:text-white transition-colors px-[10px] py-[2px] transition-ease hover:bg-[#333] rounded-[8px] text-ellipsis overflow-hidden whitespace-nowrap"> 
+                    <ion-icon name="color-palette"></ion-icon>
+                    <span class="text-ellipsis overflow-hidden whitespace-nowrap"> World Arts  </span> 
+                </span>
+                <span class="cursor-pointer flex justify-start gap-2 items-center px-2 hover:text-white transition-colors px-[10px] py-[2px] transition-ease hover:bg-[#333] rounded-[8px] text-ellipsis overflow-hidden whitespace-nowrap"> 
+                    <ion-icon name="film"></ion-icon>
+                    <span class="text-ellipsis overflow-hidden whitespace-nowrap"> Entertainment  </span> 
+                </span>
+                
+            </div>
+
 
         </div>
 
