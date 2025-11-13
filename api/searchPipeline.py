@@ -14,7 +14,7 @@ import asyncio
 import concurrent.futures
 from functools import lru_cache
 import time
-
+from config import POLLINATIONS_ENDPOINT
 
 
 logging.basicConfig(level=logging.INFO)
@@ -23,7 +23,6 @@ dotenv.load_dotenv()
 POLLINATIONS_TOKEN = os.getenv("TOKEN")
 MODEL = os.getenv("MODEL")
 REFRRER = os.getenv("REFERRER")
-POLLINATIONS_ENDPOINT = "https://text.pollinations.ai/openai"
 print(MODEL, POLLINATIONS_TOKEN)
 
 
@@ -186,7 +185,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         yield initial_event
     try:
         current_utc_time = datetime.now(timezone.utc)
-        headers = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json",
+                   "Authorization": f"Bearer {POLLINATIONS_TOKEN}"}
+                   
         memoized_results = {
             "timezone_info": {},
             "web_searches": {},
@@ -266,7 +267,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 "messages": messages,
                 "tools": tools,
                 "tool_choice": "auto",
-                "token": POLLINATIONS_TOKEN,
+                "key": POLLINATIONS_TOKEN,
                 "referrer": REFRRER,
                 "private": True,
                 "seed": random.randint(1000, 9999),
@@ -364,7 +365,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             payload = {
                 "model": MODEL,
                 "messages": messages,
-                "token": POLLINATIONS_TOKEN,
+                "key": POLLINATIONS_TOKEN,
                 "referrer": REFRRER,
                 "private": True,
                 "seed": random.randint(1000, 9999),
