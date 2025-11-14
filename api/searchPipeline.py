@@ -199,6 +199,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         messages = [
             {
                 "role": "system",
+                "name": "elixposearch-agent-system",
                 "content": f"""
                 Mission: Provide comprehensive, detailed, and well-researched answers that synthesize ALL gathered information into rich content.
                 CRITICAL CONTENT REQUIREMENTS:
@@ -267,11 +268,15 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 "messages": messages,
                 "tools": tools,
                 "tool_choice": "auto",
-                "key": POLLINATIONS_TOKEN,
+                "parallel_tool_calls": True,
                 "referrer": REFRRER,
                 "private": True,
                 "seed": random.randint(1000, 9999),
-                "max_tokens": 3000
+                "max_tokens": 3000,
+                "frequency_penalty": 0,
+                "logit_bias": None,
+                "logprobs": False,
+                "top_logprobs": 0,
             }
             try:
                 loop = asyncio.get_event_loop()
