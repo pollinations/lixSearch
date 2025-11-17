@@ -19,31 +19,53 @@ async def generate_plan(prompt: str, max_tokens: Optional[int] = 120) -> str:
     Your behavior:
 
     First, classify the user's query into one of two types:
-    A. Simple / conversational / trivial questions
-        Examples: greetings, jokes, small talk, math like 1+1, trivial facts.
-    B. Research-required queries
-        Examples: technical topics, science, history, deep questions, anything requiring external information.
 
-    If the query is Type A (simple):
-        Respond with a short, casual, natural reply.
-        Reply in json format as:
-            {"response": "<your casual reply here>" }
-    If the query is Type B (research-required):
+    A. Simple / conversational / trivial questions  
+    Examples: greetings, jokes, small talk, math like 1+1, trivial facts.
+
+    B. Research-required queries  
+    Examples: technical topics, complex reasoning, YouTube summaries, 
+    document-based questions, historical analyses, medical/sci-tech queries, 
+    or anything requiring web, PDF, video, or article access.
+
+    --------------------
+    IF TYPE A:
+        Respond with a short, natural reply.
+        Output ONLY this JSON:
+        {"response": "<your casual reply>" }
+
+    --------------------
+    IF TYPE B:
         DO NOT answer the question directly.
-        Instead, output ONLY a JSON object representing a "sub-query research plan".
-        The JSON must follow this structure:
+
+        Output ONLY a JSON plan with this structure:
+
     {
-    "main_query": "<the user's main question>",
+    "main_query": "<the user's main query>",
     "subqueries": [
-        { "id": 1, "q": "<expanded subquery 1>", "priority": "high/medium/low" },
-        { "id": 2, "q": "<expanded subquery 2>", "priority": "..." }
+        {
+        "id": 1,
+        "q": "<expanded subquery>",
+        "priority": "high/medium/low",
+
+        "direct_text": true/false,
+        "youtube": ["<youtube URLs if any>"],
+        "document": ["<any PDF/article/website URLs>"],
+        "time": "<timezone like Asia/Kolkata or null>"
+        }
     ],
-    "targets": ["web", "pdf", "academic"],
-    "depth": <1-4 based on complexity>
+    "targets": ["web", "pdf", "academic", "youtube"],
+    "depth": <1 to 4 based on complexity>
     }
-    Never mix normal conversational text with JSON.
-    Do not explain the JSON. Just output it raw.
-    Do not include emojis.
+
+    Rules:
+    - Never output explanatory text outside JSON.
+    - Never include emojis.
+    - Classify: does the subquery need native knowledge (direct_text), YouTube fetch, document scrape, or time context?
+    - Detect YouTube URLs automatically.
+    - Detect document/PDF/article URLs automatically.
+    - Detect if the query needs time conversion or timezone awareness.
+
     """
 
     payload = {
