@@ -2,7 +2,6 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 import re
-from conditional_print import conditional_print
 from config import SCRAPE_IMAGE, MAX_TOTAL_SCRAPE_WORD_COUNT, scrape_website_show_log
 
 
@@ -18,13 +17,13 @@ def fetch_full_text(
     try:
         response = requests.get(url, timeout=20, headers=headers)
         if response.status_code != 200:
-            conditional_print(f"Error:- {url}", show_logs)
+            print(f"Error:- {url}")
             return "", []
         response.raise_for_status()
 
         content_type = response.headers.get('Content-Type', '').lower()
         if 'text/html' not in content_type:
-            conditional_print(f"Skipping non-HTML content from {url} (Content-Type: {content_type})", show_logs)
+            print(f"Skipping non-HTML content from {url} (Content-Type: {content_type})")
             return "", []
 
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -64,13 +63,13 @@ def fetch_full_text(
         return text_content.strip()[:MAX_TOTAL_SCRAPE_WORD_COUNT]
 
     except requests.exceptions.Timeout:
-        conditional_print(f"Timeout scraping URL: {url}", show_logs)
+        print(f"Timeout scraping URL: {url}")
         return "", []
     except requests.exceptions.RequestException as e:
-        conditional_print(f"Request error scraping URL: {url}: {type(e).__name__}: {e}", show_logs)
+        print(f"Request error scraping URL: {url}: {type(e).__name__}: {e}")
         return "", []
     except Exception as e:
-        conditional_print(f"Error processing URL: {url}: {type(e).__name__}: {e}", show_logs)
+        print(f"Error processing URL: {url}: {type(e).__name__}: {e}")
         return "", []
 
 
