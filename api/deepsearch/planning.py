@@ -5,6 +5,7 @@ import os
 from loguru import logger
 import asyncio
 import random
+import json
 
 load_dotenv()
 
@@ -101,7 +102,8 @@ if __name__ == "__main__":
     async def main():
         user_prompt = "Hi"
         reply = await generate_reply(user_prompt)
-
+        with open("api/deepresearch/planning.json", "w") as f:
+            f.write(json.dumps(reply, indent=2))
         print("\n--- Generated Reply ---\n")
         print(reply)
 
