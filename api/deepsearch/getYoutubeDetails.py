@@ -61,7 +61,7 @@ def get_youtube_metadata(url):
 
 
 
-def get_youtube_transcript(url, query, languages: Iterable[str] = ("en",),preserve_formatting: bool = False,):
+def get_youtube_transcript(url, query, full_transcript: bool = False, languages: Iterable[str] = ("en",),preserve_formatting: bool = False,):
     print("[INFO] Getting Youtube Transcript")
     video_id = get_youtube_video_id(url)
     if not video_id:
@@ -86,10 +86,14 @@ def get_youtube_transcript(url, query, languages: Iterable[str] = ("en",),preser
         if not entries:
             raise ValueError("Transcript fetch returned no entries.")
         full_text = " ".join(entry.text for entry in entries)
-        
-        full_text = full_text.strip()
-
-        return full_text
+        if full_transcript:
+            return full_text
+        else:
+            full_text = full_text.split(". ")
+            data_embed, query_embed = embedModelService.encodeSemantic(full_text, list(query))
+            scores = embedModelService.cosineScore(query_embed, data_embed, k=5)
+            relevant_texts = [full_text[idx] for idx, score in scores if score > 0.8]
+            return ". ".join(relevant_texts) if relevant_texts else full_text
         
         
 
