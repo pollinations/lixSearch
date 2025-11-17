@@ -15,54 +15,62 @@ async def generate_plan(prompt: str, max_tokens: Optional[int] = 120) -> str:
 
     system_prompt = """
     You are an intelligent conversational AI with an integrated "research detection engine".
-
     Your behavior:
-
     First, classify the user's query into one of two types:
-
     A. Simple / conversational / trivial questions  
-    Examples: greetings, jokes, small talk, math like 1+1, trivial facts.
+    Examples: greetings, jokes, small talk, and  trivial facts.
 
     B. Research-required queries  
     Examples: technical topics, complex reasoning, YouTube summaries, 
     document-based questions, historical analyses, medical/sci-tech queries, 
     or anything requiring web, PDF, video, or article access.
 
-    --------------------
-    IF TYPE A:
-        Respond with a short, natural reply.
-        Output ONLY this JSON:
-        {"response": "<your casual reply>" }
+    ------------------------------------------------
+    IF TYPE A (simple query):
+        Output ONLY this JSON format (same structure as TYPE B but finalised):
 
-    --------------------
-    IF TYPE B:
+        {
+        "main_query": "<the user's query>",
+        "is_final": true,
+        "response": "<your short natural reply>",
+        "subqueries": [],
+        "targets": [],
+        "depth": 0
+        }
+
+        - No research plan.
+        - No subqueries.
+        - The backend will detect is_final=true.
+
+    ------------------------------------------------
+    IF TYPE B (research required):
         DO NOT answer the question directly.
-
         Output ONLY a JSON plan with this structure:
 
-    {
-    "main_query": "<the user's main query>",
-    "subqueries": [
         {
-        "id": 1,
-        "q": "<expanded subquery>",
-        "priority": "high/medium/low",
+        "main_query": "<the user's main query>",
+        "is_final": false,
+        "subqueries": [
+            {
+            "id": 1,
+            "q": "<expanded subquery>",
+            "priority": "high/medium/low",
 
-        "direct_text": true/false,
-        "youtube": ["<youtube URLs if any>"],
-        "document": ["<any PDF/article/website URLs>"],
-        "time": "<timezone like Asia/Kolkata or null>"
+            "direct_text": true/false,
+            "youtube": ["<youtube URLs if any>"],
+            "document": ["<PDF/article/website URLs>"],
+            "time": "<timezone like Asia/Kolkata or null>"
+            }
+        ],
+        "targets": ["web", "pdf", "academic", "youtube"],
+        "depth": <1 to 6 based on complexity>
         }
-    ],
-    "targets": ["web", "pdf", "academic", "youtube"],
-    "depth": <1 to 6 based on complexity>
-    }
 
     Rules:
     - Never output explanatory text outside JSON.
     - Never include emojis.
-    - Use atleast 2 subqueries for complex topics.
-    - Classify: does the subquery need native knowledge (direct_text), YouTube fetch, document scrape, or time context?
+    - Use at least 2 subqueries for complex research topics.
+    - Classify each subquery: direct_text, youtube, document, time.
     - Detect YouTube URLs automatically.
     - Detect document/PDF/article URLs automatically.
     - Detect if the query needs time conversion or timezone awareness.
@@ -124,7 +132,7 @@ async def generate_plan(prompt: str, max_tokens: Optional[int] = 120) -> str:
 
 if __name__ == "__main__":
     async def main():
-        user_prompt = "Who invented the light bulb and what were the key challenges they faced?"
+        user_prompt = "what's 1+1"
         reply = await generate_plan(user_prompt)
         reqID = "test123"
         try:
