@@ -101,3 +101,15 @@ def getDeepSearchQuery(sessionID: str):
 def cleanDeepSearchQuery(sessionID: str):
     if sessionID in _deepsearch_store:
         del _deepsearch_store[sessionID]
+
+if __name__ == "__main__":
+    test_queries = ["Latest news from Nepal", "Political updates in Nepal"]
+    test_urls = [
+        "https://english.nepalnews.com/",
+        "https://apnews.com/article/nepal-gen-z-protests-army-kathmandu-2e4d9e835216b11fa238d7bcf8915cbf",
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    ]
+    content = fetch_url_content_parallel(test_queries, test_urls)
+    print("\n--- Fetched Content ---\n")
+    for item in content:
+        print(item)

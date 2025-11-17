@@ -64,7 +64,7 @@ class ipcModules:
         top_k = torch.topk(cosine_scores, k=k)
         return [(int(idx), float(score)) for score, idx in zip(top_k.values, top_k.indices)]
 class searchPortManager:
-    def __init__(self, start_port=9000, end_port=9999):
+    def __init__(self, start_port=10000, end_port=19999):
         self.start_port = start_port
         self.end_port = end_port
         self.used_ports = set()
@@ -483,7 +483,7 @@ def get_port_status():
     return port_manager.get_status()
 
 
-port_manager = searchPortManager(start_port=9000, end_port=9999)
+port_manager = searchPortManager(start_port=10000, end_port=19999)
 agent_pool = SearchAgentPool(pool_size=1, max_tabs_per_agent=20)
 _event_loop = None
 _event_loop_thread = None
