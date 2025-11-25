@@ -71,23 +71,6 @@ def fetch_url_content_parallel(queries, urls, max_workers=10):
 
         return sentences
 
-def fetch_youtube_parallel(urls, mode='metadata', max_workers=10):
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        if mode == 'metadata':
-            futures = {executor.submit(youtubeMetadata, url): url for url in urls}
-        else:
-            futures = {executor.submit(get_youtube_transcript, url): url for url in urls}
-
-        results = {}
-        for future in concurrent.futures.as_completed(futures):
-            url = futures[future]
-            try:
-                results[url] = future.result()
-            except Exception as e:
-                logger.error(f"YouTube {mode} failed for {url}: {e}")
-                results[url] = '[Failed]'
-        return results
-
 def get_youtube_metadata(url):
     print("[INFO] Getting Youtube Metadata")
     parsed_url = urlparse(url)
@@ -123,53 +106,6 @@ def get_youtube_video_id(url):
     return None
 
 
-
-def get_youtube_transcript(url, query, full_transcript: bool = False, languages: Iterable[str] = ("en",),preserve_formatting: bool = False,):
-    print("[INFO] Getting Youtube Transcript")
-    video_id = get_youtube_video_id(url)
-    if not video_id:
-        print("Attempted to get transcript with no video ID.")
-        return None
-
-    try:
-        try:
-            entries = YouTubeTranscriptApi().list(video_id).find_transcript(languages).fetch(preserve_formatting=preserve_formatting)
-            print(f"Found English ('en') transcript for video ID: {video_id}")
-        except NoTranscriptFound:
-            print(f"No 'en' transcript found. Trying other available languages.")
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-            available = list(transcript_list._manually_created_transcripts.values()) + list(transcript_list._generated_transcripts.values())
-            if not available:
-                print(f"No transcripts found in any language for video ID: {video_id}")
-                return None
-            transcript = available[0]
-            print(f"Using transcript in '{transcript.language_code}'")
-            entries = transcript.fetch()
-
-        if not entries:
-            raise ValueError("Transcript fetch returned no entries.")
-        full_text = " ".join(entry.text for entry in entries)
-        if full_transcript:
-            return full_text
-        else:
-            full_text = full_text.split(". ")
-            data_embed, query_embed = embedModelService.encodeSemantic(full_text, list(query))
-            scores = embedModelService.cosineScore(query_embed, data_embed, k=5)
-            relevant_texts = [full_text[idx] for idx, score in scores if score > 0.8]
-            return ". ".join(relevant_texts) if relevant_texts else full_text
-        
-        
-
-    except NoTranscriptFound:
-        print(f"No transcript available for video ID: {video_id}")
-    except TranscriptsDisabled:
-        print(f"Transcripts are disabled for video ID: {video_id}")
-    except Exception as e:
-        print(f"Unexpected error while fetching transcript for {video_id}: {type(e).__name__} - {e}")
-
-    return None
-
-
 def storeDeepSearchQuery(query: list, sessionID: str):
     _deepsearch_store[sessionID] = query
 
@@ -185,15 +121,6 @@ def testYoutubeMetadata():
     metadata = youtubeMetadata(youtube_url)
     print("Metadata:", metadata)
 
-
-def testYoutubeTranscript():
-    url = "https://www.youtube.com/watch?v=FLal-KvTNAQ"
-    query = "summarize me the video "
-    transcript = get_youtube_transcript(url, query, full_transcript=False)
-    print("Transcript snippet:", transcript[:500])
-    print("="*50)
-    metadata = get_youtube_metadata(url)
-    print("Metadata:", metadata)
 
 
 def testSearching():
@@ -211,4 +138,4 @@ def testSearching():
 
 
 if __name__ == "__main__":
-    testYoutubeTranscript()
+    pass

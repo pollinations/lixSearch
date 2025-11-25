@@ -317,8 +317,6 @@ class YahooSearchAgentText:
             page = await self.context.new_page()
             search_url = f"{url}"
             await page.goto(search_url, timeout=50000)
-
-            # Handle "Accept" popup
             await handle_accept_popup(page)
             page.on("request", lambda req: capture_url(req, lambda url: set_transcript(url)))
 
@@ -336,20 +334,13 @@ class YahooSearchAgentText:
                 transcript_url = url
 
             await page.goto(url, wait_until="networkidle")
-            # Simulate human behavior
             await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
             await page.wait_for_timeout(random.randint(1000, 2000))
 
             await page.wait_for_selector("button.ytp-subtitles-button.ytp-button", timeout=55000)
-
-            meta_title_elements = await page.query_selector_all("button.ytp-subtitles-button.ytp-button")
-            meta_title = None
-            if meta_title_elements:
-                meta_title = await meta_title_elements[0].text_content()
-            else:
-                meta_title = ""
-
-            print(f"[SEARCH] Tab #{self.tab_count} has found video with the url {url}  on port {self.custom_port}")
+            await page.click('button.ytp-subtitles-button.ytp-button')
+            await page.wait_for_timeout(6000)
+            print(f"[SEARCH] Tab #{self.tab_count} has found transcript fetch url of  the video url {url}  on port {self.custom_port}")
             
             # Increment pool tab count
             if agent_idx is not None:
@@ -366,60 +357,76 @@ class YahooSearchAgentText:
                 except Exception as e:
                     print(f"[WARN] Failed to close tab #{self.tab_count}: {e}")
         
-        return meta_title
+        return transcript_url
 
     async def youtube_metadata(self, url, agent_idx=None):
-        blacklist = [
-            "yahoo.com/preferences",
-            "yahoo.com/account",
-            "login.yahoo.com",
-            "yahoo.com/gdpr",
-        ]
-        results = []
-        page = None
-        try:
-            self.tab_count += 1
-            print(f"[SEARCH] Opening tab #{self.tab_count} on port {self.custom_port} for url: '{url}'")
-            
-            # Open new tab for this search
-            page = await self.context.new_page()
-            search_url = f"{url}"
-            await page.goto(search_url, timeout=50000)
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-infobars",
+                    "--window-size=1920,1080",
+                    "--start-maximized",
+                    "--autoplay-policy=no-user-gesture-required"
+                ]
+            )
 
-            # Handle "Accept" popup
-            await handle_accept_popup(page)
+            context = await browser.new_context(
+                viewport={"width": 1920, "height": 1080},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                )
+            )
 
-            # Simulate human behavior
-            await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
-            await page.wait_for_timeout(random.randint(1000, 2000))
+            page = await context.new_page()
 
-            await page.wait_for_selector("div#title > h1 > yt-formatted-string.ytd-watch-metadata", timeout=55000)
+            # 🥷 Stealth patch to remove headless indicators
+            await page.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                window.chrome = { runtime: {} };
+                Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3,4] });
+                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            """)
 
-            meta_title_elements = await page.query_selector_all("div#title > h1 > yt-formatted-string.ytd-watch-metadata")
-            meta_title = None
-            if meta_title_elements:
-                meta_title = await meta_title_elements[0].text_content()
-            else:
-                meta_title = ""
+            transcript_url = None
 
-            print(f"[SEARCH] Tab #{self.tab_count} has found video with the url {url}  on port {self.custom_port}")
-            
-            # Increment pool tab count
-            if agent_idx is not None:
-                agent_pool.increment_tab_count("text", agent_idx)
-                
-        except Exception as e:
-            print(f"❌ Yahoo search failed on tab #{self.tab_count}, port {self.custom_port}: {e}")
-        finally:
-            # Always close the tab after search
-            if page:
-                try:
-                    await page.close()
-                    print(f"[SEARCH] Closed tab #{self.tab_count} on port {self.custom_port}")
-                except Exception as e:
-                    print(f"[WARN] Failed to close tab #{self.tab_count}: {e}")
-        
-        return meta_title
+            def capture_url(req):
+                url = req.url
+                if (
+                    "timedtext" in url or
+                    "texttrack" in url or
+                    "caption" in url
+                ):
+                    nonlocal transcript_url
+                    transcript_url = url
+
+            page.on("request", capture_url)
+
+            await page.goto(url, wait_until="networkidle")
+
+            # Force YouTube player UI visibility
+            await page.evaluate("""
+                const player = document.querySelector('.html5-video-player');
+                if (player) player.classList.add('ytp-autohide');
+            """)
+
+            # Ensure CC button is interactable
+            await page.wait_for_selector('button.ytp-subtitles-button.ytp-button', state="visible")
+
+            # Click fake mouse movement (important in headless)
+            await page.mouse.move(300, 300)
+            await page.wait_for_timeout(300)
+
+            await page.click('button.ytp-subtitles-button.ytp-button', force=True)
+
+            # Give time for transcript request to fire
+            await page.wait_for_timeout(2500)
+
+            await browser.close()
+            return transcript_url
 
     async def close(self):
         try:
@@ -577,6 +584,14 @@ class accessSearchAgents:
         results = await agent.youtube_metadata(url, agent_idx=agent_idx)
         return results
     
+    async def _async_get_youtube_transcript_url(self, url):
+        if not agent_pool.initialized:
+            await agent_pool.initialize_pool()
+        
+        agent, agent_idx = await agent_pool.get_text_agent()
+        results = await agent.youtube_transcript_url(url, agent_idx=agent_idx)
+        return results
+    
     async def _async_image_search(self, query, max_images=10):
         if not agent_pool.initialized:
             await agent_pool.initialize_pool()
@@ -601,7 +616,7 @@ class accessSearchAgents:
         return run_async_on_bg_loop(self._async_image_search(query, max_images))
     
     def get_transcript_url(self, url):
-        pass
+        return run_async_on_bg_loop(self._async_get_youtube_transcript_url(url))
     
     def get_agent_pool_status(self):
         return run_async_on_bg_loop(self._async_get_agent_pool_status())
