@@ -1,7 +1,6 @@
 import asyncio
 from pytubefix import AsyncYouTube
 import whisper
-import tempfile
 import os
 from pydub import AudioSegment
 import torch
@@ -9,35 +8,11 @@ import time
 
 URL = "https://www.youtube.com/watch?v=v8eUhkhC8lw"
 BASE_CACHE_DIR = "./cached_audio"  
-MIN_CHUNK_MS = 10_000              
-CHUNK_LENGTH_MS = 60_000           
 
 def ensure_cache_dir(video_id):
     path = os.path.join(BASE_CACHE_DIR, video_id)
     os.makedirs(path, exist_ok=True)
     return path
-
-def chunk_audio(audio_path, chunk_length_ms=CHUNK_LENGTH_MS, min_length_ms=MIN_CHUNK_MS):
-    audio = AudioSegment.from_file(audio_path)
-    chunks = []
-    for i in range(0, len(audio), chunk_length_ms):
-        chunk = audio[i:i + chunk_length_ms]
-        if len(chunk) >= min_length_ms:  # skip too short chunks
-            chunks.append(chunk)
-    return chunks
-
-def save_chunks_to_files(chunks, folder):
-    paths = []
-    for idx, chunk in enumerate(chunks):
-        path = os.path.join(folder, f"chunk_{idx}.wav")
-        chunk.export(path, format="wav")
-        paths.append(path)
-    return paths
-
-async def transcribe_chunk(model, wav_path):
-    # Whisper's CPU/GPU transcribe runs in a separate thread to not block asyncio
-    result = await asyncio.to_thread(model.transcribe, wav_path, language="en")
-    return result["text"]
 
 async def download_audio(video_id, url):
     cache_folder = ensure_cache_dir(video_id)
@@ -72,19 +47,10 @@ async def main(url):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = whisper.load_model("small", device=device)
     
-    chunks = chunk_audio(wav_path)
-    if not chunks:
-        print("Audio too short to chunk, using full audio.")
-        chunks = [AudioSegment.from_file(wav_path)]
-    
-    chunk_folder = os.path.join(BASE_CACHE_DIR, video_id, "chunks")
-    os.makedirs(chunk_folder, exist_ok=True)
-    chunk_paths = save_chunks_to_files(chunks, chunk_folder)
-    
     start_time = time.time()
-    tasks = [transcribe_chunk(model, path) for path in chunk_paths]
-    results = await asyncio.gather(*tasks)
-    final_text = " ".join(results)
+    # Full audio transcription
+    result = await asyncio.to_thread(model.transcribe, wav_path, language="en")
+    final_text = result["text"]
     end_time = time.time()
     
     print("="*50)
