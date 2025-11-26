@@ -1,8 +1,6 @@
 MAX_TRANSCRIPT_WORD_COUNT = 3000
 MAX_TOTAL_SCRAPE_WORD_COUNT = 5000
 MAX_IMAGES_TO_INCLUDE = 4
-scrape_website_show_log = True
-SCRAPE_IMAGE=True
 MAX_LINKS_TO_TAKE = 6
 isHeadless=True
 POLLINATIONS_ENDPOINT = "https://enter.pollinations.ai/api/generate/v1/chat/completions"

@@ -7,8 +7,6 @@ from typing import Optional
 from responseGenerator import generate_intermediate_response
 import asyncio
 
-
-
 class modelManager(BaseManager): pass
 modelManager.register("ipcService")
 manager = modelManager(address=("localhost", 5010), authkey=b"ipcService")
