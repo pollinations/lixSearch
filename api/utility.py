@@ -27,16 +27,11 @@ def preprocess_text(text):
     # Remove URLs, special characters, and clean up
     text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
     text = re.sub(r'[^\w\s.,!?;:]', ' ', text)
-    
-    # Split into sentences more intelligently
     sentences = re.split(r'(?<=[.!?])\s+', text)
-    
-    # Filter out short or meaningless sentences
     meaningful_sentences = []
     for sentence in sentences:
         sentence = sentence.strip()
         if len(sentence) > 20 and len(sentence.split()) > 3:
-            # Remove sentences that are mostly navigation/UI elements
             if not any(word in sentence.lower() for word in ['feedback', 'menu', 'navigation', 'click', 'download']):
                 meaningful_sentences.append(sentence)
     
