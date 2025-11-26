@@ -7,7 +7,6 @@ import asyncio
 import re
 from urllib.parse import urlparse, parse_qs
 from typing import Optional, Iterable
-from utility import rerank
 from responseGenerator import generate_intermediate_response
 
 class modelManager(BaseManager): pass

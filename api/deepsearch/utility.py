@@ -71,33 +71,13 @@ def fetch_url_content_parallel(queries, urls, max_workers=10):
                 logger.error(f"Failed fetching {url}: {e}")
                 results += f"\nURL: {url}\n Failed to fetch content of this URL"
         logger.info(f"Fetched all URL information in parallel.")
-        sentences = preprocess_text(results)
-        data_embed, query_embed = embedModelService.encodeSemantic(sentences, list(queries))
-        scores = embedModelService.cosineScore(query_embed, data_embed, k=5)
-        for idx, score in scores:
-            if score > 0.8:  
-                sentences[idx]
-
-        return sentences
-
-
-
-
-
-def rerank(query, information):
-    sentences = preprocess_text(information)
-    data_embed, query_embed = embedModelService.encodeSemantic(sentences, [query])
-    scores = embedModelService.cosineScore(query_embed, data_embed, k=5)  
-    information_piece = ""
-    seen_sentences = set()  
-    for idx, score in scores:
-        if score > 0.8:  
-            sentence = sentences[idx].strip()
-            if sentence not in seen_sentences and len(sentence) > 20: 
-                information_piece += sentence + " "
-                seen_sentences.add(sentence)
-    return information_piece.strip()
-
+        information = embedModelService.extract_relevant(results, queries)
+        for i in information:
+            sentences = []
+            for piece in i:
+                sentences.extend([s.strip() for s in piece.split('.') if s.strip()])
+            result += '. '.join(sentences) + '. '
+        return results
 
 
 def storeDeepSearchQuery(query: list, sessionID: str):

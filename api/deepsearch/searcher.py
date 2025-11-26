@@ -6,7 +6,7 @@ import time
 from typing import Optional
 from responseGenerator import generate_intermediate_response
 import asyncio
-from utility import rerank
+
 
 
 class modelManager(BaseManager): pass
@@ -16,16 +16,23 @@ manager.connect()
 embedModelService = manager.ipcService()
 
 async def subQueryPlan(block, reqID):
+    result = ""
     start_time = time.time()
     query = block["q"]
     get_url = webSearch(query)
     information = fetch_url_content_parallel(query, get_url)
-    reranked_info = rerank(query, information)
+    response = embedModelService.extract_relevant(information, query)
+    for i in response:
+            sentences = []
+            for piece in i:
+                sentences.extend([s.strip() for s in piece.split('.') if s.strip()])
+            result += '. '.join(sentences) + '. '
+
     end_time = time.time()
     struct = {
         "query": query,
         "urls": get_url,
-        "information": reranked_info,
+        "information": result,
         "id": block["id"],
         "priority": block["priority"],
         "time_taken": f"{end_time - start_time:.2f}s",
