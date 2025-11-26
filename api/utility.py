@@ -97,7 +97,7 @@ def fetch_url_content_parallel(queries, urls, max_workers=10):
             sentences = []
             for piece in i:
                 sentences.extend([s.strip() for s in piece.split('.') if s.strip()])
-            result += '. '.join(sentences) + '. '
+            results += '. '.join(sentences) + '. '
         return results
 
 
