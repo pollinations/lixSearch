@@ -66,7 +66,11 @@ async def generate_plan(prompt: str, max_tokens: Optional[int] = 600) -> str:
         "private": True,
         "referrer": "elixpoart",
         "max_tokens": max_tokens,
-        "seed": random.randint(1000, 1000000)
+        "seed": random.randint(1000, 1000000),
+        "frequency_penalty" : 1,
+        "logit_bias": {},
+        "logprobs": False,
+        "modalities" : ["text"]
     }
 
     headers = {
@@ -113,7 +117,7 @@ if __name__ == "__main__":
             with open(f"searchSessions/{reqID}/{reqID}_planning.json", "w") as f:   
                 f.write(json.dumps(reply_json, indent=2))
         except Exception:
-            pass
+            print("Error parsing JSON or writing file.")
         print("\n--- Generated Reply ---\n")
         print(reply)
 
