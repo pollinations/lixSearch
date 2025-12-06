@@ -807,4 +807,4 @@ if __name__ == "__main__":
         print(f"[ERROR] Server error: {e}")
     finally:
         shutdown_graceful()
-        print("[INFO] Shutdown complete.")
+        print("[INFO] Shutdown completed.")
