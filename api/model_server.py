@@ -792,7 +792,7 @@ if __name__ == "__main__":
     agent_pool = SearchAgentPool(pool_size=1, max_tabs_per_agent=20)
     manager = modelManager(address=("localhost", 5010), authkey=b"ipcService")
     server = manager.get_server()
-    logger.info("Starting embedding service on port 5010...")
+    logger.info("Ipc started on port 5010...")
 
     try:
         _ensure_background_loop()
