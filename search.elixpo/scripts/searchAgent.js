@@ -1,7 +1,4 @@
-// Constants
 
-// conversationHistory = [];
-// DOM elements
 const messageInput = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
 const plusBtn = document.getElementById('plusBtn');
@@ -12,9 +9,6 @@ const initialTitle = document.querySelector('.initial-title');
 // State
 let isGenerating = false;
 let isDeepResearch = false;
-
-
-
 
   messageInput.addEventListener("input", () => {
     messageInput.style.height = "auto"; // reset height
