@@ -10,20 +10,12 @@ if not os.path.exists('searchenv/nltk_data'):
     nltk.download("punkt_tab", download_dir='./searchenv/nltk_data')
 
 
-# -----------------------------
-# Load embedding model (CPU)
-# -----------------------------
-
 model = SentenceTransformer(
     "sentence-transformers/all-MiniLM-L6-v2",
     device="cpu",
     cache_folder = "model_cache"
 )
 
-
-# -----------------------------
-# Utility
-# -----------------------------
 
 def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
     return np.dot(a, b)
@@ -32,10 +24,6 @@ def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
 def normalize(vecs: np.ndarray) -> np.ndarray:
     return vecs / np.linalg.norm(vecs, axis=1, keepdims=True)
 
-
-# -----------------------------
-# Chunk documents
-# -----------------------------
 
 def chunk_text(text: str, max_sentences: int = 5) -> List[str]:
     sentences = sent_tokenize(text)
@@ -49,10 +37,6 @@ def chunk_text(text: str, max_sentences: int = 5) -> List[str]:
     return chunks
 
 
-# -----------------------------
-# Sentence selection pipeline
-# -----------------------------
-
 def select_top_sentences(
     query: str,
     docs: List[str],
@@ -63,7 +47,6 @@ def select_top_sentences(
     Returns top relevant sentences with similarity scores
     """
 
-    # 1. Chunk documents
     chunks = []
     chunk_to_sentences = []
 
@@ -76,7 +59,6 @@ def select_top_sentences(
     if not chunks:
         return []
 
-    # 2. Embed query + chunks
     embeddings = model.encode(
         [query] + chunks,
         batch_size=16,
@@ -86,18 +68,14 @@ def select_top_sentences(
     query_emb = embeddings[0:1]
     chunk_embs = embeddings[1:]
 
-    # 3. Normalize
     query_emb = normalize(query_emb)
     chunk_embs = normalize(chunk_embs)
 
-    # 4. Chunk similarity
     scores = chunk_embs @ query_emb.T
     scores = scores.squeeze()
 
-    # 5. Pick top chunks
     top_chunk_idxs = np.argsort(scores)[-top_k_chunks:][::-1]
 
-    # 6. Sentence-level refinement (cheap)
     candidate_sentences = []
 
     for idx in top_chunk_idxs:
@@ -105,13 +83,11 @@ def select_top_sentences(
         sentences = chunk_to_sentences[idx]
 
         for s in sentences:
-            # lexical bias + semantic inheritance
             score = chunk_score
             if query.lower() in s.lower():
                 score += 0.05
             candidate_sentences.append((s, float(score)))
 
-    # 7. Final ranking
     candidate_sentences.sort(key=lambda x: x[1], reverse=True)
 
     return candidate_sentences[:top_k_sentences]
@@ -136,4 +112,3 @@ results = select_top_sentences(query, docs)
 
 for sent, score in results:
     print(f"{score:.3f} | {sent}")
-
