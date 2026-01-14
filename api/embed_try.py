@@ -108,9 +108,9 @@ def select_top_sentences(
 
 
 
-query = "What happened at the SIR hearing?"
+query = "turing machine definition"
 t2 = time.perf_counter()
-text = fetch_full_text("https://www.financialexpress.com/india-news/six-others-have-claimed-as-father-ec-summons-bengal-voters-for-sir-hearing-over-logical-discrepancy/4106668/")
+text = fetch_full_text("https://www.geeksforgeeks.org/theory-of-computation/turing-machine-in-toc/")
 print(text)
 t3 = time.perf_counter()
 print(f"Web scrape time  : {t3 - t2:.3f} seconds")
@@ -121,5 +121,5 @@ print(f"\nModel load time   : {MODEL_LOAD_TIME:.3f} seconds")
 print(f"Inference time    : {inference_time:.3f} seconds\n")
 
 for sent, score in results:
-    if score > 0.3:
+    if score > 0.6:
         print(sent)
