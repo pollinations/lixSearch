@@ -15,3 +15,5 @@ searchSessions/
 .*json
 node_modules/
 cached_audio/
+nltk_data/
+mdoel_cache/
