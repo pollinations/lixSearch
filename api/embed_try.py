@@ -20,7 +20,7 @@ t0 = time.perf_counter()
 
 model = SentenceTransformer(
     "sentence-transformers/all-MiniLM-L6-v2",
-    device="cpu",
+    device="cuda",
     cache_folder="model_cache"
 )
 
@@ -110,10 +110,11 @@ def select_top_sentences(
 
 query = "What happened at the SIR hearing?"
 t2 = time.perf_counter()
-docs = fetch_full_text("https://www.financialexpress.com/india-news/six-others-have-claimed-as-father-ec-summons-bengal-voters-for-sir-hearing-over-logical-discrepancy/4106668/")
-print(docs)
+text = fetch_full_text("https://www.financialexpress.com/india-news/six-others-have-claimed-as-father-ec-summons-bengal-voters-for-sir-hearing-over-logical-discrepancy/4106668/")
+print(text)
 t3 = time.perf_counter()
 print(f"Web scrape time  : {t3 - t2:.3f} seconds")
+docs = [text] if text else []
 results, inference_time = select_top_sentences(query, docs)
 
 print(f"\nModel load time   : {MODEL_LOAD_TIME:.3f} seconds")

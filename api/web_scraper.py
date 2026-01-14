@@ -17,7 +17,7 @@ def fetch_full_text(
         response = requests.get(url, timeout=20, headers=headers)
         if response.status_code != 200:
             print(f"Error:- {url}")
-            return "", []
+            return ""
         response.raise_for_status()
 
         content_type = response.headers.get('Content-Type', '').lower()
@@ -56,18 +56,17 @@ def fetch_full_text(
         if word_count >= total_word_count_limit:
             text_content = ' '.join(text_content.split()[:total_word_count_limit]) + '...'
 
-        return temp_text
-        # return text_content.strip()[:MAX_TOTAL_SCRAPE_WORD_COUNT]
+        return text_content.strip()
 
     except requests.exceptions.Timeout:
         print(f"Timeout scraping URL: {url}")
-        return "", []
+        return ""
     except requests.exceptions.RequestException as e:
         print(f"Request error scraping URL: {url}: {type(e).__name__}: {e}")
-        return "", []
+        return ""
     except Exception as e:
         print(f"Error processing URL: {url}: {type(e).__name__}: {e}")
-        return "", []
+        return ""
 
 
 if __name__ == "__main__":
