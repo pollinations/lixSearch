@@ -107,17 +107,17 @@ def select_top_sentences(
 
 
 
-query = "What happened to the bengal woman in india?"
+query = "What happened at the SIR hearing?"
 t2 = time.perf_counter()
-docs = fetch_full_text("https://www.hindustantimes.com/india-news/bengal-woman-trying-to-escape-drunk-eve-teasers-dies-in-road-accident-101740391266434.html")
+docs = fetch_full_text("https://www.financialexpress.com/india-news/six-others-have-claimed-as-father-ec-summons-bengal-voters-for-sir-hearing-over-logical-discrepancy/4106668/")
 print(docs)
 t3 = time.perf_counter()
-# print(f"Web scrape time  : {t3 - t2:.3f} seconds")
-# results, inference_time = select_top_sentences(query, docs)
+print(f"Web scrape time  : {t3 - t2:.3f} seconds")
+results, inference_time = select_top_sentences(query, docs)
 
-# print(f"\nModel load time   : {MODEL_LOAD_TIME:.3f} seconds")
-# print(f"Inference time    : {inference_time:.3f} seconds\n")
+print(f"\nModel load time   : {MODEL_LOAD_TIME:.3f} seconds")
+print(f"Inference time    : {inference_time:.3f} seconds\n")
 
-# for sent, score in results:
-#     if score > 0.6:
-#         print(sent)
+for sent, score in results:
+    if score > 0.3:
+        print(sent)
