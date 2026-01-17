@@ -5,16 +5,9 @@ from nltk.tokenize import sent_tokenize
 from typing import List, Tuple
 import nltk
 import os
-import requests
-import random
-from dotenv import load_dotenv
-from web_scraper import fetch_full_text
 import asyncio
-from urllib.parse import quote
 from search import playwright_web_search
 
-
-load_dotenv()
 
 NLTK_DIR = "searchenv/nltk_data"
 os.makedirs(NLTK_DIR, exist_ok=True)
@@ -26,7 +19,6 @@ if not os.path.exists(os.path.join(NLTK_DIR, "tokenizers/punkt")):
 
 
 t0 = time.perf_counter()
-
 model = SentenceTransformer(
     "sentence-transformers/all-MiniLM-L6-v2",
     device="cuda",
@@ -60,73 +52,6 @@ def chunk_text(text: str, max_sentences: int = 5) -> List[str]:
 
 
 
-def generate_intermediate_response(query: str, embed_result: str, max_tokens: int = 500) -> str:
-    system_prompt = f"""You are an expert search response formatter. Your task is to take a user query and raw search results, and frame them into a natural, smooth, and engaging response that reads like a well-crafted search summary.
-    
-Guidelines:
-- Format the response to flow naturally from the query
-- Highlight the most relevant information
-- Make it conversational yet informative
-- Use clear structure and formatting when appropriate
-- Ensure the response sounds human and polished
-- If there are multiple pieces of information, organize them logically
-- Avoid overwhelming the user with raw data but pack as much semantic information as you can.
-- Keep the response concise but comprehensive
-- Fit the response within the {max_tokens} token limit but in detail."""
-    
-    payload = {
-        "model": "gemini-fast",
-        "messages": [
-            {
-                "role": "system",
-                "content": system_prompt.replace("\n", " ").strip()
-            },
-            {
-                "role": "user",
-                "content": f"Query: {query}\n\nRaw Search Result:\n{embed_result}"
-            }
-        ],
-        "temperature": 0.7,
-        "stream": False,
-        "private": True,
-        "max_tokens": max_tokens,
-        "seed": random.randint(1000, 1000000)
-    }
-    
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv('TOKEN')}"
-    }
-    
-    try:
-        response = requests.post(
-            "https://gen.pollinations.ai/v1/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=30
-        )
-        
-        if response.status_code != 200:
-            raise RuntimeError(f"Request failed: {response.status_code}, {response.text}")
-        
-        data = response.json()
-        try:
-            reply = data["choices"][0]["message"]["content"]
-        except Exception as e:
-            raise RuntimeError(f"Unexpected response format: {data}") from e
-        
-        return reply.strip()
-    
-    except requests.exceptions.Timeout:
-        print(f"Timeout occurred formatting response for query: {query}")
-        return f"Based on your search for '{query}': {embed_result}"
-    except Exception as e:
-        print(f"Error in generate_intermediate_response: {e}")
-        return f"Based on your search for '{query}': {embed_result}"
-    
-
-
-
 
 def select_top_sentences(
     query: str,
@@ -134,10 +59,6 @@ def select_top_sentences(
     top_k_chunks: int = 4,
     top_k_sentences: int = 8,
 ) -> Tuple[List[Tuple[str, float]], float]:
-    """
-    Returns top relevant sentences + inference time
-    """
-
     start = time.perf_counter()
 
     chunks = []
@@ -182,100 +103,7 @@ def select_top_sentences(
     end = time.perf_counter()
 
     return candidate_sentences[:top_k_sentences], end - start
-
-
-
-
-
-async def run_complete_pipeline(query: str):
-    """Run complete search pipeline with separate timing metrics"""
-    
-    print(f"\n{'='*70}")
-    print(f"COMPLETE SEARCH PIPELINE FOR: '{query}'")
-    print(f"{'='*70}\n")
-    
-    
-    
-    # ACTUAL PIPELINE METRICS
-    print("[PIPELINE] Starting actual search and processing pipeline...\n")
-    
-    # 1. SEARCH PHASE
-    print("━" * 70)
-    print("PHASE 1: PLAYWRIGHT SEARCH")
-    print("━" * 70)
-    urls, search_time = await playwright_web_search(query, max_links=3)
-    print(f"✓ Found {len(urls)} URLs in {search_time:.3f} seconds\n")
-    
-    if not urls:
-        print("[ERROR] No URLs found")
-        return
-    
-    # # 2. FETCH CONTENT PHASE
-    # print("━" * 70)
-    # print("PHASE 2: FETCH & SCRAPE CONTENT")
-    # print("━" * 70)
-    # fetch_start = time.perf_counter()
-    # docs = []
-    # for url in urls:
-    #     try:
-    #         print(f"  Fetching: {url[:60]}...")
-    #         text = fetch_full_text(url)
-    #         if text:
-    #             docs.append(text)
-    #             print(f"    ✓ Fetched {len(text)} characters")
-    #     except Exception as e:
-    #         print(f"    ✗ Failed: {e}")
-    # fetch_end = time.perf_counter()
-    # fetch_time = fetch_end - fetch_start
-    # print(f"✓ Fetched {len(docs)} documents in {fetch_time:.3f} seconds\n")
-    
-    # if not docs:
-    #     print("[ERROR] No documents fetched")
-    #     return
-    
-    # # 3. SEMANTIC EXTRACTION PHASE
-    # print("━" * 70)
-    # print("PHASE 3: SEMANTIC SENTENCE EXTRACTION")
-    # print("━" * 70)
-    # results, inference_time = select_top_sentences(query, docs, top_k_chunks=3, top_k_sentences=5)
-    # print(f"✓ Extracted {len(results)} top sentences in {inference_time:.3f} seconds")
-    
-    # top_text = "\n".join([f"  • {sent[:80]}... (score: {score:.3f})" for sent, score in results[:3]])
-    # print(f"\nTop sentences:\n{top_text}\n")
-    
-    # # 4. RESPONSE FORMATTING PHASE
-    # print("━" * 70)
-    # print("PHASE 4: LLM RESPONSE FORMATTING")
-    # print("━" * 70)
-    # response_start = time.perf_counter()
-    # sent = "\n".join([s for s, _ in results if results])
-    # final_resp = generate_intermediate_response(query, sent)
-    # response_end = time.perf_counter()
-    # response_time = response_end - response_start
-    # print(f"✓ Generated formatted response in {response_time:.3f} seconds\n")
-    
-    # print(f"Formatted Response:\n{'-' * 70}")
-    # print(final_resp)
-    # print(f"{'-' * 70}\n")
-    
-    # # FINAL SUMMARY
-    # total_pipeline_time = search_time + fetch_time + inference_time + response_time
-    
-    # print("=" * 70)
-    # print("TIMING SUMMARY (excluding warmup)")
-    # print("=" * 70)
-    # print(f"Model Load Time (warmup):        {MODEL_LOAD_TIME:.3f} seconds")
-    # print(f"Playwright Warmup (excluded):    {playwright_warmup_time:.3f} seconds")
-    # print(f"\nPipeline Breakdown:")
-    # print(f"  1. Playwright Search:          {search_time:.3f} seconds")
-    # print(f"  2. Content Fetching:           {fetch_time:.3f} seconds")
-    # print(f"  3. Semantic Extraction:        {inference_time:.3f} seconds")
-    # print(f"  4. LLM Response Format:        {response_time:.3f} seconds")
-    # print(f"  " + "-" * 66)
-    # print(f"  TOTAL PIPELINE TIME:           {total_pipeline_time:.3f} seconds")
-    # print("=" * 70 + "\n")
-
 # Main execution
 if __name__ == "__main__":
     query = "latest news between america and venezuela?"
-    asyncio.run(run_complete_pipeline(query))
+    pass

@@ -316,7 +316,7 @@ def fetch_full_text(
 if __name__ == "__main__":
     async def main():
         query = "quote"
-        urls, search_time = await playwright_web_search(query, max_links=1, images=True)
+        urls, search_time = await playwright_web_search(query, max_links=10, images=False)
         print(f"Search completed in {search_time:.3f} seconds")
         print("URLs found:")
         for url in urls:
