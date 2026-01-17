@@ -3,6 +3,8 @@ from config import BASE_CACHE_DIR
 from pytubefix import AsyncYouTube
 from pydub import AudioSegment
 from multiprocessing.managers import BaseManager
+import torch
+import whisper
 import asyncio
 import re
 import time
@@ -10,13 +12,18 @@ from urllib.parse import urlparse, parse_qs
 from typing import Optional, Iterable
 
 
+
+# Remove model server dependency for STT, only keep search_service if needed
 class modelManager(BaseManager): pass
 modelManager.register("accessSearchAgents")
-modelManager.register("ipcService")
 manager = modelManager(address=("localhost", 5010), authkey=b"ipcService")
 manager.connect()
 search_service = manager.accessSearchAgents()
-modelService = manager.ipcService()
+
+# Load Whisper model directly here
+AUDIO_TRANSCRIBE_SIZE = "base"  # or set to your preferred model size
+device = "cuda" if torch.cuda.is_available() else "cpu"
+whisper_model = whisper.load_model(AUDIO_TRANSCRIBE_SIZE).to(device)
 
 def youtubeMetadata(url: str):
     metadata = search_service.get_youtube_metadata(url)
@@ -80,24 +87,19 @@ async def transcribe_audio(url, full_transcript: Optional[str] = None, query: Op
     meta_data = youtubeMetadata(url)
     print(f"[INFO] Video title: {meta_data}")
     audio = await download_audio(url)
-    transcription = modelService.transcribeAudio(audio)
+    # Use Whisper model directly
+    print(f"[INFO] Transcribing audio with Whisper model on device: {device}")
+    result = whisper_model.transcribe(audio)
+    transcription = result["text"]
     print(f"[INFO] Completed transcription for video ID: {video_id}")
+    # If full_transcript is provided, use it
     if full_transcript:
         print("[INFO] Using provided full transcript.")
         transcription = full_transcript
-    else:
-        query = query or "Provide a brief summary of the video content."
-        print("[INFO] Using generated transcription for query inference.")
-        information_piece = modelService.extract_relevant(transcription, query)
-        print(f"[INFO] Extracted {len(information_piece)} relevant pieces.")
-        for i in information_piece:
-            sentences = []
-            for piece in i:
-                sentences.extend([s.strip() for s in piece.split('.') if s.strip()])
-            transcription += '. '.join(sentences) + '. '
-    transcription += f"Video Titled as {meta_data}"
+    # Optionally, you can add query-based extraction here if needed, but modelService.extract_relevant is not available
+    transcription += f" Video Titled as {meta_data}"
     end_time = time.time()
-    print(f"[INFO] Transcription and extraction took {end_time - start_time:.2f} seconds.")
+    print(f"[INFO] Transcription took {end_time - start_time:.2f} seconds.")
     return transcription
 
 if __name__ == "__main__":
