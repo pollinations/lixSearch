@@ -12,6 +12,8 @@ __pycache__/
 minikube-linux-amd64
 pip_cache/
 searchSessions/
+tmp_cache/
+audio_cache/
 .*json
 node_modules/
 cached_audio/
