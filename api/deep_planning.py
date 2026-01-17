@@ -78,7 +78,7 @@ async def generate_plan(prompt: str, max_tokens: Optional[int] = 600) -> str:
 
     try:
         response = requests.post(
-            "https://enter.pollinations.ai/api/generate/v1/chat/completions",
+            "https://gen.pollinations.ai/v1/chat/completions",
             headers=headers, json=payload, timeout=30
         )
         if response.status_code != 200:
