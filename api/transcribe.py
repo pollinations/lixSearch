@@ -1,10 +1,12 @@
 import os
 import time
+import numpy as np
 from faster_whisper import WhisperModel
 from pydub import AudioSegment
 import torch
 
-t0 = time.perf_counter()
+# ------------------ MODEL INIT (ONCE) ------------------
+
 model = WhisperModel(
     "small",
     device="cuda",
@@ -13,73 +15,78 @@ model = WhisperModel(
     local_files_only=True
 )
 
-def chunk_audio_to_disk(audio: AudioSegment, chunk_length_ms: int, reqID: str, base_tmp: str = "tmp_cache"):
-    import shutil
-    chunk_dir = os.path.join(base_tmp, reqID)
-    if os.path.exists(chunk_dir):
-        shutil.rmtree(chunk_dir)
-    os.makedirs(chunk_dir, exist_ok=True)
+# ------------------ AUDIO UTIL ------------------
 
-    chunk_paths = []
-    for i, start in enumerate(range(0, len(audio), chunk_length_ms)):
-        end = min(start + chunk_length_ms, len(audio))
-        chunk_audio = audio[start:end]
-        chunk_path = os.path.join(chunk_dir, f"chunk_{i}.wav")
-        chunk_audio.export(chunk_path, format="wav")
-        chunk_paths.append(chunk_path)
-
-    return chunk_paths
-
-def transcribe(AUDIO_FILE: str, reqID: str, timings: list | None = None) -> str:
-    if timings is None:
-        timings = []
-
-    audio = AudioSegment.from_file(AUDIO_FILE)
-    duration_sec = len(audio) / 1000
-
-    # ---------- BASE CASE ----------
-    if duration_sec <= 5 * 60:
-        t_start = time.perf_counter()
-        segments, _ = model.transcribe(AUDIO_FILE, beam_size=5)
-        t_end = time.perf_counter()
-
-        elapsed = t_end - t_start
-        timings.append(elapsed)
-
-        print(
-            f"[BASE] {os.path.basename(AUDIO_FILE)} | "
-            f"duration={duration_sec:.2f}s | "
-            f"time={elapsed:.3f}s"
-        )
-
-        return "".join(segment.text.strip() for segment in segments)
-
-    # ---------- RECURSIVE CASE ----------
-    print(
-        f"[RECURSE] {os.path.basename(AUDIO_FILE)} | "
-        f"{duration_sec/60:.2f} min → chunking"
+def load_audio_mono_float32(path: str, target_sr: int = 16000) -> np.ndarray:
+    audio = (
+        AudioSegment
+        .from_file(path)
+        .set_channels(1)
+        .set_frame_rate(target_sr)  # <-- THIS WAS MISSING
     )
 
-    chunk_length_ms = 2 * 60 * 1000
-    chunk_paths = chunk_audio_to_disk(audio, chunk_length_ms, reqID)
+    samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
+    samples /= np.iinfo(audio.array_type).max
+    return samples
 
-    transcriptions = []
-    for idx, chunk_path in enumerate(chunk_paths):
-        print(f"[CALL] chunk {idx+1}/{len(chunk_paths)} → {chunk_path}")
-        text = transcribe(chunk_path, reqID, timings)
-        transcriptions.append(text)
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
-    return " ".join(transcriptions)
+def chunk_audio(samples: np.ndarray, sr: int, chunk_sec: int):
+    chunk_size = chunk_sec * sr
+    for i in range(0, len(samples), chunk_size):
+        yield samples[i:i + chunk_size]
+
+# ------------------ TRANSCRIPTION ------------------
+
+def transcribe_long(
+    audio_path: str,
+    chunk_sec: int = 120,
+    beam_size: int = 5,
+) -> str:
+
+    samples = load_audio_mono_float32(audio_path)
+    sample_rate = 16000  # Whisper expectation
+
+    if sample_rate != 16000:
+        raise RuntimeError("Resampling required (Whisper expects 16kHz).")
+
+    total_chunks = (len(samples) + chunk_sec * sample_rate - 1) // (chunk_sec * sample_rate)
+    results = []
+
+    print(f"[INFO] audio length = {len(samples)/sample_rate/60:.2f} min")
+    print(f"[INFO] chunks = {total_chunks}")
+
+    for idx, chunk in enumerate(chunk_audio(samples, sample_rate, chunk_sec)):
+        print(f"[CALL] chunk {idx+1}/{total_chunks}")
+
+        t0 = time.perf_counter()
+
+        segments, _ = model.transcribe(
+            chunk,
+            beam_size=beam_size,
+            vad_filter=True,
+            language="en",
+            task="transcribe"
+        )
+
+        text = "".join(seg.text for seg in segments)
+        results.append(text)
+
+        t1 = time.perf_counter()
+        print(f"[CHUNK] {idx+1} time = {t1 - t0:.3f}s")
+
+        # IMPORTANT: do NOT call torch.cuda.empty_cache()
+
+    return " ".join(results)
+
+# ------------------ ENTRY ------------------
 
 if __name__ == "__main__":
     AUDIO_FILE = "audio_cache/2gUAxUWXelg.wav"
-    reqID = "test123"
 
-    t1 = time.perf_counter()
-    result = transcribe(AUDIO_FILE, reqID)
-    t2 = time.perf_counter()
+    t_start = time.perf_counter()
+    transcript = transcribe_long(AUDIO_FILE)
+    t_end = time.perf_counter()
 
-    print("\n=== Timing Summary ===")
-    print(result)
+    print("\n=== DONE ===")
+    print(f"Total time: {t_end - t_start:.2f}s")
+    print(transcript)
