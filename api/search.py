@@ -68,10 +68,15 @@ async def warmup_playwright():
         print(f"[WARN] Playwright warmup failed: {e}")
         return 0.0
 
-async def playwright_web_search(query: str, max_links: int = 5) -> Tuple[List[str], float]:
+async def playwright_web_search(query: str, max_links: int = 20, images: bool = False) -> Tuple[List[str], float]:
     """
-    Search using playwright and return URLs + timing
+    Search using playwright and return URLs/images + timing
     Time includes playwright startup and search execution
+    
+    Args:
+        query: Search query string
+        max_links: Maximum number of results to return
+        images: If True, search for images; if False, search for URLs
     """
     search_start = time.perf_counter()
     results = []
@@ -120,32 +125,107 @@ async def playwright_web_search(query: str, max_links: int = 5) -> Tuple[List[st
         """)
         
         page = await context.new_page()
-        search_url = f"https://search.yahoo.com/search?p={quote(query)}&fr=yfp-t&fr2=p%3Afp%2Cm%3Asb&fp=1"
-        print(f"[SEARCH] Navigating to: {search_url}")
-        await page.goto(search_url, timeout=50000)
         
-        # Handle popup
-        await handle_accept_popup(page)
-        
-        # Simulate human behavior
-        await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
-        await page.wait_for_timeout(random.randint(1000, 2000))
-        
-        # Wait for results
-        await page.wait_for_selector("div.compTitle > a", timeout=55000)
-        
-        # Extract links
-        link_elements = await page.query_selector_all("div.compTitle > a")
-        blacklist = ["yahoo.com/preferences", "yahoo.com/account", "login.yahoo.com", "yahoo.com/gdpr"]
-        
-        for link in link_elements:
-            if len(results) >= max_links:
-                break
-            href = await link.get_attribute("href")
-            if href and href.startswith("http") and not any(b in href for b in blacklist):
-                results.append(href)
-        print(results)
-        print(f"[SEARCH] Found {len(results)} URLs")
+        if images:
+            # Image search
+            search_url = f"https://images.search.yahoo.com/search/images?p={quote(query)}"
+            print(f"[IMAGE SEARCH] Navigating to: {search_url}")
+            await page.goto(search_url, timeout=50000)
+            
+            # Handle popup
+            await handle_accept_popup(page)
+            
+            # Simulate human behavior
+            await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
+            await page.wait_for_timeout(random.randint(1000, 2000))
+            
+            # Wait for thumbnail images to load
+            await page.wait_for_selector("img[src*='s.yimg.com']", timeout=55000)
+            
+            # Get all thumbnail images
+            image_elements = await page.query_selector_all("li[data-bns='API']")
+            print(f"[IMAGE SEARCH] Found {len(image_elements)} thumbnails")
+            
+            for idx, img in enumerate(image_elements):
+                if len(results) >= max_links:
+                    break
+                try:
+                    captured_image_url = None
+                    print(f"[IMAGE] Processing thumbnail {idx + 1}")
+                    
+                    async def handle_response(response):
+                        nonlocal captured_image_url
+                        try:
+                            content_type = response.headers.get("content-type", "")
+                            if ("image/jpeg" in content_type or "image/jpg" in content_type or response.url.endswith(".jpg") or response.url.endswith(".jpeg")):
+                                url = response.url
+                                if "maxresdefault" not in url and not url.startswith("https://s.yimg.com"):
+                                    captured_image_url = url
+                                    print(f"[IMAGE] Captured JPEG from network: {url}")
+                        except Exception as e:
+                            pass
+                    
+                    # Set up listener BEFORE clicking
+                    page.on("response", handle_response)
+                    
+                    # Click the image element
+                    await img.click()
+                    
+                    # Wait for network response with timeout
+                    wait_start = time.perf_counter()
+                    while captured_image_url is None and (time.perf_counter() - wait_start) < 3:
+                        await page.wait_for_timeout(100)
+                    
+                    # Remove the response listener
+                    page.remove_listener("response", handle_response)
+                    
+                    if captured_image_url:
+                        results.append(captured_image_url)
+                        print(f"[IMAGE] Added: {captured_image_url} (Count: {len(results)}/{max_links})")
+                    else:
+                        print(f"[WARN] No JPEG URL captured for thumbnail {idx + 1}")
+                    
+                    # Go back to search results
+                    await page.go_back()
+                    await page.wait_for_timeout(500)
+                    
+                    # Continue if we haven't reached max_links yet
+                    if len(results) >= max_links:
+                        break
+                except Exception as e:
+                    print(f"[WARN] Failed to extract image URL at index {idx}: {e}")
+            
+            print(results)
+            print(f"[IMAGE SEARCH] Found {len(results)} images")
+        else:
+            # URL search
+            search_url = f"https://search.yahoo.com/search?p={quote(query)}&fr=yfp-t&fr2=p%3Afp%2Cm%3Asb&fp=1"
+            print(f"[SEARCH] Navigating to: {search_url}")
+            await page.goto(search_url, timeout=50000)
+            
+            # Handle popup
+            await handle_accept_popup(page)
+            
+            # Simulate human behavior
+            await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
+            await page.wait_for_timeout(random.randint(1000, 2000))
+            
+            # Wait for results
+            await page.wait_for_selector("div.compTitle > a", timeout=55000)
+            
+            # Extract links
+            link_elements = await page.query_selector_all("div.compTitle > a")
+            blacklist = ["yahoo.com/preferences", "yahoo.com/account", "login.yahoo.com", "yahoo.com/gdpr"]
+            
+            for link in link_elements:
+                if len(results) >= max_links:
+                    break
+                href = await link.get_attribute("href")
+                if href and href.startswith("http") and not any(b in href for b in blacklist):
+                    results.append(href)
+            
+            print(results)
+            print(f"[SEARCH] Found {len(results)} URLs")
         
         await page.close()
         await context.close()
@@ -161,13 +241,8 @@ async def playwright_web_search(query: str, max_links: int = 5) -> Tuple[List[st
 
 if __name__ == "__main__":
     async def main():
-        setup_start = time.perf_counter()
-        print("[SETUP] Warming up playwright engine...")
-        playwright_warmup_time = await warmup_playwright()
-        setup_end = time.perf_counter()
-        print(f"[SETUP] Total setup time: {setup_end - setup_start:.3f} seconds\n")
-        query = "What is the capital of France?"
-        urls, search_time = await playwright_web_search(query, max_links=3)
+        query = "quote"
+        urls, search_time = await playwright_web_search(query, max_links=1, images=True)
         print(f"Search completed in {search_time:.3f} seconds")
         print("URLs found:")
         for url in urls:
