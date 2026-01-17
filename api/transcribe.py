@@ -2,6 +2,7 @@ import os
 import time
 from faster_whisper import WhisperModel
 from pydub import AudioSegment
+import torch
 
 t0 = time.perf_counter()
 model = WhisperModel(
@@ -67,6 +68,8 @@ def transcribe(AUDIO_FILE: str, reqID: str, timings: list | None = None) -> str:
         print(f"[CALL] chunk {idx+1}/{len(chunk_paths)} → {chunk_path}")
         text = transcribe(chunk_path, reqID, timings)
         transcriptions.append(text)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     return " ".join(transcriptions)
 
