@@ -2,13 +2,14 @@ import time
 from playwright.async_api import async_playwright  
 import random
 import asyncio
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from urllib.parse import quote
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 import re
 from config import MAX_TOTAL_SCRAPE_WORD_COUNT
+from knowledge_graph import build_knowledge_graph, clean_text_nltk, chunk_and_graph
 
 
 USER_AGENTS = [
@@ -250,22 +251,35 @@ async def playwright_web_search(query: str, max_links: int = 20, images: bool = 
 def fetch_full_text(
     url,
     total_word_count_limit=MAX_TOTAL_SCRAPE_WORD_COUNT,
-):
+    build_kg: bool = True,
+) -> Tuple[str, Dict]:
+    """
+    Fetch and clean text from URL with optional knowledge graph building
+    
+    Args:
+        url: URL to fetch
+        total_word_count_limit: Max words to extract
+        build_kg: Whether to build knowledge graph
+    
+    Returns:
+        Tuple of (cleaned_text, knowledge_graph_dict or empty dict)
+    """
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
+    kg_result = {}
 
     try:
         response = requests.get(url, timeout=20, headers=headers)
         if response.status_code != 200:
             print(f"Error:- {url}")
-            return ""
+            return "", kg_result
         response.raise_for_status()
 
         content_type = response.headers.get('Content-Type', '').lower()
         if 'text/html' not in content_type:
             print(f"Skipping non-HTML content from {url} (Content-Type: {content_type})")
-            return "", []
+            return "", kg_result
 
         soup = BeautifulSoup(response.content, 'html.parser')
 
@@ -298,17 +312,32 @@ def fetch_full_text(
         if word_count >= total_word_count_limit:
             text_content = ' '.join(text_content.split()[:total_word_count_limit]) + '...'
 
-        return text_content.strip()
+        cleaned_text = text_content.strip()
+        
+        # Build knowledge graph if requested
+        if build_kg and cleaned_text:
+            try:
+                kg = build_knowledge_graph(cleaned_text)
+                kg_result = {
+                    "entities": kg.entities,
+                    "top_entities": kg.get_top_entities(top_k=10),
+                    "relationships": kg.relationships[:20],  # Limit relationships
+                    "importance_scores": kg.importance_scores
+                }
+            except Exception as e:
+                print(f"[WARN] Knowledge graph building failed for {url}: {e}")
+        
+        return cleaned_text, kg_result
 
     except requests.exceptions.Timeout:
         print(f"Timeout scraping URL: {url}")
-        return ""
+        return "", kg_result
     except requests.exceptions.RequestException as e:
         print(f"Request error scraping URL: {url}: {type(e).__name__}: {e}")
-        return ""
+        return "", kg_result
     except Exception as e:
         print(f"Error processing URL: {url}: {type(e).__name__}: {e}")
-        return ""
+        return "", kg_result
 
 
 
@@ -316,7 +345,7 @@ def fetch_full_text(
 if __name__ == "__main__":
     async def main():
         query = "quote"
-        urls, search_time = await playwright_web_search(query, max_links=10, images=False)
+        urls, search_time = await playwright_web_search(query, max_links=4, images=False)
         print(f"Search completed in {search_time:.3f} seconds")
         print("URLs found:")
         for url in urls:

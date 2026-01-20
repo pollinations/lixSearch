@@ -5,6 +5,8 @@ from web_scraper import fetch_full_text
 import concurrent 
 import re
 from urllib.parse import urlparse, parse_qs
+from typing import Dict, List, Tuple
+from knowledge_graph import build_knowledge_graph
 
 
 
@@ -76,14 +78,36 @@ def preprocess_text(text):
     return meaningful_sentences
 
 
-def fetch_url_content_parallel(queries, urls, max_workers=10):
+def fetch_url_content_parallel(queries, urls, max_workers=10, use_kg: bool = True) -> Tuple[str, List[Dict]]:
+    """
+    Fetch URL content in parallel with optional knowledge graph extraction
+    
+    Args:
+        queries: List of search queries for context
+        urls: List of URLs to fetch
+        max_workers: Number of parallel workers
+        use_kg: Whether to build knowledge graphs
+    
+    Returns:
+        Tuple of (aggregated_results_text, kg_data_list)
+    """
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(fetch_full_text, url): url for url in urls}
         results = ""
+        kg_data_list = []
+        
         for future in concurrent.futures.as_completed(futures):
             url = futures[future]
             try:
-                text_content = future.result()
+                result = future.result()
+                
+                # Handle both old format (string) and new format (tuple)
+                if isinstance(result, tuple):
+                    text_content, kg_dict = result
+                    kg_data_list.append(kg_dict)
+                else:
+                    text_content = result
+                
                 clean_text = str(text_content).encode('unicode_escape').decode('utf-8')
                 clean_text = clean_text.replace('\\n', ' ').replace('\\r', ' ').replace('\\t', ' ')
                 clean_text = ''.join(c for c in clean_text if c.isprintable())
@@ -91,14 +115,17 @@ def fetch_url_content_parallel(queries, urls, max_workers=10):
             except Exception as e:
                 logger.error(f"Failed fetching {url}: {e}")
                 results += f"\nURL: {url}\n Failed to fetch content of this URL"
+        
         logger.info(f"Fetched all URL information in parallel.")
         information = embedModelService.extract_relevant(results, queries)
+        
         for i in information:
             sentences = []
             for piece in i:
                 sentences.extend([s.strip() for s in piece.split('.') if s.strip()])
             results += '. '.join(sentences) + '. '
-        return results
+        
+        return results, kg_data_list
 
 
 def storeDeepSearchQuery(query: list, sessionID: str):

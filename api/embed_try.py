@@ -2,11 +2,12 @@ import time
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from nltk.tokenize import sent_tokenize
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import nltk
 import os
 import asyncio
 from search import playwright_web_search
+from knowledge_graph import build_knowledge_graph
 
 
 NLTK_DIR = "searchenv/nltk_data"
@@ -58,16 +59,44 @@ def select_top_sentences(
     docs: List[str],
     top_k_chunks: int = 4,
     top_k_sentences: int = 8,
+    kg_data: List[Dict] = None,
 ) -> Tuple[List[Tuple[str, float]], float]:
+    """
+    Select top sentences using both embedding similarity and knowledge graph importance
+    
+    Args:
+        query: Search query
+        docs: List of documents
+        top_k_chunks: Top K chunks to consider
+        top_k_sentences: Top K sentences to return
+        kg_data: Knowledge graph data from scraping (optional)
+    
+    Returns:
+        Tuple of (top_sentences, processing_time)
+    """
     start = time.perf_counter()
 
     chunks = []
     chunk_to_sentences = []
+    chunk_kg_scores = []  # Importance scores from KG for each chunk
+    
     for doc in docs:
         doc_chunks = chunk_text(doc)
         for ch in doc_chunks:
             chunks.append(ch)
             chunk_to_sentences.append(sent_tokenize(ch))
+            
+            # Calculate KG importance score if available
+            kg_score = 0.0
+            if kg_data:
+                # Check if chunk contains entities from KG
+                for kg_dict in kg_data:
+                    if isinstance(kg_dict, dict) and "top_entities" in kg_dict:
+                        for entity, score in kg_dict["top_entities"][:5]:
+                            if entity.lower() in ch.lower():
+                                kg_score = max(kg_score, float(score))
+            
+            chunk_kg_scores.append(kg_score)
 
     if not chunks:
         return [], 0.0
@@ -85,13 +114,21 @@ def select_top_sentences(
     chunk_embs = normalize(chunk_embs)
 
     scores = (chunk_embs @ query_emb.T).squeeze()
-
-    top_chunk_idxs = np.argsort(scores)[-top_k_chunks:][::-1]
+    
+    # Combine embedding scores with KG importance scores (70% embedding, 30% KG)
+    combined_scores = []
+    for i, score in enumerate(scores):
+        kg_weight = chunk_kg_scores[i] if i < len(chunk_kg_scores) else 0.0
+        combined_score = (0.7 * float(score)) + (0.3 * kg_weight)
+        combined_scores.append(combined_score)
+    
+    combined_scores = np.array(combined_scores)
+    top_chunk_idxs = np.argsort(combined_scores)[-top_k_chunks:][::-1]
 
     candidate_sentences = []
 
     for idx in top_chunk_idxs:
-        chunk_score = scores[idx]
+        chunk_score = combined_scores[idx]
         for s in chunk_to_sentences[idx]:
             score = chunk_score
             if query.lower() in s.lower():
