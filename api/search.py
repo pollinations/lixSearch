@@ -1,8 +1,8 @@
 import time
-from playwright.async_api import async_playwright  
+from playwright.async_api import async_playwright
 import random
 import asyncio
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from urllib.parse import quote
 import requests
 from bs4 import BeautifulSoup
@@ -10,6 +10,7 @@ from urllib.parse import urljoin, urlparse
 import re
 from config import MAX_TOTAL_SCRAPE_WORD_COUNT
 from knowledge_graph import build_knowledge_graph, clean_text_nltk, chunk_and_graph
+from kg_manager import kg_manager
 
 
 USER_AGENTS = [
@@ -252,15 +253,17 @@ def fetch_full_text(
     url,
     total_word_count_limit=MAX_TOTAL_SCRAPE_WORD_COUNT,
     build_kg: bool = True,
+    request_id: Optional[str] = None,
 ) -> Tuple[str, Dict]:
     """
-    Fetch and clean text from URL with optional knowledge graph building
-    
+    Fetch and clean text from URL with optional knowledge graph building and request tracking
+
     Args:
         url: URL to fetch
         total_word_count_limit: Max words to extract
         build_kg: Whether to build knowledge graph
-    
+        request_id: Optional request ID for tracking KG in manager
+
     Returns:
         Tuple of (cleaned_text, knowledge_graph_dict or empty dict)
     """
@@ -313,7 +316,7 @@ def fetch_full_text(
             text_content = ' '.join(text_content.split()[:total_word_count_limit]) + '...'
 
         cleaned_text = text_content.strip()
-        
+
         # Build knowledge graph if requested
         if build_kg and cleaned_text:
             try:
@@ -324,9 +327,18 @@ def fetch_full_text(
                     "relationships": kg.relationships[:20],  # Limit relationships
                     "importance_scores": kg.importance_scores
                 }
+
+                # Store in KG manager if request_id is provided
+                if request_id:
+                    kg_manager.add_kg(request_id, url, cleaned_text, kg)
+                    kg_result["stored_in_manager"] = True
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"[KG] Knowledge graph stored for request {request_id}")
+
             except Exception as e:
                 print(f"[WARN] Knowledge graph building failed for {url}: {e}")
-        
+
         return cleaned_text, kg_result
 
     except requests.exceptions.Timeout:

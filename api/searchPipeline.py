@@ -155,7 +155,8 @@ async def optimized_tool_execution(function_name: str, function_args: dict, memo
                 queries = memoized_results.get("search_query", "")
                 if isinstance(queries, str):
                     queries = [queries]
-                future = executor.submit(fetch_url_content_parallel, queries, urls)
+                request_id = memoized_results.get("request_id")
+                future = executor.submit(fetch_url_content_parallel, queries, urls, request_id=request_id)
                 parallel_results = future.result(timeout=10)
             yield parallel_results if parallel_results else "[No content fetched from URL]"
         else:
@@ -168,7 +169,7 @@ async def optimized_tool_execution(function_name: str, function_args: dict, memo
         logger.error(f"Error executing tool {function_name}: {e}")
         yield f"[ERROR] Tool execution failed: {str(e)[:100]}"
 
-async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: str = None):
+async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: str = None, request_id: str = None):
     logger.info(f"Starting Optimized ElixpoSearch Pipeline for query: '{user_query}' with image: '{user_image[:50] + '...' if user_image else 'None'}'")
     def emit_event(event_type, message):
         if event_id:
@@ -189,7 +190,8 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             "fetched_urls": {},
             "youtube_metadata": {},
             "youtube_transcripts": {},
-            "base64_cache": {}
+            "base64_cache": {},
+            "request_id": request_id,
         }
         messages = [
                     {

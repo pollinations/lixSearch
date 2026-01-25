@@ -67,8 +67,8 @@ async def process_request_worker():
                     final_result_content = []
                     sources = []
                     uq, ui = task.user_query if isinstance(task.user_query, tuple) else (task.user_query, None)
-                    
-                    async for chunk in run_elixposearch_pipeline(uq, ui, event_id=None):
+
+                    async for chunk in run_elixposearch_pipeline(uq, ui, event_id=None, request_id=task.request_id):
                         lines = chunk.splitlines()
                         event_type = None
                         data_lines = []
@@ -507,6 +507,85 @@ async def testResponse():
     })
 
 
+
+
+@app.route("/kg/request/<request_id>", methods=["GET"])
+async def get_request_kg(request_id: str):
+    """Get aggregated knowledge graph for a specific request"""
+    from kg_manager import kg_manager
+
+    kg_data = kg_manager.get_request_kg(request_id)
+    if not kg_data:
+        return jsonify({"error": f"No knowledge graph found for request {request_id}"}), 404
+
+    metadata = kg_manager.get_request_metadata(request_id)
+    return jsonify({
+        "request_id": request_id,
+        "metadata": metadata,
+        "knowledge_graph": kg_data
+    })
+
+
+@app.route("/kg/request/<request_id>/entities", methods=["GET"])
+async def get_request_entities(request_id: str):
+    """Get top entities for a specific request"""
+    from kg_manager import kg_manager
+
+    top_k = request.args.get("top_k", default=15, type=int)
+    entities = kg_manager.get_top_entities(request_id, top_k=top_k)
+
+    if not entities:
+        return jsonify({"error": f"No entities found for request {request_id}"}), 404
+
+    return jsonify({
+        "request_id": request_id,
+        "top_entities": entities
+    })
+
+
+@app.route("/kg/request/<request_id>/context", methods=["GET"])
+async def get_request_context(request_id: str):
+    """Get query context built from knowledge graphs for a request"""
+    from kg_manager import kg_manager
+
+    context = kg_manager.build_query_context(request_id)
+    if not context:
+        return jsonify({"error": f"No context available for request {request_id}"}), 404
+
+    return jsonify({
+        "request_id": request_id,
+        "context": context
+    })
+
+
+@app.route("/kg/request/<request_id>/export", methods=["GET"])
+async def export_request_kg(request_id: str):
+    """Export complete knowledge graph data for a request"""
+    from kg_manager import kg_manager
+
+    kg_export = kg_manager.export_request_kg(request_id)
+    if not kg_export:
+        return jsonify({"error": f"No knowledge graph found for request {request_id}"}), 404
+
+    return jsonify(kg_export)
+
+
+@app.route("/kg/manager/stats", methods=["GET"])
+async def get_kg_manager_stats():
+    """Get knowledge graph manager statistics"""
+    from kg_manager import kg_manager
+
+    stats = kg_manager.get_stats()
+    return jsonify(stats)
+
+
+@app.route("/kg/request/<request_id>", methods=["DELETE"])
+async def delete_request_kg(request_id: str):
+    """Clear knowledge graph data for a specific request"""
+    from kg_manager import kg_manager
+
+    kg_manager.clear_request(request_id)
+    return jsonify({"message": f"Cleared knowledge graph for request {request_id}"})
 
 
 @app.route("/health", methods=["GET"])
