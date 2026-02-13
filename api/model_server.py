@@ -3,7 +3,7 @@ from sentence_transformers import SentenceTransformer, util
 import torch, threading
 from concurrent.futures import ThreadPoolExecutor
 from loguru import logger
-from playwright.async_api import async_playwright  #type: ignore
+from playwright.async_api import async_playwright
 import random
 import asyncio
 import os
@@ -82,7 +82,6 @@ class ipcModules:
             return []
         
         try:
-            # Handle single query string or list of queries
             if isinstance(query, list):
                 query_text = " ".join(query) if query else ""
             else:
@@ -98,7 +97,6 @@ class ipcModules:
                 normalize_embeddings=True
             )
             
-            # Ensure query embedding is 1D
             if len(query_emb.shape) > 1:
                 query_emb = query_emb.squeeze()
             
@@ -110,18 +108,15 @@ class ipcModules:
                 show_progress_bar=False
             )
             
-            # Ensure sent_emb is 2D
             if len(sent_emb.shape) == 1:
                 sent_emb = sent_emb.reshape(1, -1)
             
-            # Validate shapes before dot product
             if sent_emb.shape[1] != query_emb.shape[0]:
                 logger.warning(
                     f"[INSTANCE {ipcModules._instance_id}] Embedding dimension mismatch: "
                     f"sent_emb shape={sent_emb.shape}, query_emb shape={query_emb.shape}. "
                     f"Returning top sentences by length"
                 )
-                # Fallback: return sentences by word count
                 ranked = sorted(
                     zip(sentences, [len(s.split()) for s in sentences]),
                     key=lambda x: x[1],
@@ -139,7 +134,6 @@ class ipcModules:
             return result
         except Exception as e:
             logger.error(f"[INSTANCE {ipcModules._instance_id}] extract_relevant error: {e}", exc_info=True)
-            # Fallback: return first few sentences
             return sentences[:min(5, len(sentences))]
 
     def rank_results(self, query: str, results: list) -> list:
@@ -173,16 +167,6 @@ class ipcModules:
             return [(r, 1.0) for r in results]
 
     def extract_and_rank_sentences(self, content: str, query: str) -> list:
-        """
-        Extract and rank sentences from content by relevance to query.
-        
-        Args:
-            content: Text content to extract from
-            query: Query to rank relevance against
-            
-        Returns:
-            List of top-ranked sentences
-        """
         try:
             sentences = sent_tokenize(content)
             if not sentences:
@@ -232,7 +216,6 @@ class searchPortManager:
                     print(f"[PORT] Allocated port {port}. Active ports: {len(self.used_ports)}")
                     return port
             
-            # If random selection fails, try sequential search
             for port in range(self.start_port, self.end_port + 1):
                 if port not in self.used_ports:
                     self.used_ports.add(port)
@@ -316,7 +299,6 @@ class SearchAgentPool:
             min_tabs = min(self.image_agent_tabs)
             agent_idx = self.image_agent_tabs.index(min_tabs)
             
-            # Check if agent needs restart after 20 tabs
             if self.image_agent_tabs[agent_idx] >= self.max_tabs_per_agent:
                 print(f"[POOL] Restarting image agent {agent_idx} after {self.image_agent_tabs[agent_idx]} tabs")
                 try:
@@ -324,7 +306,6 @@ class SearchAgentPool:
                 except Exception as e:
                     print(f"[POOL] Error closing old image agent: {e}")
                 
-                # Create and start new agent
                 new_agent = YahooSearchAgentImage()
                 await new_agent.start()
                 self.image_agents[agent_idx] = new_agent
@@ -335,7 +316,6 @@ class SearchAgentPool:
             return self.image_agents[agent_idx], agent_idx
     
     def increment_tab_count(self, agent_type: str, agent_idx: int):
-        """Increment tab count after successful tab creation"""
         if agent_type == "text":
             self.text_agent_tabs[agent_idx] += 1
             print(f"[POOL] Text agent {agent_idx} now has {self.text_agent_tabs[agent_idx]} tabs")
@@ -420,15 +400,12 @@ class YahooSearchAgentText:
             self.tab_count += 1
             print(f"[SEARCH] Opening tab #{self.tab_count} on port {self.custom_port} for query: '{query[:50]}...'")
             
-            # Open new tab for this search
             page = await self.context.new_page()
             search_url = f"https://search.yahoo.com/search?p={quote(query)}&fr=yfp-t&fr2=p%3Afp%2Cm%3Asb&fp=1"
             await page.goto(search_url, timeout=50000)
 
-            # Handle "Accept" popup
             await handle_accept_popup(page)
 
-            # Simulate human behavior
             await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
             await page.wait_for_timeout(random.randint(1000, 2000))
 
@@ -444,14 +421,12 @@ class YahooSearchAgentText:
 
             print(f"[SEARCH] Tab #{self.tab_count} returned {len(results)} results for '{query[:50]}...' on port {self.custom_port}")
             
-            # Increment pool tab count
             if agent_idx is not None:
                 agent_pool.increment_tab_count("text", agent_idx)
                 
         except Exception as e:
             print(f"❌ Yahoo search failed on tab #{self.tab_count}, port {self.custom_port}: {e}")
         finally:
-            # Always close the tab after search
             if page:
                 try:
                     await page.close()
@@ -496,14 +471,12 @@ class YahooSearchAgentText:
             await page.wait_for_timeout(6000)
             print(f"[SEARCH] Tab #{self.tab_count} has found transcript fetch url of  the video url {url}  on port {self.custom_port}")
             
-            # Increment pool tab count
             if agent_idx is not None:
                 agent_pool.increment_tab_count("text", agent_idx)
                 
         except Exception as e:
             print(f"❌ Yahoo search failed on tab #{self.tab_count}, port {self.custom_port}: {e}")
         finally:
-            # Always close the tab after search
             if page:
                 try:
                     await page.close()
@@ -526,15 +499,12 @@ class YahooSearchAgentText:
             self.tab_count += 1
             print(f"[SEARCH] Opening tab #{self.tab_count} on port {self.custom_port} for url: '{url}'")
             
-            # Open new tab for this search
             page = await self.context.new_page()
             search_url = f"{url}"
             await page.goto(search_url, timeout=50000)
 
-            # Handle "Accept" popup
             await handle_accept_popup(page)
 
-            # Simulate human behavior
             await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
             await page.wait_for_timeout(random.randint(1000, 2000))
 
@@ -549,14 +519,12 @@ class YahooSearchAgentText:
 
             print(f"[SEARCH] Tab #{self.tab_count} has found video with the url {url}  on port {self.custom_port}")
             
-            # Increment pool tab count
             if agent_idx is not None:
                 agent_pool.increment_tab_count("text", agent_idx)
                 
         except Exception as e:
             print(f"❌ Yahoo search failed on tab #{self.tab_count}, port {self.custom_port}: {e}")
         finally:
-            # Always close the tab after search
             if page:
                 try:
                     await page.close()
@@ -574,7 +542,6 @@ class YahooSearchAgentText:
             if self.playwright:
                 await self.playwright.stop()
             
-            # Clean up user data directory
             try:
                 shutil.rmtree(f"/tmp/chrome-user-data-{self.custom_port}", ignore_errors=True)
             except Exception as e:
@@ -644,15 +611,12 @@ class YahooSearchAgentImage:
             self.tab_count += 1
             print(f"[IMAGE SEARCH] Opening tab #{self.tab_count} on port {self.custom_port} for query: '{query[:50]}...'")
             
-            # Open new tab for this search
             page = await self.context.new_page()
             search_url = f"https://images.search.yahoo.com/search/images?p={quote(query)}"
             await page.goto(search_url, timeout=20000)
 
-            # Handle "Accept" popup
             await handle_accept_popup(page)
 
-            # Simulate human behavior
             await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
             await page.wait_for_timeout(random.randint(1000, 2000))
 
@@ -666,14 +630,12 @@ class YahooSearchAgentImage:
 
             print(f"[IMAGE SEARCH] Tab #{self.tab_count} returned {len(results)} image results for '{query[:50]}...' on port {self.custom_port}")
             
-            # Increment pool tab count
             if agent_idx is not None:
                 agent_pool.increment_tab_count("image", agent_idx)
                 
         except Exception as e:
             print(f"[ERROR] Yahoo image search failed on tab #{self.tab_count}, port {self.custom_port}: {e}")
         finally:
-            # Always close the tab after search
             if page:
                 try:
                     await page.close()
@@ -859,7 +821,6 @@ class CacheCleanupJob:
                     folder_age = current_time - os.path.getmtime(folder_path)
                     if folder_age > self.max_age_seconds:
                         try:
-                            # Handle permission issues on Linux
                             for root, dirs, files in os.walk(folder_path, topdown=False):
                                 for file in files:
                                     file_path = os.path.join(root, file)
@@ -918,3 +879,6 @@ if __name__ == "__main__":
     finally:
         shutdown_graceful()
         print("[INFO] Shutdown completed.")
+
+
+
