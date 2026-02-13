@@ -18,6 +18,7 @@ import json
 from production_pipeline import initialize_production_pipeline, get_production_pipeline
 from session_manager import get_session_manager
 from rag_engine import get_rag_engine
+from chat_engine import initialize_chat_engine, get_chat_engine
 from requestID import RequestIDMiddleware
 
 # Initialize logging
@@ -49,6 +50,12 @@ async def startup():
         
         try:
             pipeline = await initialize_production_pipeline()
+            
+            # Initialize chat engine with session manager and RAG engine
+            session_manager = get_session_manager()
+            rag_engine = get_rag_engine()
+            initialize_chat_engine(session_manager, rag_engine)
+            
             pipeline_initialized = True
             logger.info("[APP] ElixpoSearch ready")
         except Exception as e:
@@ -275,6 +282,224 @@ async def get_stats():
     
     except Exception as e:
         logger.error(f"[API] Stats error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/chat', methods=['POST'])
+async def chat():
+    """
+    Contextual chat endpoint
+    POST body: {session_id?, message, search?, image_url?}
+    """
+    if not pipeline_initialized:
+        return jsonify({"error": "Server not initialized"}), 503
+    
+    try:
+        data = await request.get_json()
+        user_message = data.get("message", "").strip()
+        session_id = data.get("session_id")
+        use_search = data.get("search", True)
+        image_url = data.get("image_url")
+        
+        if not user_message:
+            return jsonify({"error": "Message is required"}), 400
+        
+        # Create session if not provided
+        if not session_id:
+            session_manager = get_session_manager()
+            session_id = session_manager.create_session(user_message)
+        
+        request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:12])
+        logger.info(f"[{request_id}] Chat: {user_message[:50]}... session: {session_id}")
+        
+        chat_engine = get_chat_engine()
+        
+        async def event_generator():
+            if use_search:
+                async for chunk in chat_engine.chat_with_search(session_id, user_message):
+                    yield chunk.encode('utf-8')
+            else:
+                async for chunk in chat_engine.generate_contextual_response(session_id, user_message):
+                    yield chunk.encode('utf-8')
+        
+        return Response(
+            event_generator(),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Content-Type': 'text/event-stream',
+                'Access-Control-Allow-Origin': '*'
+            }
+        )
+    
+    except Exception as e:
+        logger.error(f"[{request_id}] Chat error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/session/<session_id>/chat', methods=['POST'])
+async def session_chat(session_id: str):
+    """
+    Session-based contextual chat
+    POST body: {message, search?, image_url?}
+    """
+    if not pipeline_initialized:
+        return jsonify({"error": "Server not initialized"}), 503
+    
+    try:
+        session_manager = get_session_manager()
+        
+        # Verify session exists
+        if not session_manager.get_session(session_id):
+            return jsonify({"error": "Session not found"}), 404
+        
+        data = await request.get_json()
+        user_message = data.get("message", "").strip()
+        use_search = data.get("search", False)  # Default to no search for existing sessions
+        image_url = data.get("image_url")
+        
+        if not user_message:
+            return jsonify({"error": "Message is required"}), 400
+        
+        request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:12])
+        logger.info(f"[{request_id}] Session chat {session_id}: {user_message[:50]}...")
+        
+        chat_engine = get_chat_engine()
+        
+        async def event_generator():
+            if use_search:
+                async for chunk in chat_engine.chat_with_search(session_id, user_message):
+                    yield chunk.encode('utf-8')
+            else:
+                async for chunk in chat_engine.generate_contextual_response(session_id, user_message):
+                    yield chunk.encode('utf-8')
+        
+        return Response(
+            event_generator(),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Content-Type': 'text/event-stream',
+                'Access-Control-Allow-Origin': '*'
+            }
+        )
+    
+    except Exception as e:
+        logger.error(f"[API] Session chat error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/session/<session_id>/chat/completions', methods=['POST'])
+async def chat_completions(session_id: str):
+    """
+    OpenAI-compatible chat completions endpoint
+    POST body: {messages: [{role, content}], temperature?, max_tokens?, stream?}
+    """
+    if not pipeline_initialized:
+        return jsonify({"error": "Server not initialized"}), 503
+    
+    try:
+        session_manager = get_session_manager()
+        
+        # Verify session exists
+        if not session_manager.get_session(session_id):
+            return jsonify({"error": "Session not found"}), 404
+        
+        data = await request.get_json()
+        messages = data.get("messages", [])
+        stream = data.get("stream", False)
+        
+        if not messages or not isinstance(messages, list):
+            return jsonify({"error": "Messages array is required"}), 400
+        
+        # Extract the last user message
+        user_message = None
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                user_message = msg.get("content", "").strip()
+                break
+        
+        if not user_message:
+            return jsonify({"error": "No user message found in messages"}), 400
+        
+        request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:12])
+        logger.info(f"[{request_id}] Chat completions {session_id}")
+        
+        chat_engine = get_chat_engine()
+        
+        if stream:
+            async def event_generator():
+                async for chunk in chat_engine.generate_contextual_response(session_id, user_message):
+                    yield chunk.encode('utf-8')
+            
+            return Response(
+                event_generator(),
+                mimetype='text/event-stream',
+                headers={
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    'Content-Type': 'text/event-stream',
+                    'Access-Control-Allow-Origin': '*'
+                }
+            )
+        else:
+            # Non-streaming response
+            response_content = ""
+            async for chunk in chat_engine.generate_contextual_response(session_id, user_message):
+                if chunk.startswith("event: final"):
+                    # Extract content from SSE format
+                    lines = chunk.split('\n')
+                    for line in lines:
+                        if line.startswith("data:"):
+                            response_content = line.replace("data:", "").strip()
+            
+            return jsonify({
+                "id": f"chatcmpl-{str(uuid.uuid4())[:12]}",
+                "object": "chat.completion",
+                "created": int(datetime.utcnow().timestamp()),
+                "model": "elixpo-rag",
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": response_content
+                    },
+                    "finish_reason": "stop"
+                }],
+                "usage": {
+                    "prompt_tokens": len(user_message.split()),
+                    "completion_tokens": len(response_content.split()),
+                    "total_tokens": len(user_message.split()) + len(response_content.split())
+                }
+            })
+    
+    except Exception as e:
+        logger.error(f"[API] Chat completions error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/session/<session_id>/history', methods=['GET'])
+async def get_chat_history(session_id: str):
+    """
+    Get conversation history for a session
+    """
+    try:
+        session_manager = get_session_manager()
+        history = session_manager.get_conversation_history(session_id)
+        
+        if history is None:
+            return jsonify({"error": "Session not found"}), 404
+        
+        return jsonify({
+            "session_id": session_id,
+            "conversation_history": history,
+            "message_count": len(history)
+        })
+    
+    except Exception as e:
+        logger.error(f"[API] History error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 

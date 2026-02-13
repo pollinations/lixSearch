@@ -26,6 +26,8 @@ class SessionData:
         self.metadata: Dict = {}
         self.tool_calls_made: List[str] = []
         self.errors: List[str] = []
+        self.conversation_history: List[Dict] = []
+        self.search_context: str = ""
     
     def add_fetched_url(self, url: str, content: str):
         self.fetched_urls.append(url)
@@ -93,7 +95,26 @@ class SessionData:
             "top_entities": self.top_entities_cache,
             "num_relationships": len(self.local_kg.relationships),
             "document_count": len(self.processed_content),
+            "conversation_turns": len(self.conversation_history),
         }
+    
+    def add_message_to_history(self, role: str, content: str, metadata: Dict = None):
+        msg = {
+            "role": role,
+            "content": content,
+            "timestamp": datetime.now().isoformat()
+        }
+        if metadata:
+            msg.update(metadata)
+        self.conversation_history.append(msg)
+        self.last_activity = datetime.now()
+    
+    def get_conversation_history(self) -> List[Dict]:
+        return self.conversation_history
+    
+    def set_search_context(self, context: str):
+        self.search_context = context
+        self.last_activity = datetime.now()
 
 
 class SessionManager:
@@ -189,6 +210,25 @@ class SessionManager:
                     for sid, s in self.sessions.items()
                 }
             }
+    
+    def add_message_to_history(self, session_id: str, role: str, content: str, metadata: Dict = None):
+        with self.lock:
+            session = self.sessions.get(session_id)
+            if session:
+                session.add_message_to_history(role, content, metadata)
+    
+    def get_conversation_history(self, session_id: str) -> List[Dict]:
+        with self.lock:
+            session = self.sessions.get(session_id)
+            if session:
+                return session.get_conversation_history()
+            return []
+    
+    def set_search_context(self, session_id: str, context: str):
+        with self.lock:
+            session = self.sessions.get(session_id)
+            if session:
+                session.set_search_context(context)
 
 
 _session_manager: Optional[SessionManager] = None
