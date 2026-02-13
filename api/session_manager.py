@@ -1,12 +1,8 @@
 import uuid
 import threading
-import asyncio
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
-import json
 from loguru import logger
-from collections import defaultdict
-import concurrent.futures
 import numpy as np
 import faiss
 
@@ -32,20 +28,15 @@ class SessionData:
         self.errors: List[str] = []
         self.conversation_history: List[Dict] = []
         self.search_context: str = ""
-        
-        # FAISS index for vector similarity search
         self.faiss_index = faiss.IndexFlatL2(embedding_dim)
-        self.content_order: List[str] = []  # Track order of embeddings in FAISS index
+        self.content_order: List[str] = []
         self.lock = threading.RLock()
     
     def add_fetched_url(self, url: str, content: str, embedding: Optional[np.ndarray] = None):
-        """Add fetched URL with optional embedding vector."""
         with self.lock:
             self.fetched_urls.append(url)
             self.processed_content[url] = content
-            
             if embedding is not None:
-                # Normalize embedding if needed
                 if isinstance(embedding, np.ndarray):
                     if len(embedding.shape) == 1:
                         embedding = embedding.reshape(1, -1)
@@ -53,12 +44,10 @@ class SessionData:
                     self.content_embeddings[url] = embedding
                     self.faiss_index.add(embedding)
                     self.content_order.append(url)
-            
             self.last_activity = datetime.now()
             self.rag_context_cache = None
 
     def get_rag_context(self, refresh: bool = False, query_embedding: Optional[np.ndarray] = None) -> str:
-        """Build RAG context using FAISS vector similarity search."""
         with self.lock:
             if self.rag_context_cache and not refresh:
                 return self.rag_context_cache
@@ -68,7 +57,6 @@ class SessionData:
                 f"Sources fetched: {len(self.fetched_urls)}",
             ]
             
-            # If we have embeddings and a query embedding, use FAISS for ranking
             if query_embedding is not None and self.faiss_index.ntotal > 0:
                 try:
                     if isinstance(query_embedding, np.ndarray):
@@ -76,7 +64,6 @@ class SessionData:
                             query_embedding = query_embedding.reshape(1, -1)
                         query_embedding = query_embedding.astype(np.float32)
                     
-                    # Search for most similar content
                     k = min(10, self.faiss_index.ntotal)
                     distances, indices = self.faiss_index.search(query_embedding, k)
                     
@@ -84,18 +71,16 @@ class SessionData:
                     for idx, distance in zip(indices[0], distances[0]):
                         if idx < len(self.content_order):
                             url = self.content_order[idx]
-                            relevance_score = 1.0 / (1.0 + distance)  # Convert L2 distance to similarity
+                            relevance_score = 1.0 / (1.0 + distance)
                             content_preview = self.processed_content[url][:100]
                             context_parts.append(f"  - {url} (relevance: {relevance_score:.3f})")
                             context_parts.append(f"    Preview: {content_preview}...")
                 except Exception as e:
                     logger.warning(f"[SessionData] FAISS search failed: {e}")
-                    # Fallback to simple content listing
                     context_parts.append("\nFetched Content:")
                     for url in self.fetched_urls[-5:]:
                         context_parts.append(f"  - {url}")
             else:
-                # No embeddings available, just list URLs
                 context_parts.append("\nFetched Content:")
                 for url in self.fetched_urls[-5:]:
                     context_parts.append(f"  - {url}")
@@ -104,13 +89,11 @@ class SessionData:
             return self.rag_context_cache
     
     def get_top_content(self, k: int = 10, query_embedding: Optional[np.ndarray] = None) -> List[Tuple[str, float]]:
-        """Get top k most relevant content using FAISS similarity search."""
         with self.lock:
             if self.faiss_index.ntotal == 0:
                 return []
             
             if query_embedding is None:
-                # Return all content with default scores
                 return [(url, 1.0 / (i + 1)) for i, url in enumerate(self.content_order[:k])]
             
             try:
@@ -202,7 +185,6 @@ class SessionManager:
             return session
     
     def add_content_to_session(self, session_id: str, url: str, content: str, embedding: Optional[np.ndarray] = None):
-        """Add content to session with optional embedding vector."""
         with self.lock:
             session = self.sessions.get(session_id)
             if session:
@@ -227,7 +209,6 @@ class SessionManager:
                 session.log_tool_call(tool_name)
     
     def get_rag_context(self, session_id: str, refresh: bool = False, query_embedding: Optional[np.ndarray] = None) -> str:
-        """Get RAG context using FAISS vector similarity search."""
         with self.lock:
             session = self.sessions.get(session_id)
             if session:
@@ -235,7 +216,6 @@ class SessionManager:
             return ""
     
     def get_top_content(self, session_id: str, k: int = 10, query_embedding: Optional[np.ndarray] = None) -> List[Tuple[str, float]]:
-        """Get top k most relevant content for a session."""
         with self.lock:
             session = self.sessions.get(session_id)
             if session:
