@@ -127,7 +127,6 @@ class SessionData:
         self.search_context = context
         self.last_activity = datetime.now()
 
-
 class SessionManager:
     def __init__(self, max_sessions: int = 1000, ttl_minutes: int = 30):
         self.sessions: Dict[str, SessionData] = {}
@@ -241,9 +240,6 @@ class SessionManager:
             if session:
                 session.set_search_context(context)
 
-
-
-
 class SessionMemory:
     def __init__(self, session_id: str, summary_threshold: int = 6):
         self.session_id = session_id
@@ -326,16 +322,13 @@ class SessionMemory:
             self.turn_count = 0
 
 
-
 _session_manager: Optional[SessionManager] = None
-
 
 def initialize_session_manager(max_sessions: int = 1000, ttl_minutes: int = 30):
     global _session_manager
     _session_manager = SessionManager(max_sessions, ttl_minutes)
     logger.info("[SessionManager] Global session manager initialized")
     return _session_manager
-
 
 def get_session_manager() -> SessionManager:
     global _session_manager

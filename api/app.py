@@ -1,11 +1,3 @@
-"""
-Production-Ready FastAPI Application
-- Uses model_server for hot-loading models
-- Session-based architecture with knowledge graphs
-- RAG-enhanced responses
-- Production logging and monitoring
-"""
-
 from quart import Quart, request, jsonify, Response, websocket
 from quart_cors import cors
 import asyncio

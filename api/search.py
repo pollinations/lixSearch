@@ -6,11 +6,9 @@ from typing import List, Tuple, Dict, Optional
 from urllib.parse import quote
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin, urlparse
 import re
 import logging
 from config import MAX_TOTAL_SCRAPE_WORD_COUNT, RETRIEVAL_TOP_K
-from knowledge_graph import build_knowledge_graph, clean_text_nltk, chunk_and_graph
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +227,6 @@ async def playwright_web_search(query: str, max_links: int = 20, images: bool = 
 def fetch_full_text(
     url,
     total_word_count_limit=MAX_TOTAL_SCRAPE_WORD_COUNT,
-    build_kg: bool = True,
     request_id: Optional[str] = None,
 ) -> Tuple[str, Dict]:
     headers = {
@@ -279,46 +276,7 @@ def fetch_full_text(
             text_content = ' '.join(text_content.split()[:total_word_count_limit]) + '...'
 
         cleaned_text = text_content.strip()
-
-        if build_kg and cleaned_text:
-            try:
-                kg = build_knowledge_graph(cleaned_text)
-                
-                chunked_graphs = chunk_and_graph(cleaned_text, chunk_size=500, overlap=50)
-                
-                for chunk_data in chunked_graphs:
-                    chunk_kg_dict = chunk_data.get("knowledge_graph", {})
-                    if chunk_kg_dict and "entities" in chunk_kg_dict:
-                        for entity_key, entity_info in chunk_kg_dict.get("entities", {}).items():
-                            if entity_key not in kg.entities:
-                                kg.add_entity(
-                                    entity_info.get("original", entity_key),
-                                    entity_info.get("type", "UNKNOWN")
-                                )
-                
-                kg.calculate_importance()
-                
-                kg_result = {
-                    "entities": kg.entities,
-                    "entity_count": len(kg.entities),
-                    "top_entities": kg.get_top_entities(top_k=10),
-                    "relationships": kg.relationships[:20],
-                    "relationship_count": len(kg.relationships),
-                    "importance_scores": kg.importance_scores,
-                    "chunks_analyzed": len(chunked_graphs),
-                    "semantic_enrichment": True
-                }
-
-                logger.info(
-                    f"[KG] Built comprehensive KG from {url}: "
-                    f"{len(kg.entities)} entities, {len(kg.relationships)} relationships, "
-                    f"enhanced with {len(chunked_graphs)} semantic chunks"
-                )
-
-            except Exception as e:
-                logger.warning(f"[KG] Knowledge graph building failed for {url}: {e}", exc_info=True)
-
-        return cleaned_text, kg_result
+        return cleaned_text
 
     except requests.exceptions.Timeout:
         logger.error(f"[FETCH] Timeout scraping URL: {url}")
@@ -356,8 +314,8 @@ def _ensure_retrieval_services():
     if _global_embedding_service is None:
         try:
             from embedding_service import EmbeddingService
-            from vector_store import VectorStore
-            from retrieval_pipeline import RetrievalPipeline
+            from embedding_service import VectorStore
+            from rag_engine import RetrievalPipeline
             from config import EMBEDDING_MODEL, EMBEDDINGS_DIR
             
             logger.info("[SEARCH] Initializing retrieval services...")

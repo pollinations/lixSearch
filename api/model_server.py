@@ -24,10 +24,10 @@ from config import (
     PERSIST_VECTOR_STORE_INTERVAL, MAX_LINKS_TO_TAKE, isHeadless
 )
 from embedding_service import EmbeddingService
-from vector_store import VectorStore
+from embedding_service import VectorStore
 from semantic_cache import SemanticCache
-from session_memory import SessionMemory
-from retrieval_pipeline import RetrievalPipeline
+from session_manager import SessionMemory
+from rag_engine import RetrievalPipeline
 
 
 USER_AGENTS = [

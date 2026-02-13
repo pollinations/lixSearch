@@ -8,15 +8,12 @@ import time
 import numpy as np
 from multiprocessing.managers import BaseManager
 from nltk.tokenize import sent_tokenize
-
 from dotenv import load_dotenv
 import os
 import requests
-
 from session_manager import SessionManager
 from tools import tools
 from rag_engine import RAGEngine
-
 from utility import cleanQuery, webSearch, fetch_url_content_parallel, rank_results, extract_and_rank_sentences, build_final_response
 from getImagePrompt import generate_prompt_from_image, replyFromImage
 from getYoutubeDetails import transcribe_audio, youtubeMetadata

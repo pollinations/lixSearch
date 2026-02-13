@@ -3,8 +3,6 @@ import os
 import sys
 from pathlib import Path
 from loguru import logger
-
-# Set NLTK data path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 NLTK_DATA_DIR = PROJECT_ROOT / "searchenv" / "nltk_data"
 NLTK_DATA_DIR.mkdir(parents=True, exist_ok=True)

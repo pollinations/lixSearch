@@ -1,30 +1,22 @@
 from typing import Dict, List, Optional
+import threading
 from loguru import logger
-from embedding_service import EmbeddingService
-from vector_store import VectorStore
-from semantic_cache import SemanticCache
-from session_memory import SessionMemory
 import numpy as np
-from typing import Dict, List, Tuple
 import requests
 from bs4 import BeautifulSoup
-from loguru import logger
-from text_utils import chunk_text, clean_text
-from embedding_service import EmbeddingService
-from vector_store import VectorStore
 from datetime import datetime
-from typing import Dict, List, Optional
-from loguru import logger
-from embedding_service import EmbeddingService
-from vector_store import VectorStore
+
+from embedding_service import EmbeddingService, VectorStore
 from semantic_cache import SemanticCache
-from session_memory import SessionMemory
-from rag_engine_optimized import OptimizedRAGEngine
+from session_manager import SessionMemory
+from utility import chunk_text, clean_text
 from config import (
-    EMBEDDING_MODEL, EMBEDDINGS_DIR, SEMANTIC_CACHE_TTL_SECONDS,
-    SEMANTIC_CACHE_SIMILARITY_THRESHOLD, SESSION_SUMMARY_THRESHOLD
+    EMBEDDING_MODEL,
+    EMBEDDINGS_DIR,
+    SEMANTIC_CACHE_TTL_SECONDS,
+    SEMANTIC_CACHE_SIMILARITY_THRESHOLD,
+    SESSION_SUMMARY_THRESHOLD,
 )
-import threading
 
 
 
@@ -268,9 +260,9 @@ class RetrievalSystem:
         with self.sessions_lock:
             return self.sessions.get(session_id)
     
-    def get_rag_engine(self, session_id: str) -> OptimizedRAGEngine:
+    def get_rag_engine(self, session_id: str) -> RAGEngine:
         session_memory = self.create_session(session_id)
-        return OptimizedRAGEngine(
+        return RAGEngine(
             self.embedding_service,
             self.vector_store,
             self.semantic_cache,
