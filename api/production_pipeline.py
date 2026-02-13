@@ -148,7 +148,8 @@ class ProductionPipeline:
         if not session_id:
             session_id = self.session_manager.create_session(query)
         
-        logger.info(f"[{session_id}] Processing: {query[:50]}...")
+        log_prefix = f"[{request_id or session_id}]" if request_id else f"[{session_id}]"
+        logger.info(f"{log_prefix} Processing: {query[:50]}...")
         
         session = self.session_manager.get_session(session_id)
         if not session:
@@ -163,18 +164,44 @@ class ProductionPipeline:
             session.web_search_urls.extend(websites)
             session.youtube_urls.extend(youtube_urls)
             
+            # Check if query contains location (for timezone queries)
+            location_detected = False
+            if any(word in cleaned_query.lower() for word in ['time', 'timezone', 'location', 'when']):
+                location_detected = True
+            
             image_prompt = None
             if image_url:
                 yield self._format_sse("info", "<TASK>Processing image...</TASK>")
                 self.session_manager.log_tool_execution(session_id, "image")
                 try:
-                    image_prompt = await generate_prompt_from_image(image_url)
+                    image_prompt = await asyncio.to_thread(generate_prompt_from_image, image_url)
+                    
+                    # Also get direct reply from image for the query
+                    image_reply = await asyncio.to_thread(replyFromImage, image_url, cleaned_query)
+                    if image_reply:
+                        filtered_reply = image_reply[:1000] if len(image_reply) > 1000 else image_reply
+                        self.session_manager.add_content_to_session(session_id, f"[Image Analysis]", filtered_reply)
+                    
                     combined_query = f"{cleaned_query} {image_prompt}" if cleaned_query else image_prompt
                 except Exception as e:
-                    logger.warning(f"[{session_id}] Image error: {e}")
+                    logger.warning(f"{log_prefix} Image error: {e}")
                     combined_query = cleaned_query
             else:
                 combined_query = cleaned_query
+            
+            # Handle timezone/location queries
+            if location_detected:
+                yield self._format_sse("info", "<TASK>Getting location info...</TASK>")
+                try:
+                    self.session_manager.log_tool_execution(session_id, "get_local_time")
+                    # Extract potential location from query
+                    location_words = [word for word in cleaned_query.split() if len(word) > 2]
+                    if location_words:
+                        local_time = await asyncio.to_thread(get_local_time, location_words[-1])
+                        if local_time:
+                            self.session_manager.add_content_to_session(session_id, f"[Location Info]", str(local_time)[:500])
+                except Exception as e:
+                    logger.warning(f"{log_prefix} Location error: {e}")
             
             yield self._format_sse("info", "<TASK>Searching...</TASK>")
             self.session_manager.log_tool_execution(session_id, "web_search")
@@ -188,14 +215,39 @@ class ProductionPipeline:
                 fetch_urls = [search_results] if search_results else []
             
             if fetch_urls:
-                yield self._format_sse("info", "<TASK>Fetching content...</TASK>")
-                self.session_manager.log_tool_execution(session_id, "fetch")
+                yield self._format_sse("info", "<TASK>Fetching content in parallel...</TASK>")
+                self.session_manager.log_tool_execution(session_id, "fetch_url_content_parallel")
                 
                 try:
+                    # Use parallel fetching for better performance
+                    aggregated_results, kg_data_list = await asyncio.to_thread(
+                        fetch_url_content_parallel,
+                        [combined_query],
+                        fetch_urls,
+                        max_workers=8,
+                        use_kg=True,
+                        request_id=request_id
+                    )
+                    
+                    if aggregated_results:
+                        self.session_manager.add_content_to_session(session_id, "[Parallel Fetch Results]", aggregated_results[:3000])
+                    
+                    # Track KG data from parallel fetch
+                    if kg_data_list:
+                        logger.info(f"{log_prefix} Extracted KG data from {len(kg_data_list)} sources")
+                    
+                    for url in fetch_urls:
+                        session.fetched_urls.append(url)
+                    
+                    yield self._format_sse("info", f"<TASK>Processed {len(fetch_urls)} sources</TASK>")
+                    
+                except Exception as e:
+                    logger.warning(f"{log_prefix} Parallel fetch error: {e}")
+                    # Fallback to sequential fetching
                     from search import fetch_full_text
                     for url in fetch_urls:
                         try:
-                            content = await asyncio.to_thread(fetch_full_text, url)
+                            content = await asyncio.to_thread(fetch_full_text, url, request_id=request_id)
                             if content:
                                 top_sents = await self._extract_and_rank_sentences(
                                     url, content, combined_query, ipc_service
@@ -203,18 +255,31 @@ class ProductionPipeline:
                                 filtered_content = " ".join(top_sents) if top_sents else content[:2000]
                                 self.session_manager.add_content_to_session(session_id, url, filtered_content)
                                 yield self._format_sse("info", f"<TASK>Processed {len(session.fetched_urls)} sources</TASK>")
-                        except Exception as e:
-                            logger.warning(f"[{session_id}] Fetch error for {url}: {e}")
-                            session.add_error(f"Fetch failed: {str(e)[:100]}")
-                except Exception as e:
-                    logger.warning(f"[{session_id}] Content fetching error: {e}")
+                        except Exception as url_e:
+                            logger.warning(f"{log_prefix} Fetch error for {url}: {url_e}")
+                            session.add_error(f"Fetch failed: {str(url_e)[:100]}")
             
             if session.youtube_urls:
                 yield self._format_sse("info", "<TASK>Processing videos...</TASK>")
                 for yt_url in session.youtube_urls[:2]:
                     try:
                         self.session_manager.log_tool_execution(session_id, "youtube")
-                        transcript = await transcribe_audio(yt_url, full_transcript=False, query=combined_query)
+                        
+                        # Get metadata first
+                        try:
+                            yt_metadata = await asyncio.to_thread(youtubeMetadata, yt_url)
+                            if yt_metadata:
+                                self.session_manager.add_content_to_session(session_id, f"[YT Metadata: {yt_url}]", str(yt_metadata)[:500])
+                        except Exception as meta_e:
+                            logger.warning(f"{log_prefix} YouTube metadata error: {meta_e}")
+                        
+                        # Then transcribe
+                        transcript = await asyncio.to_thread(
+                            transcribe_audio, 
+                            yt_url, 
+                            full_transcript=False, 
+                            query=combined_query
+                        )
                         if transcript:
                             top_sents = await self._extract_and_rank_sentences(
                                 yt_url, transcript, combined_query, ipc_service
@@ -222,23 +287,23 @@ class ProductionPipeline:
                             filtered_transcript = " ".join(top_sents) if top_sents else transcript[:2000]
                             self.session_manager.add_content_to_session(session_id, yt_url, filtered_transcript)
                     except Exception as e:
-                        logger.warning(f"[{session_id}] YouTube error for {yt_url}: {e}")
+                        logger.warning(f"{log_prefix} YouTube error for {yt_url}: {e}")
                         session.add_error(f"YouTube failed: {str(e)[:100]}")
             
             if not image_url and (image_prompt or combined_query):
                 yield self._format_sse("info", "<TASK>Finding images...</TASK>")
                 try:
                     self.session_manager.log_tool_execution(session_id, "image_search")
-                    image_results = await imageSearch(combined_query, max_images=5)
+                    image_results = await asyncio.to_thread(imageSearch, combined_query, max_images=5)
                     if image_results:
                         session.images.extend(image_results if isinstance(image_results, list) else [image_results])
                 except Exception as e:
-                    logger.warning(f"[{session_id}] Image search error: {e}")
+                    logger.warning(f"{log_prefix} Image search error: {e}")
             
             yield self._format_sse("info", "<TASK>Building KG...</TASK>")
             rag_context = self.rag_engine.build_rag_prompt_enhancement(session_id)
             rag_stats = self.rag_engine.get_summary_stats(session_id)
-            logger.info(f"[{session_id}] KG built: {rag_stats}")
+            logger.info(f"{log_prefix} KG built: {rag_stats}")
             
             yield self._format_sse("info", "<TASK>Generating response...</TASK>")
             
@@ -246,7 +311,8 @@ class ProductionPipeline:
                 query=combined_query,
                 rag_context=rag_context,
                 session_id=session_id,
-                image_url=image_url
+                image_url=image_url,
+                request_id=request_id
             )
             
             yield self._format_sse("info", "<TASK>SUCCESS</TASK>")
@@ -259,10 +325,10 @@ class ProductionPipeline:
             
             yield self._format_sse("final", final_response)
             
-            logger.info(f"[{session_id}] Complete")
+            logger.info(f"{log_prefix} Complete")
             
         except Exception as e:
-            logger.error(f"[{session_id}] Error: {e}", exc_info=True)
+            logger.error(f"{log_prefix} Error: {e}", exc_info=True)
             session.add_error(f"Pipeline error: {str(e)}")
             yield self._format_sse("error", "Request failed. Retry.")
     
@@ -271,7 +337,8 @@ class ProductionPipeline:
         query: str,
         rag_context: str,
         session_id: str,
-        image_url: Optional[str] = None
+        image_url: Optional[str] = None,
+        request_id: Optional[str] = None
     ) -> str:
         
         current_utc_time = datetime.now(timezone.utc)
@@ -419,7 +486,8 @@ Requirements:
             return content
         
         except Exception as e:
-            logger.error(f"[{session_id}] LLM error: {e}")
+            log_prefix = f"[{request_id or session_id}]" if request_id else f"[{session_id}]"
+            logger.error(f"{log_prefix} LLM error: {e}")
             return f"# Error\n\nFailed to generate: {str(e)[:200]}"
     
     def _build_final_response(

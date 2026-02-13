@@ -200,7 +200,7 @@ async def playwright_web_search(query: str, max_links: int = 20, images: bool = 
             await page.wait_for_selector("div.compTitle > a", timeout=55000)
             
             link_elements = await page.query_selector_all("div.compTitle > a")
-            blacklist = ["yahoo.com/preferences", "yahoo.com/account", "login.yahoo.com", "yahoo.com/gdpr"]
+            blacklist = ["yahoo.com/preferences", "yahoo.com/account", "login.yahoo.com", "yahoo.com/gdpr", "https://ad.doubleclick.net"]
             
             for link in link_elements:
                 if len(results) >= max_links:
@@ -335,8 +335,8 @@ def fetch_full_text(
 
 if __name__ == "__main__":
     async def main():
-        query = "quote"
-        urls, search_time = await playwright_web_search(query, max_links=4, images=False)
+        query = "an evening in paris"
+        urls, search_time = await playwright_web_search(query, max_links=4, images=True)
         print(f"Search completed in {search_time:.3f} seconds")
         print("URLs found:")
         for url in urls:
