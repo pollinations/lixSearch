@@ -21,6 +21,7 @@ import numpy as np
 from config import BASE_CACHE_DIR, AUDIO_TRANSCRIBE_SIZE
 import schedule
 import uuid
+from nltk.tokenize import sent_tokenize
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
@@ -141,10 +142,80 @@ class ipcModules:
             # Fallback: return first few sentences
             return sentences[:min(5, len(sentences))]
 
+    def rank_results(self, query: str, results: list) -> list:
+        if not results:
+            return []
+        
+        try:
+            query_emb = self.embed_model.encode(
+                query,
+                convert_to_numpy=True,
+                normalize_embeddings=True
+            )
+            
+            results_emb = self.embed_model.encode(
+                results,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+                batch_size=32,
+                show_progress_bar=False
+            )
+            
+            if len(results_emb.shape) == 1:
+                results_emb = results_emb.reshape(1, -1)
+            
+            scores = np.dot(results_emb, query_emb)
+            
+            ranked = sorted(zip(results, scores.tolist()), key=lambda x: x[1], reverse=True)
+            return ranked
+        except Exception as e:
+            logger.warning(f"[INSTANCE {ipcModules._instance_id}] Ranking failed: {e}")
+            return [(r, 1.0) for r in results]
 
-
-    
-
+    def extract_and_rank_sentences(self, content: str, query: str) -> list:
+        """
+        Extract and rank sentences from content by relevance to query.
+        
+        Args:
+            content: Text content to extract from
+            query: Query to rank relevance against
+            
+        Returns:
+            List of top-ranked sentences
+        """
+        try:
+            sentences = sent_tokenize(content)
+            if not sentences:
+                return []
+            
+            sentences = [s for s in sentences if len(s.split()) > 3][:100]
+            
+            query_emb = self.embed_model.encode(
+                query,
+                convert_to_numpy=True,
+                normalize_embeddings=True
+            )
+            
+            sentences_emb = self.embed_model.encode(
+                sentences,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+                batch_size=32,
+                show_progress_bar=False
+            )
+            
+            if len(sentences_emb.shape) == 1:
+                sentences_emb = sentences_emb.reshape(1, -1)
+            
+            scores = np.dot(sentences_emb, query_emb)
+            
+            ranked = sorted(zip(sentences, scores.tolist()), key=lambda x: x[1], reverse=True)
+            
+            top_sentences = [s for s, score in ranked[:10] if score > 0.3]
+            return top_sentences
+        except Exception as e:
+            logger.warning(f"[INSTANCE {ipcModules._instance_id}] Sentence extraction failed: {e}")
+            return []
 
 class searchPortManager:
     def __init__(self, start_port=10000, end_port=19999):

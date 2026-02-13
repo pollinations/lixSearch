@@ -8,7 +8,6 @@ import re
 from urllib.parse import urlparse, parse_qs
 from typing import Dict, List, Tuple, Optional
 import numpy as np
-from nltk.tokenize import sent_tokenize
 from knowledge_graph import build_knowledge_graph
 
 
@@ -148,25 +147,8 @@ async def rank_results(query: str, results: List[str], ipc_service) -> List[Tupl
         return []
     
     try:
-        query_emb = ipc_service.embed_model.encode(
-            query,
-            convert_to_numpy=True,
-            normalize_embeddings=True
-        )
-        
-        results_emb = ipc_service.embed_model.encode(
-            results,
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-            batch_size=32
-        )
-        
-        if len(results_emb.shape) == 1:
-            results_emb = results_emb.reshape(1, -1)
-        
-        scores = np.dot(results_emb, query_emb)
-        
-        ranked = sorted(zip(results, scores), key=lambda x: x[1], reverse=True)
+        # Use the ipc_service's rank_results method to avoid IPC serialization issues
+        ranked = ipc_service.rank_results(query, results)
         return ranked
     except Exception as e:
         logger.warning(f"Ranking failed: {e}")
@@ -192,15 +174,8 @@ async def extract_and_rank_sentences(
         List of top-ranked sentences
     """
     try:
-        sentences = sent_tokenize(content)
-        if not sentences:
-            return []
-        
-        sentences = [s for s in sentences if len(s.split()) > 3][:100]
-        
-        ranked = await rank_results(query, sentences, ipc_service)
-        
-        top_sentences = [s for s, score in ranked[:10] if score > 0.3]
+        # Use the ipc_service's method to handle sentence extraction server-side
+        top_sentences = ipc_service.extract_and_rank_sentences(content, query)
         return top_sentences
     except Exception as e:
         logger.warning(f"Sentence extraction failed for {url}: {e}")
