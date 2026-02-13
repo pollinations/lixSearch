@@ -42,7 +42,6 @@ async def handle_accept_popup(page):
         print(f"[WARN] No accept popup found: {e}")
 
 async def warmup_playwright():
-    """Warmup playwright engine - time not counted in actual search"""
     print("[WARMUP] Starting playwright warmup...")
     warmup_start = time.perf_counter()
     try:
@@ -65,7 +64,6 @@ async def warmup_playwright():
             viewport={'width': 1280, 'height': 720},
         )
         
-        # Quick page load to warm up
         page = await context.new_page()
         await page.goto("about:blank", timeout=5000)
         await page.close()
@@ -81,15 +79,6 @@ async def warmup_playwright():
         return 0.0
 
 async def playwright_web_search(query: str, max_links: int = 20, images: bool = False) -> Tuple[List[str], float]:
-    """
-    Search using playwright and return URLs/images + timing
-    Time includes playwright startup and search execution
-    
-    Args:
-        query: Search query string
-        max_links: Maximum number of results to return
-        images: If True, search for images; if False, search for URLs
-    """
     search_start = time.perf_counter()
     results = []
     
@@ -139,22 +128,17 @@ async def playwright_web_search(query: str, max_links: int = 20, images: bool = 
         page = await context.new_page()
         
         if images:
-            # Image search
             search_url = f"https://images.search.yahoo.com/search/images?p={quote(query)}"
             print(f"[IMAGE SEARCH] Navigating to: {search_url}")
             await page.goto(search_url, timeout=50000)
             
-            # Handle popup
             await handle_accept_popup(page)
             
-            # Simulate human behavior
             await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
             await page.wait_for_timeout(random.randint(1000, 2000))
             
-            # Wait for thumbnail images to load
             await page.wait_for_selector("img[src*='s.yimg.com']", timeout=55000)
             
-            # Get all thumbnail images
             image_elements = await page.query_selector_all("li[data-bns='API']")
             print(f"[IMAGE SEARCH] Found {len(image_elements)} thumbnails")
             
@@ -177,18 +161,14 @@ async def playwright_web_search(query: str, max_links: int = 20, images: bool = 
                         except Exception as e:
                             pass
                     
-                    # Set up listener BEFORE clicking
                     page.on("response", handle_response)
                     
-                    # Click the image element
                     await img.click()
                     
-                    # Wait for network response with timeout
                     wait_start = time.perf_counter()
                     while captured_image_url is None and (time.perf_counter() - wait_start) < 3:
                         await page.wait_for_timeout(100)
                     
-                    # Remove the response listener
                     page.remove_listener("response", handle_response)
                     
                     if captured_image_url:
@@ -197,11 +177,9 @@ async def playwright_web_search(query: str, max_links: int = 20, images: bool = 
                     else:
                         print(f"[WARN] No JPEG URL captured for thumbnail {idx + 1}")
                     
-                    # Go back to search results
                     await page.go_back()
                     await page.wait_for_timeout(500)
                     
-                    # Continue if we haven't reached max_links yet
                     if len(results) >= max_links:
                         break
                 except Exception as e:
@@ -210,22 +188,17 @@ async def playwright_web_search(query: str, max_links: int = 20, images: bool = 
             print(results)
             print(f"[IMAGE SEARCH] Found {len(results)} images")
         else:
-            # URL search
             search_url = f"https://search.yahoo.com/search?p={quote(query)}&fr=yfp-t&fr2=p%3Afp%2Cm%3Asb&fp=1"
             print(f"[SEARCH] Navigating to: {search_url}")
             await page.goto(search_url, timeout=50000)
             
-            # Handle popup
             await handle_accept_popup(page)
             
-            # Simulate human behavior
             await page.mouse.move(random.randint(100, 500), random.randint(100, 500))
             await page.wait_for_timeout(random.randint(1000, 2000))
             
-            # Wait for results
             await page.wait_for_selector("div.compTitle > a", timeout=55000)
             
-            # Extract links
             link_elements = await page.query_selector_all("div.compTitle > a")
             blacklist = ["yahoo.com/preferences", "yahoo.com/account", "login.yahoo.com", "yahoo.com/gdpr"]
             
@@ -259,18 +232,6 @@ def fetch_full_text(
     build_kg: bool = True,
     request_id: Optional[str] = None,
 ) -> Tuple[str, Dict]:
-    """
-    Fetch and clean text from URL with optional knowledge graph building and request tracking
-
-    Args:
-        url: URL to fetch
-        total_word_count_limit: Max words to extract
-        build_kg: Whether to build knowledge graph
-        request_id: Optional request ID for tracking KG in manager
-
-    Returns:
-        Tuple of (cleaned_text, knowledge_graph_dict or empty dict)
-    """
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
@@ -290,7 +251,6 @@ def fetch_full_text(
 
         soup = BeautifulSoup(response.content, 'html.parser')
 
-        # Remove unwanted elements
         for element in soup(['script', 'style', 'nav', 'footer', 'header', 'aside', 'form', 'button', 'noscript', 'iframe', 'svg']):
             element.extract()
 
@@ -300,7 +260,6 @@ def fetch_full_text(
         if not main_content_elements:
             main_content_elements = [soup.find('body')] if soup.find('body') else [soup]
 
-        # Extract text
         temp_text = []
         word_count = 0
         for main_elem in main_content_elements:
@@ -321,20 +280,15 @@ def fetch_full_text(
 
         cleaned_text = text_content.strip()
 
-        # Build knowledge graph with semantic chunking for better contextualization
         if build_kg and cleaned_text:
             try:
-                # Build main knowledge graph
                 kg = build_knowledge_graph(cleaned_text)
                 
-                # Build chunked knowledge graphs for semantic enrichment
                 chunked_graphs = chunk_and_graph(cleaned_text, chunk_size=500, overlap=50)
                 
-                # Merge chunk-level insights into main KG
                 for chunk_data in chunked_graphs:
                     chunk_kg_dict = chunk_data.get("knowledge_graph", {})
                     if chunk_kg_dict and "entities" in chunk_kg_dict:
-                        # Add chunk entities to main KG
                         for entity_key, entity_info in chunk_kg_dict.get("entities", {}).items():
                             if entity_key not in kg.entities:
                                 kg.add_entity(
@@ -342,7 +296,6 @@ def fetch_full_text(
                                     entity_info.get("type", "UNKNOWN")
                                 )
                 
-                # Rebuild importance scores after merging
                 kg.calculate_importance()
                 
                 kg_result = {
@@ -390,7 +343,3 @@ if __name__ == "__main__":
             print(f" - {url}")
     
     asyncio.run(main())
-    # test_url = "https://www.financialexpress.com/india-news/six-others-have-claimed-as-father-ec-summons-bengal-voters-for-sir-hearing-over-logical-discrepancy/4106668/"
-    # text = fetch_full_text(test_url)
-    # print("\n--- Extracted Text ---\n")
-    # print(text)
