@@ -13,12 +13,11 @@ from dotenv import load_dotenv
 import os
 import requests
 
-from session_manager import SessionManager, get_session_manager
-from rag_engine import RAGEngine, get_rag_engine
-from knowledge_graph import build_knowledge_graph
+from session_manager import SessionManager
 from tools import tools
+from rag_engine import RAGEngine
 
-from utility import cleanQuery, webSearch, fetch_url_content_parallel
+from utility import cleanQuery, webSearch, fetch_url_content_parallel, rank_results, extract_and_rank_sentences, build_final_response
 from getImagePrompt import generate_prompt_from_image, replyFromImage
 from getYoutubeDetails import transcribe_audio, youtubeMetadata
 from getTimeZone import get_local_time
@@ -88,51 +87,6 @@ class ProductionPipeline:
         
         self.initialized = True
         logger.info("[Pipeline] Ready")
-    
-    async def _rank_results(self, query: str, results: List[str], ipc_service) -> List[Tuple[str, float]]:
-        if not results:
-            return []
-        
-        try:
-            query_emb = ipc_service.embed_model.encode(
-                query,
-                convert_to_numpy=True,
-                normalize_embeddings=True
-            )
-            
-            results_emb = ipc_service.embed_model.encode(
-                results,
-                convert_to_numpy=True,
-                normalize_embeddings=True,
-                batch_size=32
-            )
-            
-            if len(results_emb.shape) == 1:
-                results_emb = results_emb.reshape(1, -1)
-            
-            scores = np.dot(results_emb, query_emb)
-            
-            ranked = sorted(zip(results, scores), key=lambda x: x[1], reverse=True)
-            return ranked
-        except Exception as e:
-            logger.warning(f"[Pipeline] Ranking failed: {e}")
-            return [(r, 1.0) for r in results]
-    
-    async def _extract_and_rank_sentences(self, url: str, content: str, query: str, ipc_service) -> List[str]:
-        try:
-            sentences = sent_tokenize(content)
-            if not sentences:
-                return []
-            
-            sentences = [s for s in sentences if len(s.split()) > 3][:100]
-            
-            ranked = await self._rank_results(query, sentences, ipc_service)
-            
-            top_sentences = [s for s, score in ranked[:10] if score > 0.3]
-            return top_sentences
-        except Exception as e:
-            logger.warning(f"[Pipeline] Sentence extraction failed for {url}: {e}")
-            return []
     
     async def process_request(
         self,
@@ -209,7 +163,7 @@ class ProductionPipeline:
             search_results = webSearch(combined_query)
             if isinstance(search_results, list):
                 session.web_search_urls.extend(search_results)
-                ranked_urls = await self._rank_results(combined_query, search_results[:15], ipc_service)
+                ranked_urls = await rank_results(combined_query, search_results[:15], ipc_service)
                 fetch_urls = [url for url, _ in ranked_urls[:8]]
             else:
                 fetch_urls = [search_results] if search_results else []
@@ -249,7 +203,7 @@ class ProductionPipeline:
                         try:
                             content = await asyncio.to_thread(fetch_full_text, url, request_id=request_id)
                             if content:
-                                top_sents = await self._extract_and_rank_sentences(
+                                top_sents = await extract_and_rank_sentences(
                                     url, content, combined_query, ipc_service
                                 )
                                 filtered_content = " ".join(top_sents) if top_sents else content[:2000]
@@ -281,7 +235,7 @@ class ProductionPipeline:
                             query=combined_query
                         )
                         if transcript:
-                            top_sents = await self._extract_and_rank_sentences(
+                            top_sents = await extract_and_rank_sentences(
                                 yt_url, transcript, combined_query, ipc_service
                             )
                             filtered_transcript = " ".join(top_sents) if top_sents else transcript[:2000]
@@ -317,7 +271,7 @@ class ProductionPipeline:
             
             yield self._format_sse("info", "<TASK>SUCCESS</TASK>")
             
-            final_response = self._build_final_response(
+            final_response = build_final_response(
                 response_content,
                 session,
                 rag_stats
@@ -463,6 +417,8 @@ Requirements:
             "messages": messages,
             "temperature": 0.7,
             "top_p": 1,
+            "tools": tools,
+            "tool_choice": "auto",
             "max_tokens": 3000,
             "seed": random.randint(1000, 9999),
             "stream": False,
@@ -489,31 +445,6 @@ Requirements:
             log_prefix = f"[{request_id or session_id}]" if request_id else f"[{session_id}]"
             logger.error(f"{log_prefix} LLM error: {e}")
             return f"# Error\n\nFailed to generate: {str(e)[:200]}"
-    
-    def _build_final_response(
-        self,
-        response_content: str,
-        session,
-        rag_stats: Dict
-    ) -> str:
-        parts = [response_content]
-        
-        if session.images:
-            parts.append("\n\n---\n## Images\n")
-            for img_url in session.images[:5]:
-                parts.append(f"![](external-image)")
-        
-        if session.fetched_urls:
-            parts.append("\n\n---\n## Sources\n")
-            for i, url in enumerate(session.fetched_urls, 1):
-                parts.append(f"{i}. [{url}]({url})")
-        
-        parts.append("\n\n---\n## Summary\n")
-        parts.append(f"- Documents: {rag_stats.get('documents_fetched', 0)}")
-        parts.append(f"- Entities: {rag_stats.get('entities_extracted', 0)}")
-        parts.append(f"- Relationships: {rag_stats.get('relationships_discovered', 0)}")
-        
-        return "\n".join(parts)
     
     @staticmethod
     def _format_sse(event: str, data: str) -> str:

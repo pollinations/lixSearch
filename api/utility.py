@@ -2,10 +2,13 @@ from collections import deque
 from loguru import logger
 from multiprocessing.managers import BaseManager
 from search import fetch_full_text
-import concurrent 
+import concurrent
+import concurrent.futures
 import re
 from urllib.parse import urlparse, parse_qs
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
+import numpy as np
+from nltk.tokenize import sent_tokenize
 from knowledge_graph import build_knowledge_graph
 
 
@@ -129,7 +132,118 @@ def fetch_url_content_parallel(queries, urls, max_workers=10, use_kg: bool = Tru
         return results, kg_data_list
 
 
-def storeDeepSearchQuery(query: list, sessionID: str):
+async def rank_results(query: str, results: List[str], ipc_service) -> List[Tuple[str, float]]:
+    """
+    Rank search results by relevance to query using embeddings.
+    
+    Args:
+        query: The search query
+        results: List of result strings to rank
+        ipc_service: IPC service with embedding model
+        
+    Returns:
+        List of (result, score) tuples sorted by relevance
+    """
+    if not results:
+        return []
+    
+    try:
+        query_emb = ipc_service.embed_model.encode(
+            query,
+            convert_to_numpy=True,
+            normalize_embeddings=True
+        )
+        
+        results_emb = ipc_service.embed_model.encode(
+            results,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+            batch_size=32
+        )
+        
+        if len(results_emb.shape) == 1:
+            results_emb = results_emb.reshape(1, -1)
+        
+        scores = np.dot(results_emb, query_emb)
+        
+        ranked = sorted(zip(results, scores), key=lambda x: x[1], reverse=True)
+        return ranked
+    except Exception as e:
+        logger.warning(f"Ranking failed: {e}")
+        return [(r, 1.0) for r in results]
+
+
+async def extract_and_rank_sentences(
+    url: str,
+    content: str,
+    query: str,
+    ipc_service
+) -> List[str]:
+    """
+    Extract and rank sentences from content by relevance to query.
+    
+    Args:
+        url: Source URL (for logging)
+        content: Text content to extract from
+        query: Query to rank relevance against
+        ipc_service: IPC service with embedding model
+        
+    Returns:
+        List of top-ranked sentences
+    """
+    try:
+        sentences = sent_tokenize(content)
+        if not sentences:
+            return []
+        
+        sentences = [s for s in sentences if len(s.split()) > 3][:100]
+        
+        ranked = await rank_results(query, sentences, ipc_service)
+        
+        top_sentences = [s for s, score in ranked[:10] if score > 0.3]
+        return top_sentences
+    except Exception as e:
+        logger.warning(f"Sentence extraction failed for {url}: {e}")
+        return []
+
+
+def build_final_response(
+    response_content: str,
+    session,
+    rag_stats: Dict
+) -> str:
+    """
+    Build final response with content, images, sources, and summary.
+    
+    Args:
+        response_content: Main response content
+        session: Session object with metadata
+        rag_stats: RAG statistics dictionary
+        
+    Returns:
+        Formatted final response string
+    """
+    parts = [response_content]
+    
+    if session.images:
+        parts.append("\n\n---\n## Images\n")
+        for img_url in session.images[:5]:
+            parts.append(f"![](external-image)")
+    
+    if session.fetched_urls:
+        parts.append("\n\n---\n## Sources\n")
+        for i, url in enumerate(session.fetched_urls, 1):
+            parts.append(f"{i}. [{url}]({url})")
+    
+    parts.append("\n\n---\n## Summary\n")
+    parts.append(f"- Documents: {rag_stats.get('documents_fetched', 0)}")
+    parts.append(f"- Entities: {rag_stats.get('entities_extracted', 0)}")
+    parts.append(f"- Relationships: {rag_stats.get('relationships_discovered', 0)}")
+    
+    return "\n".join(parts)
+
+
+
     _deepsearch_store[sessionID] = query
 
 def getDeepSearchQuery(sessionID: str):
