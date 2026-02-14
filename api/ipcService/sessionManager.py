@@ -1,7 +1,7 @@
 from sessions.sessionMemory import SessionMemory
 import threading
 from typing import Dict, Optional, List
-from config import SESSION_SUMMARY_THRESHOLD
+from pipeline.config import SESSION_SUMMARY_THRESHOLD
 
 class SessionManager:
     def __init__(self):

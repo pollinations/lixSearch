@@ -1,12 +1,12 @@
 import requests
 import json
-from getImagePrompt import generate_prompt_from_image, replyFromImage
+from functionCalls.getImagePrompt import generate_prompt_from_image, replyFromImage
 from tools import tools
 from datetime import datetime, timezone
-from getYoutubeDetails import transcribe_audio, youtubeMetadata
-from getTimeZone import get_local_time
-from utility import fetch_url_content_parallel, webSearch, imageSearch, cleanQuery
-from semantic_cache import SemanticCache
+from functionCalls.getYoutubeDetails import transcribe_audio, youtubeMetadata
+from functionCalls.getTimeZone import get_local_time
+from commons.searching_based import fetch_url_content_parallel, webSearch, imageSearch, cleanQuery
+from ragService.semanticCache import SemanticCache
 import random
 import logging
 import dotenv

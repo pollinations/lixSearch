@@ -1,11 +1,11 @@
 import re
-from loguru import re
 from loguru import logger
 from .main import _init_ipc_manager
-
+import asyncio
+search_service = None
+from commons.searching_based import fetch_full_text
 
 def webSearch(query: str):
-    """Synchronous web search"""
     if not _init_ipc_manager() or search_service is None:
         logger.warning("[Utility] IPC service not available for web search")
         return []
@@ -18,21 +18,10 @@ def webSearch(query: str):
 
 
 async def imageSearch(query: str, max_images: int = 10) -> list:
-    """
-    Asynchronous image search wrapper using asyncio.to_thread for non-blocking execution.
-    
-    Args:
-        query: Search query for images
-        max_images: Maximum number of images to return
-        
-    Returns:
-        List of image URLs
-    """
     if not _init_ipc_manager() or search_service is None:
         logger.warning("[Utility] IPC service not available for image search")
         return []
     try:
-        # Run synchronous IPC call in thread to avoid blocking event loop
         loop = asyncio.get_event_loop()
         urls = await loop.run_in_executor(
             None,
@@ -60,11 +49,6 @@ def preprocess_text(text):
 
 
 def fetch_url_content_parallel(queries, urls, max_workers=10, request_id: str = None) -> str:
-    # OPTIMIZATION FIX #12: Removed double-threading
-    # Instead of ThreadPoolExecutor inside an asyncio.to_thread(),
-    # this is now called directly via asyncio.to_thread() in searchPipeline
-    # This reduces context switching overhead
-    
     results = []
     for url in urls:
         try:
@@ -82,4 +66,3 @@ def fetch_url_content_parallel(queries, urls, max_workers=10, request_id: str = 
     logger.info(f"[Utility] Fetched all URLs in parallel, total: {len(combined_text)} chars")
     
     return combined_text
-

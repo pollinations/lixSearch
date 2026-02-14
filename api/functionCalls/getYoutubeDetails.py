@@ -1,5 +1,5 @@
 import os
-from config import BASE_CACHE_DIR
+from pipeline.config import BASE_CACHE_DIR, AUDIO_TRANSCRIBE_SIZE
 from pytubefix import AsyncYouTube
 from pydub import AudioSegment
 from multiprocessing.managers import BaseManager
@@ -10,7 +10,6 @@ import re
 import time
 from urllib.parse import urlparse, parse_qs
 from typing import Optional
-from config import AUDIO_TRANSCRIBE_SIZE
 from faster_whisper import WhisperModel
 
 class ModelManager(BaseManager): 
@@ -80,19 +79,12 @@ def get_youtube_video_id(url):
     elif "youtu.be" in parsed_url.netloc:
         path = parsed_url.path.lstrip('/')
         if path:
-            match = re.search(r'/(?:embed|v)/([^/?#&]+)', parsed_url.path)
-            if match:
-                return match.group(1)
-    elif "youtu.be" in parsed_url.netloc:
-        path = parsed_url.path.lstrip('/')
-        if path:
             video_id = path.split('/')[0].split('?')[0].split('#')[0]
             video_id = video_id.split('&')[0]
             return video_id
     return None
 
 async def download_audio(url):
-    """Download audio from YouTube video"""
     video_id = get_youtube_video_id(url)
     cache_folder = ensure_cache_dir(video_id)
     wav_path = os.path.join(cache_folder, f"{video_id}.wav")
@@ -121,18 +113,6 @@ async def transcribe_audio(
     query: Optional[str] = None,
     timeout: float = 300.0
 ) -> str:
-    """
-    Transcribe YouTube video using faster-whisper (via IPC if available, local fallback)
-    
-    Args:
-        url: YouTube URL to transcribe
-        full_transcript: Whether to get full transcript (unused but kept for compatibility)
-        query: Optional query to filter transcript relevance
-        timeout: Transcription timeout in seconds
-    
-    Returns:
-        Transcription text with source metadata
-    """
     start_time = time.perf_counter()
     video_id = get_youtube_video_id(url)
     if not video_id:
@@ -142,12 +122,10 @@ async def transcribe_audio(
     try:
         logger.info(f"[Transcribe] Starting transcription for video {video_id}")
         
-        # Try IPC first if available
         if _init_ipc_manager() and core_service is not None:
             try:
                 logger.info(f"[Transcribe] Using IPC CoreEmbeddingService for transcription")
                 audio_path = await download_audio(url)
-                # IPC call to core service transcribe method
                 transcription = await asyncio.to_thread(
                     core_service.transcribe_audio, 
                     audio_path
@@ -161,11 +139,9 @@ async def transcribe_audio(
             except Exception as e:
                 logger.warning(f"[Transcribe] IPC transcription failed: {e}. Falling back to local faster-whisper")
         
-        # Local fallback using faster-whisper
         logger.info(f"[Transcribe] Using local faster-whisper model on {device}")
         audio_path = await download_audio(url)
         
-        # Use faster-whisper for transcription
         segments, info = await asyncio.to_thread(
             whisper_model.transcribe,
             audio_path,
@@ -173,7 +149,6 @@ async def transcribe_audio(
             beam_size=5
         )
         
-        # Combine segments into full text
         transcription = " ".join([segment.text for segment in segments])
         
         metadata = await youtubeMetadata(url)
@@ -198,18 +173,6 @@ async def transcribe_long(
     beam_size: int = 5,
     query: Optional[str] = None
 ) -> str:
-    """
-    Transcribe long-form YouTube video with faster-whisper (chunked processing)
-    
-    Args:
-        url: YouTube URL to transcribe
-        chunk_sec: Audio chunk size in seconds for processing
-        beam_size: Faster-whisper beam search size (higher = better quality, slower)
-        query: Optional query to filter transcript relevance
-    
-    Returns:
-        Transcription text with source metadata and performance stats
-    """
     start_time = time.perf_counter()
     video_id = get_youtube_video_id(url)
     
@@ -221,30 +184,25 @@ async def transcribe_long(
         logger.info(f"[TranscribeLong] Starting long-form transcription for video {video_id}")
         audio_path = await download_audio(url)
         
-        # Verify file exists
         if not os.path.exists(audio_path):
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
         
-        # Use faster-whisper for long transcription
         logger.info(f"[TranscribeLong] Using faster-whisper on {device} with beam_size={beam_size}")
         segments, info = await asyncio.to_thread(
             whisper_model.transcribe,
             audio_path,
             language="en",
             beam_size=beam_size,
-            vad_filter=True  # Use voice activity detection for better quality
+            vad_filter=True
         )
         
-        # Combine segments into full text
         transcription = " ".join([segment.text for segment in segments])
         
-        # Get metadata
         metadata = await youtubeMetadata(url)
         
         elapsed = time.perf_counter() - start_time
         logger.info(f"[TranscribeLong] Transcription completed in {elapsed:.2f}s")
         
-        # Build response with stats
         response = f"{transcription}\n\n---\n**Transcription Stats:**\n"
         response += f"- Duration: {info.duration:.1f}s\n"
         response += f"- Language: {info.language}\n"

@@ -3,7 +3,7 @@ from typing import List, Dict, Optional, AsyncGenerator
 import asyncio
 import requests
 import random
-from config import POLLINATIONS_ENDPOINT
+from pipeline.config import POLLINATIONS_ENDPOINT
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -103,7 +103,7 @@ class ChatEngine:
         yield self._format_sse("info", "<TASK>Searching for relevant information...</TASK>")
         
         try:
-            from utility import webSearch
+            from commons.searching_based import webSearch
             from searching.fetch_full_text import fetch_full_text
             
             search_results = webSearch(final_search_query)

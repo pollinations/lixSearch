@@ -4,7 +4,7 @@ from ragService.vectorStore import VectorStore
 from ragService.semanticCache import SemanticCache
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from config import EMBEDDING_MODEL, EMBEDDINGS_DIR, SEMANTIC_CACHE_TTL_SECONDS, SEMANTIC_CACHE_SIMILARITY_THRESHOLD, AUDIO_TRANSCRIBE_SIZE, RETRIEVAL_TOP_K, PERSIST_VECTOR_STORE_INTERVAL
+from pipeline.config import EMBEDDING_MODEL, EMBEDDINGS_DIR, SEMANTIC_CACHE_TTL_SECONDS, SEMANTIC_CACHE_SIMILARITY_THRESHOLD, AUDIO_TRANSCRIBE_SIZE, RETRIEVAL_TOP_K, PERSIST_VECTOR_STORE_INTERVAL
 from ragService.retrievalPipeline import RetrievalPipeline
 import torch
 import threading

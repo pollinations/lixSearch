@@ -8,7 +8,7 @@ from playwright.async_api import async_playwright
 from urllib.parse import quote
 import atexit
 import time
-from config import MAX_LINKS_TO_TAKE, isHeadless
+from pipeline.config import MAX_LINKS_TO_TAKE, isHeadless
 import shutil
 import os
 import json
