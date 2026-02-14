@@ -17,7 +17,7 @@ import time
 from config import POLLINATIONS_ENDPOINT, RAG_CONTEXT_REFRESH
 from session_manager import get_session_manager
 from rag_engine import RAGEngine, get_retrieval_system
-from instruction import system_instruction, user_instruction
+from instruction import system_instruction, user_instruction, synthesis_instruction
 
 
 logging.basicConfig(level=logging.INFO)
@@ -347,15 +347,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         if not final_message_content and current_iteration >= max_iterations:
             synthesis_prompt = {
                 "role": "user",
-                "content": f""" Provide me with a detailed aggregation of the -- {user_query}".
-                Requirements:
-                - Synthesize ALL information into a detailed response with max (3000 words) adjust to less if needed
-                - Respond in proper markdown formatting
-                - Pack all the details
-                - Include specific facts and context from the research
-                - Structure with clear sections
-                - Include sources with a different section
-                """
+                "content": synthesis_instruction(user_query)
             }
             messages.append(synthesis_prompt)
             payload = {

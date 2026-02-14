@@ -113,3 +113,15 @@ def user_instruction(query, image_url):
         - Make it comprehensive and thoroughly informative
         """
     return user_message
+
+def synthesis_instruction(user_query):
+    synthesis_message = f""" Provide me with a detailed aggregation of the -- {user_query}".
+    Requirements:
+    - Synthesize ALL information into a detailed response with max (3000 words) adjust to less if needed
+    - Respond in proper markdown formatting
+    - Pack all the details
+    - Include specific facts and context from the research
+    - Structure with clear sections
+    - Include sources with a different section
+    """
+    return synthesis_message
