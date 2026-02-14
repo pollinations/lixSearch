@@ -5,7 +5,7 @@ from loguru import logger
 from bs4 import BeautifulSoup
 from datetime import datetime
 from typing import List, Dict
-
+from commons.minimal import chunk_text, clean_text
 
 class RetrievalPipeline:
     def __init__(self, embedding_service: EmbeddingService, vector_store: VectorStore):
