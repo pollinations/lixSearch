@@ -14,6 +14,7 @@ import random
 import os
 import shutil
 import stat
+import numpy as np
 from playwright.async_api import async_playwright
 from urllib.parse import quote
 from config import (
@@ -130,7 +131,91 @@ class CoreEmbeddingService:
         )
         self._persist_thread.start()
         
+        # Warm up models
+        logger.info(f"[CORE {CoreEmbeddingService._instance_id}] Warming up transcribe model...")
+        self._warmup_transcribe_model()
+        logger.info(f"[CORE {CoreEmbeddingService._instance_id}] Warming up embedding model...")
+        self._warmup_embedding_model()
+        
         logger.info(f"[CORE {CoreEmbeddingService._instance_id}] Core services initialized")
+    
+    def _warmup_transcribe_model(self) -> None:
+        try:
+            sample_rate = 16000
+            duration_sec = 1
+            dummy_audio = np.zeros(sample_rate * duration_sec, dtype=np.float32)
+            
+            # Save temporary dummy audio
+            import scipy.io.wavfile as wavfile
+            temp_audio_path = "/tmp/warmup_audio.wav"
+            
+            # Ensure scipy is available, fallback to simple wav format
+            try:
+                wavfile.write(temp_audio_path, sample_rate, (dummy_audio * 32767).astype(np.int16))
+            except ImportError:
+                # If scipy is not available, create a minimal WAV file manually
+                import struct
+                wav_data = self._create_wav_data(dummy_audio)
+                with open(temp_audio_path, 'wb') as f:
+                    f.write(wav_data)
+            
+            # Warm up the model
+            with self._gpu_lock:
+                result = self.transcribe_model.transcribe(temp_audio_path, language="en")
+                logger.info(f"[CORE {CoreEmbeddingService._instance_id}] Transcribe model warmed up")
+            
+            # Clean up
+            if os.path.exists(temp_audio_path):
+                os.remove(temp_audio_path)
+        except Exception as e:
+            logger.warning(f"[CORE {CoreEmbeddingService._instance_id}] Transcribe model warm-up failed: {e}")
+    
+    def _warmup_embedding_model(self) -> None:
+        """Warm up the embedding model with dummy text."""
+        try:
+            # Warm up with a few dummy texts
+            dummy_texts = [
+                "This is a warmup text for the embedding model.",
+                "Testing the embedding service initialization."
+            ]
+            
+            embeddings = self.embedding_service.embed(dummy_texts, batch_size=2)
+            logger.info(f"[CORE {CoreEmbeddingService._instance_id}] Embedding model warmed up with shape {embeddings.shape}")
+        except Exception as e:
+            logger.warning(f"[CORE {CoreEmbeddingService._instance_id}] Embedding model warm-up failed: {e}")
+    
+    @staticmethod
+    def _create_wav_data(audio_array: np.ndarray, sample_rate: int = 16000) -> bytes:
+        """Create a WAV file from audio array data."""
+        import struct
+        
+        # Convert float32 to int16
+        audio_int16 = (audio_array * 32767).astype(np.int16)
+        
+        # WAV file parameters
+        num_channels = 1
+        num_samples = len(audio_int16)
+        bytes_per_sample = 2
+        byte_rate = sample_rate * num_channels * bytes_per_sample
+        block_align = num_channels * bytes_per_sample
+        
+        # WAV header
+        wav_data = b'RIFF'
+        wav_data += struct.pack('<I', 36 + num_samples * bytes_per_sample)  # file size - 8
+        wav_data += b'WAVE'
+        wav_data += b'fmt '
+        wav_data += struct.pack('<I', 16)  # subchunk1 size
+        wav_data += struct.pack('<H', 1)   # audio format (1 = PCM)
+        wav_data += struct.pack('<H', num_channels)
+        wav_data += struct.pack('<I', sample_rate)
+        wav_data += struct.pack('<I', byte_rate)
+        wav_data += struct.pack('<H', block_align)
+        wav_data += struct.pack('<H', 16)  # bits per sample
+        wav_data += b'data'
+        wav_data += struct.pack('<I', num_samples * bytes_per_sample)
+        wav_data += audio_int16.tobytes()
+        
+        return wav_data
     
     def transcribe_audio(self, audio_path: str) -> str:
         with self._gpu_lock:
