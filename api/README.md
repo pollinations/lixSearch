@@ -1,4 +1,4 @@
-# ElixpoSearch API Architecture
+# lixSearch API Architecture
 
 
 
@@ -12,12 +12,23 @@ graph TB
         WS[WebSocket Client]
     end
 
-    subgraph API["Main API Server - app.py"]
-        APP[Quart App Instance]
-        ROUTES["API Routes<br/>- /api/search<br/>- /api/chat<br/>- /api/session/*<br/>- /ws/search"]
-        MIDDLEWARE["Middleware<br/>- RequestID Middleware<br/>- CORS<br/>- Validation"]
-        STARTUP["Startup Handler<br/>- Initializes Services<br/>- Starts IPC Service"]
-        SHUTDOWN["Shutdown Handler<br/>- Graceful cleanup"]
+    subgraph Entry["Entry Point"]
+        APP_PY["app.py<br/>Server launcher"]
+    end
+
+    subgraph AppPackage["app Package"]
+        MAIN["main.py<br/>lixSearch class<br/>- CORS setup<br/>- Middleware registration<br/>- Route registration<br/>- Lifecycle hooks<br/>- IPC management"]
+        
+        UTILS["utils.py<br/>Validation utilities<br/>- validate_query<br/>- validate_session_id<br/>- validate_url<br/>- setup_logger"]
+        
+        subgraph Gateways["gateways/"]
+            HEALTH["health.py<br/>Health check endpoint"]
+            SEARCH_GW["search.py<br/>Search endpoint<br/>with pipeline"]
+            SESSION_GW["session.py<br/>Session CRUD<br/>- create<br/>- get<br/>- delete<br/>- query KG"]
+            CHAT_GW["chat.py<br/>Chat operations<br/>- chat<br/>- session chat<br/>- completions<br/>- history"]
+            STATS_GW["stats.py<br/>Statistics endpoint"]
+            WS_GW["websocket.py<br/>WebSocket search"]
+        end
     end
 
     subgraph IPC["IPC Service (subprocess)"]
@@ -68,27 +79,34 @@ graph TB
     subgraph Commons["Commons & Utilities"]
         SEARCHING_BASED["searching_based<br/>- Web search wrapper<br/>- Image search wrapper"]
         REQUEST_ID["RequestID Middleware<br/>- Request tracking"]
-        MAIN["Main utilities<br/>- IPC manager"]
+        MAIN_UTIL["Main utilities<br/>- IPC manager"]
     end
 
     %% Connections
-    HTTP --> APP
-    WS --> APP
+    HTTP --> APP_PY
+    WS --> APP_PY
     
-    APP --> ROUTES
-    APP --> MIDDLEWARE
-    APP --> STARTUP
-    APP --> SHUTDOWN
+    APP_PY --> MAIN
     
-    STARTUP -->|starts subprocess| IPC
-    STARTUP -->|Get Sessions| SESSION_MGR
-    STARTUP -->|Initialize| RETRIEVAL_SYS
-    STARTUP -->|Setup| CHAT_ENGINE
+    MAIN --> UTILS
+    MAIN --> Gateways
+    MAIN --> HEALTH
+    MAIN --> SEARCH_GW
+    MAIN --> SESSION_GW
+    MAIN --> CHAT_GW
+    MAIN --> STATS_GW
+    MAIN --> WS_GW
     
-    ROUTES -->|fetch_search_results| SEARCH_PIPE
-    ROUTES -->|fetch_chat| CHAT_ENGINE
-    ROUTES -->|manage_sessions| SESSION_MGR
-    ROUTES -->|fetch_context| RETRIEVAL_SYS
+    MAIN -->|startup| IPC
+    MAIN -->|Get Sessions| SESSION_MGR
+    MAIN -->|Initialize| RETRIEVAL_SYS
+    MAIN -->|Setup| CHAT_ENGINE
+    
+    HEALTH -->|check| MAIN
+    SEARCH_GW -->|fetch_search_results| SEARCH_PIPE
+    SESSION_GW -->|manage_sessions| SESSION_MGR
+    CHAT_GW -->|fetch_chat| CHAT_ENGINE
+    WS_GW -->|stream_results| SEARCH_PIPE
     
     SEARCH_PIPE -->|use_tools| TOOLS
     SEARCH_PIPE -->|apply_instructions| INSTRUCTIONS
@@ -131,13 +149,15 @@ graph TB
 
     %% Styling
     classDef client fill:#e1f5ff,stroke:#01579b,stroke-width:2px
-    classDef api fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef entry fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    classDef appPackage fill:#ffe0b2,stroke:#e65100,stroke-width:2px
     classDef service fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
     classDef pipeline fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
     classDef util fill:#fce4ec,stroke:#880e4f,stroke-width:2px
 
     class Client client
-    class API api
+    class Entry entry
+    class AppPackage,MAIN,UTILS,GATEWAYS,Gateways appPackage
     class IPC,Pipeline,Session,RAG,Chat,Search,FunctionCalls service
     class Commons util
 ```
