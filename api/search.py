@@ -3,14 +3,14 @@ from playwright.async_api import async_playwright
 import random
 import asyncio
 from typing import List, Tuple, Dict, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 import requests
 from bs4 import BeautifulSoup
 import re
 import logging
+import ipaddress
 from config import MAX_TOTAL_SCRAPE_WORD_COUNT, RETRIEVAL_TOP_K
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 __all__ = ['fetch_full_text', 'playwright_web_search', 'warmup_playwright', 'ingest_url_to_vector_store', 'retrieve_from_vector_store']
 
@@ -224,15 +224,60 @@ async def playwright_web_search(query: str, max_links: int = 20, images: bool = 
 
 
 
+def _validate_url_for_fetch(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+        
+        if not parsed.scheme or parsed.scheme not in ['http', 'https']:
+            logger.warning(f"[Fetch] Invalid URL scheme: {parsed.scheme}")
+            return False
+        
+        if not parsed.netloc:
+            logger.warning(f"[Fetch] No network location in URL")
+            return False
+        
+        hostname = parsed.hostname
+        if not hostname:
+            logger.warning(f"[Fetch] No hostname in URL")
+            return False
+        
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                logger.warning(f"[Fetch] URL targets private/loopback IP: {hostname}")
+                return False
+        except ValueError:
+            pass
+        
+        if hostname in ['localhost', '127.0.0.1', '0.0.0.0']:
+            logger.warning(f"[Fetch] URL targets localhost: {hostname}")
+            return False
+        
+        port = parsed.port
+        if port and port in [22, 23, 25, 135, 139, 445, 1433, 3306, 5432, 5010]:
+            logger.warning(f"[Fetch] URL targets restricted port: {port}")
+            return False
+        
+        return True
+    except Exception as e:
+        logger.error(f"[Fetch] URL validation error: {e}")
+        return False
+
+
 def fetch_full_text(
     url,
     total_word_count_limit=MAX_TOTAL_SCRAPE_WORD_COUNT,
     request_id: Optional[str] = None,
 ) -> Tuple[str, Dict]:
+    kg_result = {}
+    
+    if not _validate_url_for_fetch(url):
+        logger.error(f"[Fetch] URL validation failed: {url}")
+        return "", kg_result
+    
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
-    kg_result = {}
 
     try:
         response = requests.get(url, timeout=20, headers=headers)

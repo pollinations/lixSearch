@@ -9,25 +9,46 @@ from urllib.parse import urlparse, parse_qs
 from typing import Dict, List, Tuple, Optional
 import numpy as np
 from knowledge_graph import build_knowledge_graph
-from typing import List, Dict
-import re
-from loguru import logger
-
+import time
 
 
 _deepsearch_store = {}
 
-class modelManager(BaseManager): pass
+class modelManager(BaseManager): 
+    pass
+
 modelManager.register("accessSearchAgents")
 modelManager.register("ipcService")
-manager = modelManager(address=("localhost", 5010), authkey=b"ipcService")
-manager.connect()
-search_service = manager.accessSearchAgents()
-embedModelService = manager.ipcService()
+
+search_service = None
+embedModelService = None
+
+def _init_ipc_manager(max_retries: int = 3, retry_delay: float = 1.0):
+    global search_service, embedModelService
+    
+    for attempt in range(max_retries):
+        try:
+            manager = modelManager(address=("localhost", 5010), authkey=b"ipcService")
+            manager.connect()
+            search_service = manager.accessSearchAgents()
+            embedModelService = manager.ipcService()
+            logger.info("[Utility] IPC connection established with model_server")
+            return True
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"[Utility] IPC connection failed (attempt {attempt + 1}/{max_retries}): {e}")
+                time.sleep(retry_delay)
+            else:
+                logger.error(f"[Utility] Failed to connect to IPC server after {max_retries} attempts: {e}")
+                return False
+    
+    return False
+
+_ipc_ready = _init_ipc_manager()
 
 
 def cleanQuery(query):
-    print("[INFO] Cleaning User Query")
+    logger.debug("[Utility] Cleaning user query")
     urls = re.findall(r'(https?://[^\s]+)', query)
     cleaned_query = query
     website_urls = []
@@ -48,24 +69,43 @@ def cleanQuery(query):
 
 
 def webSearch(query: str):
-    urls = search_service.web_search(query)
-    return urls
+    if not _ipc_ready or search_service is None:
+        logger.error("[Utility] IPC service not available for web search")
+        return []
+    try:
+        urls = search_service.web_search(query)
+        return urls
+    except Exception as e:
+        logger.error(f"[Utility] Web search failed: {e}")
+        return []
 
 def imageSearch(query: str):
-    urls = search_service.image_search(query)
-    return urls
+    if not _ipc_ready or search_service is None:
+        logger.error("[Utility] IPC service not available for image search")
+        return []
+    try:
+        urls = search_service.image_search(query)
+        return urls
+    except Exception as e:
+        logger.error(f"[Utility] Image search failed: {e}")
+        return []
 
 def youtubeMetadata(url: str):
-    print("[INFO] Getting Youtube Metadata")
+    logger.debug("[Utility] Fetching YouTube metadata")
     parsed_url = urlparse(url)
     if "youtube.com" not in parsed_url.netloc and "youtu.be" not in parsed_url.netloc:
-        print("Not a valid YouTube URL.")
+        logger.warning("[Utility] Invalid YouTube URL provided")
         return None
+    
+    if not _ipc_ready or search_service is None:
+        logger.error("[Utility] IPC service not available for YouTube metadata")
+        return None
+        
     try:
         metadata = search_service.get_youtube_metadata(url)
         return metadata
     except Exception as e:
-        print(f"Error fetching metadata for {url}: {type(e).__name__} - {e}")
+        logger.error(f"[Utility] Error fetching YouTube metadata for {url}: {e}")
         return None
 
 def preprocess_text(text):

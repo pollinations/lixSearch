@@ -15,7 +15,7 @@ import concurrent.futures
 from functools import lru_cache
 import time
 from config import POLLINATIONS_ENDPOINT, RAG_CONTEXT_REFRESH
-from session_manager import SessionManager
+from session_manager import get_session_manager
 from rag_engine import RAGEngine, get_retrieval_system
 from instruction import system_instruction, user_instruction
 
@@ -25,7 +25,7 @@ logger = logging.getLogger("elixpo")
 dotenv.load_dotenv()
 POLLINATIONS_TOKEN = os.getenv("TOKEN")
 MODEL = os.getenv("MODEL")
-print(MODEL, POLLINATIONS_TOKEN)
+logger.debug(f"Model configured: {MODEL}")
 
 
 @lru_cache(maxsize=100)
@@ -196,7 +196,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                    "Authorization": f"Bearer {POLLINATIONS_TOKEN}"}
         
         retrieval_system = get_retrieval_system()
-        session_manager = SessionManager(max_sessions=100, ttl_minutes=30)
+        session_manager = get_session_manager()
         session_id = session_manager.create_session(user_query)
         
         rag_engine = retrieval_system.get_rag_engine(session_id)

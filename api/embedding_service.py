@@ -2,17 +2,12 @@ from sentence_transformers import SentenceTransformer
 import torch
 import numpy as np
 from loguru import logger
-from typing import List, Union
+from typing import List, Union, Dict, Tuple, Optional
 import threading
 import faiss
-import numpy as np
-import torch
 import json
 import os
 from datetime import datetime
-from typing import List, Dict, Tuple, Optional
-from loguru import logger
-import threading
 from pathlib import Path
 
 

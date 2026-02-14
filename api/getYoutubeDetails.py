@@ -3,6 +3,7 @@ from config import BASE_CACHE_DIR
 from pytubefix import AsyncYouTube
 from pydub import AudioSegment
 from multiprocessing.managers import BaseManager
+from loguru import logger
 import torch
 import whisper
 import asyncio
@@ -12,26 +13,49 @@ from urllib.parse import urlparse, parse_qs
 from typing import Optional, Iterable
 
 
+class modelManager(BaseManager): 
+    pass
 
-# Remove model server dependency for STT, only keep search_service if needed
-class modelManager(BaseManager): pass
 modelManager.register("accessSearchAgents")
-manager = modelManager(address=("localhost", 5010), authkey=b"ipcService")
-manager.connect()
-search_service = manager.accessSearchAgents()
 
-# Load Whisper model directly here
-AUDIO_TRANSCRIBE_SIZE = "small"  # or set to your preferred model size
+search_service = None
+
+def _init_ipc_manager(max_retries: int = 3, retry_delay: float = 1.0):
+    global search_service
+    
+    for attempt in range(max_retries):
+        try:
+            manager = modelManager(address=("localhost", 5010), authkey=b"ipcService")
+            manager.connect()
+            search_service = manager.accessSearchAgents()
+            logger.info("[YoutubeDetails] IPC connection established")
+            return True
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"[YoutubeDetails] IPC connection failed (attempt {attempt + 1}/{max_retries}): {e}")
+                time.sleep(retry_delay)
+            else:
+                logger.error(f"[YoutubeDetails] Failed to connect to IPC server after {max_retries} attempts: {e}")
+                return False
+    
+    return False
+
+_ipc_ready = _init_ipc_manager()
+
+AUDIO_TRANSCRIBE_SIZE = "small"
 device = "cuda" if torch.cuda.is_available() else "cpu"
 whisper_model = whisper.load_model(AUDIO_TRANSCRIBE_SIZE).to(device)
 
 async def youtubeMetadata(url: str):
-    """
-    Async wrapper for YouTube metadata retrieval via search_service.
-    Returns metadata like title, description, views, etc. from YouTube.
-    """
-    metadata = search_service.get_youtube_metadata(url)
-    return metadata
+    if not _ipc_ready or search_service is None:
+        logger.error("[YoutubeDetails] IPC service not available for YouTube metadata")
+        return None
+    try:
+        metadata = search_service.get_youtube_metadata(url)
+        return metadata
+    except Exception as e:
+        logger.error(f"[YoutubeDetails] Error fetching YouTube metadata: {e}")
+        return None
 
 def ensure_cache_dir(video_id):
     path = os.path.join(BASE_CACHE_DIR, video_id)

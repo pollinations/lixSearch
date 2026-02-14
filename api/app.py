@@ -5,12 +5,40 @@ import logging
 import sys
 import uuid
 from datetime import datetime
+import re
 
 from searchPipeline import run_elixposearch_pipeline
 from session_manager import get_session_manager
 from rag_engine import get_retrieval_system
 from chat_engine import initialize_chat_engine, get_chat_engine
 from requestID import RequestIDMiddleware
+
+
+def _validate_query(query: str, max_length: int = 5000) -> bool:
+    if not query or not isinstance(query, str):
+        return False
+    if len(query) > max_length:
+        return False
+    if len(query.strip()) == 0:
+        return False
+    return True
+
+
+def _validate_session_id(session_id: str, pattern: str = r'^[a-zA-Z0-9\-]{8,36}$') -> bool:
+    if not session_id or not isinstance(session_id, str):
+        return False
+    return bool(re.match(pattern, session_id))
+
+
+def _validate_url(url: str, max_length: int = 2048) -> bool:
+    if not url or not isinstance(url, str):
+        return False
+    if len(url) > max_length:
+        return False
+    if not url.startswith(('http://', 'https://')):
+        return False
+    return True
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -74,8 +102,14 @@ async def search():
         image_url = data.get("image_url")
         session_id = data.get("session_id")
 
-        if not query:
-            return jsonify({"error": "Query is required"}), 400
+        if not _validate_query(query):
+            return jsonify({"error": "Invalid or missing query"}), 400
+
+        if session_id and not _validate_session_id(session_id):
+            return jsonify({"error": "Invalid session_id format"}), 400
+
+        if image_url and not _validate_url(image_url):
+            return jsonify({"error": "Invalid image_url"}), 400
 
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:12])
 
