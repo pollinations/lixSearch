@@ -14,9 +14,9 @@ import asyncio
 import concurrent.futures
 from functools import lru_cache
 import time
-from config import POLLINATIONS_ENDPOINT
+from config import POLLINATIONS_ENDPOINT, RAG_CONTEXT_REFRESH
 from session_manager import SessionManager
-from rag_engine import RAGEngine
+from rag_engine import RAGEngine, get_retrieval_system
 from instruction import system_instruction, user_instruction
 
 
@@ -137,7 +137,7 @@ async def optimized_tool_execution(function_name: str, function_args: dict, memo
             result = f"YouTube Metadata:\n{metadata if metadata else '[No metadata available]'}"
             memoized_results["youtube_metadata"][url] = result
             yield result
-            
+
         elif function_name == "transcribe_audio":
             logger.info(f"Getting YouTube transcript")
             web_event = emit_event_func("INFO", f"<TASK>Processing Video, This will take a minute</TASK>")
@@ -195,10 +195,12 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         headers = {"Content-Type": "application/json",
                    "Authorization": f"Bearer {POLLINATIONS_TOKEN}"}
         
-        # Initialize RAG components
+        retrieval_system = get_retrieval_system()
         session_manager = SessionManager(max_sessions=100, ttl_minutes=30)
-        rag_engine = RAGEngine(session_manager, top_k_entities=15)
         session_id = session_manager.create_session(user_query)
+        
+        rag_engine = retrieval_system.get_rag_engine(session_id)
+        logger.info(f"[Pipeline] RAG engine initialized for session {session_id}")
                    
         memoized_results = {
             "timezone_info": {},
@@ -216,8 +218,13 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         collected_similar_images = []
         final_message_content = None
         
-        rag_context = rag_engine.build_rag_prompt_enhancement(session_id)
-        
+        # Build initial RAG context from session data
+        rag_context = session_manager.get_rag_context(
+            session_id,
+            refresh=RAG_CONTEXT_REFRESH,
+            query_embedding=None
+        )
+        logger.info(f"[Pipeline] Initial RAG context built: {len(rag_context)} chars")
         messages = [
             
             {

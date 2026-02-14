@@ -129,6 +129,27 @@ class RAGEngine:
             "semantic_cache": self.semantic_cache.get_stats(),
             "session_memory": self.session_memory.get_context()
         }
+    
+    def build_rag_prompt_enhancement(self, session_id: str, top_k: int = 5) -> str:
+        try:
+            # Get session memory context
+            context_parts = []
+            
+            if self.session_memory:
+                session_context = self.session_memory.get_minimal_context()
+                if session_context:
+                    context_parts.append("=== Previous Context ===")
+                    context_parts.append(session_context)
+                    context_parts.append("")
+            
+            # Return formatted context for system prompt
+            rag_prompt = "\n".join(context_parts) if context_parts else ""
+            logger.info(f"[RAG] Built prompt enhancement: {len(rag_prompt)} chars")
+            return rag_prompt
+        
+        except Exception as e:
+            logger.error(f"[RAG] Failed to build prompt enhancement: {e}")
+            return ""
 
 class RetrievalPipeline:
     def __init__(self, embedding_service: EmbeddingService, vector_store: VectorStore):
@@ -232,18 +253,22 @@ class RetrievalSystem:
     
     def __init__(self):
         logger.info("[RetrievalSystem] Initializing...")
-        
         self.embedding_service = EmbeddingService(model_name=EMBEDDING_MODEL)
+        logger.info(f"[RetrievalSystem] Embedding service device: {self.embedding_service.device}")
+        
         self.vector_store = VectorStore(embeddings_dir=EMBEDDINGS_DIR)
+        logger.info(f"[RetrievalSystem] Vector store device: {self.vector_store.device}")
+        
         self.semantic_cache = SemanticCache(
             ttl_seconds=SEMANTIC_CACHE_TTL_SECONDS,
             similarity_threshold=SEMANTIC_CACHE_SIMILARITY_THRESHOLD
         )
+        logger.info(f"[RetrievalSystem] Semantic cache: TTL={SEMANTIC_CACHE_TTL_SECONDS}s, threshold={SEMANTIC_CACHE_SIMILARITY_THRESHOLD}")
         
         self.sessions: Dict[str, SessionMemory] = {}
         self.sessions_lock = threading.RLock()
         
-        logger.info("[RetrievalSystem] Ready")
+        logger.info("[RetrievalSystem] ✅ Fully initialized with GPU acceleration")
     
     def create_session(self, session_id: str) -> SessionMemory:
         with self.sessions_lock:

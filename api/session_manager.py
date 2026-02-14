@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from loguru import logger
 import numpy as np
 import faiss
+import torch
 
 
 class SessionData:
@@ -28,7 +29,25 @@ class SessionData:
         self.errors: List[str] = []
         self.conversation_history: List[Dict] = []
         self.search_context: str = ""
-        self.faiss_index = faiss.IndexFlatL2(embedding_dim)
+        
+        # Initialize FAISS index with GPU acceleration if available
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        if self.device == "cuda":
+            try:
+                # Use GPU-accelerated FAISS with IndexFlatIP (inner product) for better performance
+                cpu_index = faiss.IndexFlatIP(embedding_dim)
+                self.faiss_index = faiss.index_cpu_to_gpu(
+                    faiss.StandardGpuResources(), 0, cpu_index
+                )
+                logger.info(f"[SessionData] {session_id}: FAISS index on GPU (IndexFlatIP)")
+            except Exception as e:
+                logger.warning(f"[SessionData] {session_id}: Failed to move FAISS to GPU, falling back to CPU: {e}")
+                self.faiss_index = faiss.IndexFlatL2(embedding_dim)
+                self.device = "cpu"
+        else:
+            self.faiss_index = faiss.IndexFlatL2(embedding_dim)
+            logger.info(f"[SessionData] {session_id}: FAISS index on CPU (IndexFlatL2)")
+        
         self.content_order: List[str] = []
         self.lock = threading.RLock()
     
