@@ -4,6 +4,7 @@ import asyncio
 import logging
 import sys
 import uuid
+import os
 from datetime import datetime
 import re
 import subprocess
@@ -75,10 +76,13 @@ def start_model_server():
         # Start model_server.py in a new process
         
         model_server_path = "model_server.py"
+        # CRITICAL FIX #1: Set cwd to api directory so model_server.py can be found
+        cwd = os.path.dirname(os.path.abspath(__file__))
         
         logger.info(f"[APP] Starting model server from {model_server_path}...")
         model_server_process = subprocess.Popen(
             [sys.executable, model_server_path],
+            cwd=cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
