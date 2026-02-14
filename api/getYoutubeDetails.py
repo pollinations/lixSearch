@@ -51,7 +51,9 @@ async def youtubeMetadata(url: str):
         logger.error("[YoutubeDetails] IPC service not available for YouTube metadata")
         return None
     try:
-        metadata = search_service.get_youtube_metadata(url)
+        # CRITICAL FIX #7: Use asyncio.to_thread to avoid blocking event loop
+        # The IPC call is synchronous, so we run it in a thread pool executor
+        metadata = await asyncio.to_thread(search_service.get_youtube_metadata, url)
         return metadata
     except Exception as e:
         logger.error(f"[YoutubeDetails] Error fetching YouTube metadata: {e}")

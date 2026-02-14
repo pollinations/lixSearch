@@ -19,7 +19,10 @@ def get_core_service():
             class ModelManager(BaseManager):
                 pass
             
-            ModelManager.register("CoreEmbeddingService")
+            # CRITICAL FIX #6: Register with callable to match server-side registration
+            # The callable is required for BaseManager to create proper proxies on the client side
+            # We use object as a placeholder since this is a remote client connection
+            ModelManager.register("CoreEmbeddingService", callable=object)
             manager = ModelManager(address=("localhost", 5010), authkey=b"ipcService")
             manager.connect()
             _core_service = manager.CoreEmbeddingService()

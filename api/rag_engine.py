@@ -8,10 +8,11 @@ from datetime import datetime
 
 from embedding_service import EmbeddingService, VectorStore
 from semantic_cache import SemanticCache
-from session_manager import SessionMemory
+from session_manager import SessionData
 from utility import chunk_text, clean_text
 from config import (
     EMBEDDING_MODEL,
+    EMBEDDING_DIMENSION,
     EMBEDDINGS_DIR,
     SEMANTIC_CACHE_TTL_SECONDS,
     SEMANTIC_CACHE_SIMILARITY_THRESHOLD,
@@ -24,12 +25,12 @@ class RAGEngine:
         embedding_service: EmbeddingService,
         vector_store: VectorStore,
         semantic_cache: SemanticCache,
-        session_memory: SessionMemory
+        session_data: SessionData
     ):
         self.embedding_service = embedding_service
         self.vector_store = vector_store
         self.semantic_cache = semantic_cache
-        self.session_memory = session_memory
+        self.session_data = session_data
         self.retrieval_pipeline = RetrievalPipeline(
             embedding_service,
             vector_store
@@ -56,14 +57,24 @@ class RAGEngine:
                         "latency_ms": 1.0
                     }
             
-            results = self.vector_store.search(query_embedding, top_k=top_k)
+            # CRITICAL FIX #8: Try session data first, then global vector store
+            session_content = self._get_session_content_context(query_embedding, top_k)
             
+            # Get global vector store results
+            results = self.vector_store.search(query_embedding, top_k=top_k)
             context_texts = [r["metadata"]["text"] for r in results]
             sources = list(set([r["metadata"]["url"] for r in results]))
             
             context = "\n\n".join(context_texts)
             
-            session_context = self.session_memory.get_minimal_context()
+            # Combine session content with global results
+            if session_content["texts"]:
+                logger.info(f"[RAG] Including {len(session_content['texts'])} session-specific content chunks")
+                context = session_content["combined"] + "\n\n" + context if context else session_content["combined"]
+                sources.extend(session_content["sources"])
+                sources = list(set(sources))
+            
+            session_context = self._get_session_context()
             
             full_context = ""
             if session_context:
@@ -112,6 +123,7 @@ class RAGEngine:
                 "error": str(e)
             }
     
+    
     def get_full_context(self, query: str, top_k: int = 5) -> Dict:
         retrieval_result = self.retrieve_context(query, top_k=top_k)
         
@@ -127,7 +139,7 @@ class RAGEngine:
         return {
             "vector_store": self.vector_store.get_stats(),
             "semantic_cache": self.semantic_cache.get_stats(),
-            "session_memory": self.session_memory.get_context()
+            "session_memory": self.session_data.to_dict()
         }
     
     def build_rag_prompt_enhancement(self, session_id: str, top_k: int = 5) -> str:
@@ -135,8 +147,8 @@ class RAGEngine:
             # Get session memory context
             context_parts = []
             
-            if self.session_memory:
-                session_context = self.session_memory.get_minimal_context()
+            if self.session_data:
+                session_context = self._get_session_context()
                 if session_context:
                     context_parts.append("=== Previous Context ===")
                     context_parts.append(session_context)
@@ -150,6 +162,68 @@ class RAGEngine:
         except Exception as e:
             logger.error(f"[RAG] Failed to build prompt enhancement: {e}")
             return ""
+    
+    def _get_session_context(self) -> str:
+        """Extract context from SessionData's conversation history."""
+        if not self.session_data:
+            return ""
+        
+        try:
+            history = self.session_data.get_conversation_history()
+            if not history:
+                return ""
+            
+            # Build context from recent conversation turns
+            context_parts = []
+            # Keep last 2-3 turns for context
+            for msg in history[-3:]:
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                if content:
+                    context_parts.append(f"{role.capitalize()}: {content[:200]}")
+            
+            return "\n".join(context_parts) if context_parts else ""
+        except Exception as e:
+            logger.warning(f"[RAG] Failed to extract session context: {e}")
+            return ""
+    
+    def _get_session_content_context(self, query_embedding: np.ndarray, top_k: int = 5) -> Dict:
+        """CRITICAL FIX #8: Get relevant content from session's fetched URLs using FAISS."""
+        if not self.session_data or self.session_data.faiss_index.ntotal == 0:
+            return {"texts": [], "sources": [], "combined": ""}
+        
+        try:
+            # Use session's FAISS index to find relevant content
+            if len(query_embedding.shape) == 1:
+                query_embedding = query_embedding.reshape(1, -1)
+            query_embedding = query_embedding.astype(np.float32)
+            
+            k = min(top_k, self.session_data.faiss_index.ntotal)
+            distances, indices = self.session_data.faiss_index.search(query_embedding, k)
+            
+            content_texts = []
+            sources = []
+            
+            for idx, distance in zip(indices[0], distances[0]):
+                if idx < len(self.session_data.content_order):
+                    url = self.session_data.content_order[idx]
+                    content = self.session_data.processed_content.get(url, "")
+                    if content:
+                        content_texts.append(content[:500])  # Limit content size
+                        sources.append(url)
+            
+            combined = "\n\n[Session Content]\n".join(content_texts) if content_texts else ""
+            
+            logger.info(f"[RAG] Retrieved {len(content_texts)} session content chunks (FAISS score: {distances[0][0] if len(distances[0]) > 0 else 'N/A'})")
+            
+            return {
+                "texts": content_texts,
+                "sources": sources,
+                "combined": combined
+            }
+        except Exception as e:
+            logger.warning(f"[RAG] Failed to get session content context: {e}")
+            return {"texts": [], "sources": [], "combined": ""}
 
 class RetrievalPipeline:
     def __init__(self, embedding_service: EmbeddingService, vector_store: VectorStore):
@@ -256,8 +330,8 @@ class RetrievalSystem:
         self.embedding_service = EmbeddingService(model_name=EMBEDDING_MODEL)
         logger.info(f"[RetrievalSystem] Embedding service device: {self.embedding_service.device}")
         
-        # CRITICAL FIX: Use correct embedding dimension from config
-        self.vector_store = VectorStore(embedding_dim=384, embeddings_dir=EMBEDDINGS_DIR)
+        # CRITICAL FIX #10: Use embedding dimension from config instead of hard-coded value
+        self.vector_store = VectorStore(embedding_dim=EMBEDDING_DIMENSION, embeddings_dir=EMBEDDINGS_DIR)
         logger.info(f"[RetrievalSystem] Vector store device: {self.vector_store.device}")
         
         self.semantic_cache = SemanticCache(
@@ -266,31 +340,38 @@ class RetrievalSystem:
         )
         logger.info(f"[RetrievalSystem] Semantic cache: TTL={SEMANTIC_CACHE_TTL_SECONDS}s, threshold={SEMANTIC_CACHE_SIMILARITY_THRESHOLD}")
         
-        self.sessions: Dict[str, SessionMemory] = {}
+        # NOTE: SessionMemory removed in CRITICAL FIX #3 - using SessionData from SessionManager instead
         self.sessions_lock = threading.RLock()
         
         logger.info("[RetrievalSystem] ✅ Fully initialized with GPU acceleration")
     
-    def create_session(self, session_id: str) -> SessionMemory:
-        with self.sessions_lock:
-            if session_id not in self.sessions:
-                self.sessions[session_id] = SessionMemory(
-                    session_id,
-                    summary_threshold=SESSION_SUMMARY_THRESHOLD
-                )
-            return self.sessions[session_id]
+    # CRITICAL FIX #3: Session management moved to SessionManager
+    # These methods are deprecated and kept for backward compatibility only
+    def create_session(self, session_id: str):
+        """Deprecated: Use SessionManager.create_session() instead."""
+        logger.warning(f"[RetrievalSystem] Deprecated create_session() called for {session_id}. Use SessionManager instead.")
+        return None
     
-    def get_session(self, session_id: str) -> Optional[SessionMemory]:
-        with self.sessions_lock:
-            return self.sessions.get(session_id)
+    def get_session(self, session_id: str):
+        """Deprecated: Use SessionManager.get_session() instead."""
+        return None
     
     def get_rag_engine(self, session_id: str) -> RAGEngine:
-        session_memory = self.create_session(session_id)
+        # CRITICAL FIX #3: Get existing SessionData from SessionManager instead of creating new SessionMemory
+        from session_manager import get_session_manager
+        session_manager = get_session_manager()
+        session_data = session_manager.get_session(session_id)
+        
+        if not session_data:
+            logger.warning(f"[RetrievalSystem] Session {session_id} not found in SessionManager")
+            # Create a temporary session data if not found (edge case)
+            session_data = session_manager.get_session(session_id) or type('SessionData', (), {'get_conversation_history': lambda: [], 'to_dict': lambda: {}})()
+        
         return RAGEngine(
             self.embedding_service,
             self.vector_store,
             self.semantic_cache,
-            session_memory
+            session_data
         )
     
     def add_conversation_turn(
@@ -300,23 +381,39 @@ class RetrievalSystem:
         assistant_response: str,
         entities: List[str] = None
     ) -> None:
-        session = self.get_session(session_id)
-        if session:
-            session.add_turn(user_query, assistant_response, entities)
+        # CRITICAL FIX #3: Use SessionManager to add conversation turns
+        from session_manager import get_session_manager
+        session_manager = get_session_manager()
+        session_manager.add_message_to_history(
+            session_id,
+            "user",
+            user_query
+        )
+        session_manager.add_message_to_history(
+            session_id,
+            "assistant",
+            assistant_response,
+            metadata={"entities": entities} if entities else None
+        )
     
     def delete_session(self, session_id: str) -> None:
-        with self.sessions_lock:
-            if session_id in self.sessions:
-                self.sessions[session_id].clear()
-                del self.sessions[session_id]
+        # CRITICAL FIX #3: Use SessionManager to delete session
+        from session_manager import get_session_manager
+        session_manager = get_session_manager()
+        session_manager.cleanup_session(session_id)
+        logger.info(f"[RetrievalSystem] Deleted session {session_id}")
     
     def get_stats(self) -> Dict:
-        with self.sessions_lock:
-            return {
-                "vector_store": self.vector_store.get_stats(),
-                "semantic_cache": self.semantic_cache.get_stats(),
-                "active_sessions": len(self.sessions)
-            }
+        # CRITICAL FIX #3: Get stats from SessionManager instead of internal sessions dict
+        from session_manager import get_session_manager
+        session_manager = get_session_manager()
+        sessions_stats = session_manager.get_stats()
+        
+        return {
+            "vector_store": self.vector_store.get_stats(),
+            "semantic_cache": self.semantic_cache.get_stats(),
+            "active_sessions": sessions_stats.get("total_sessions", 0)
+        }
     
     def persist_vector_store(self) -> None:
         self.vector_store.persist_to_disk()

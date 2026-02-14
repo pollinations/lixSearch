@@ -6,10 +6,13 @@ from loguru import logger
 import numpy as np
 import faiss
 import torch
+from config import EMBEDDING_DIMENSION
 
 
 class SessionData:
-    def __init__(self, session_id: str, query: str, embedding_dim: int = 384):
+    def __init__(self, session_id: str, query: str, embedding_dim: int = None):
+        if embedding_dim is None:
+            embedding_dim = EMBEDDING_DIMENSION
         self.session_id = session_id
         self.query = query
         self.embedding_dim = embedding_dim
@@ -179,7 +182,9 @@ class SessionData:
         self.last_activity = datetime.now()
 
 class SessionManager:
-    def __init__(self, max_sessions: int = 1000, ttl_minutes: int = 30, embedding_dim: int = 384):
+    def __init__(self, max_sessions: int = 1000, ttl_minutes: int = 30, embedding_dim: int = None):
+        if embedding_dim is None:
+            embedding_dim = EMBEDDING_DIMENSION
         self.sessions: Dict[str, SessionData] = {}
         self.max_sessions = max_sessions
         self.ttl = timedelta(minutes=ttl_minutes)

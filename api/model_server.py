@@ -863,11 +863,9 @@ if __name__ == "__main__":
         pass
     
     ModelManager.register("CoreEmbeddingService", CoreEmbeddingService)
-    ModelManager.register("SessionManager", SessionManager)
     ModelManager.register("accessSearchAgents", accessSearchAgents)
     
     core_service = CoreEmbeddingService()
-    session_manager = SessionManager()
     search_agents = accessSearchAgents()
     
     manager = ModelManager(address=("localhost", 5010), authkey=b"ipcService")

@@ -15,9 +15,9 @@ MODEL = LLM_MODEL
 
 class ChatEngine:
     
-    def __init__(self, session_manager, rag_engine):
+    def __init__(self, session_manager, retrieval_system):
         self.session_manager = session_manager
-        self.rag_engine = rag_engine
+        self.retrieval_system = retrieval_system
         logger.info("[ChatEngine] Initialized")
     
     async def generate_contextual_response(
@@ -70,11 +70,12 @@ class ChatEngine:
             
             assistant_response = data["choices"][0]["message"]["content"]
             
+            rag_engine = self.retrieval_system.get_rag_engine(session_id)
             self.session_manager.add_message_to_history(
                 session_id,
                 "assistant",
                 assistant_response,
-                {"sources": self.rag_engine.get_summary_stats(session_id)}
+                {"sources": rag_engine.get_stats()}
             )
             
             yield self._format_sse("info", "<TASK>SUCCESS</TASK>")
@@ -144,11 +145,12 @@ class ChatEngine:
         
         if session_id:
             try:
-                rag_context = self.rag_engine.build_rag_prompt_enhancement(session_id)
+                rag_engine = self.retrieval_system.get_rag_engine(session_id)
+                rag_context = rag_engine.build_rag_prompt_enhancement(session_id)
                 if rag_context:
                     system_content += f"\n\n{rag_context}"
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"[ChatEngine] Could not build RAG context for session {session_id}: {e}")
         
         messages = [{"role": "system", "content": system_content}]
         
@@ -170,9 +172,9 @@ class ChatEngine:
 _chat_engine: Optional[ChatEngine] = None
 
 
-def initialize_chat_engine(session_manager, rag_engine) -> ChatEngine:
+def initialize_chat_engine(session_manager, retrieval_system) -> ChatEngine:
     global _chat_engine
-    _chat_engine = ChatEngine(session_manager, rag_engine)
+    _chat_engine = ChatEngine(session_manager, retrieval_system)
     logger.info("[ChatEngine] Global chat engine initialized")
     return _chat_engine
 

@@ -9,6 +9,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
+from config import EMBEDDING_DIMENSION
 
 
 class EmbeddingService:
@@ -50,7 +51,9 @@ class EmbeddingService:
             return embedding
 
 class VectorStore:
-    def __init__(self, embedding_dim: int = 384, embeddings_dir: str = "./embeddings"):
+    def __init__(self, embedding_dim: int = None, embeddings_dir: str = "./embeddings"):
+        if embedding_dim is None:
+            embedding_dim = EMBEDDING_DIMENSION
         self.embedding_dim = embedding_dim
         self.embeddings_dir = embeddings_dir
         self.device = "cuda" if torch.cuda.is_available() else "cpu"

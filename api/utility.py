@@ -17,20 +17,17 @@ class modelManager(BaseManager):
     pass
 
 modelManager.register("accessSearchAgents")
-modelManager.register("ipcService")
 
 search_service = None
-embedModelService = None
 
 def _init_ipc_manager(max_retries: int = 3, retry_delay: float = 1.0):
-    global search_service, embedModelService
+    global search_service
     
     for attempt in range(max_retries):
         try:
             manager = modelManager(address=("localhost", 5010), authkey=b"ipcService")
             manager.connect()
             search_service = manager.accessSearchAgents()
-            embedModelService = manager.ipcService()
             logger.info("[Utility] IPC connection established with model_server")
             return True
         except Exception as e:
@@ -143,17 +140,6 @@ def fetch_url_content_parallel(queries, urls, max_workers=10, request_id: str = 
 
     combined_text = "\n".join(results)
     logger.info(f"[Utility] Fetched all URLs in parallel, total: {len(combined_text)} chars")
-    
-    if embedModelService:
-        try:
-            information = embedModelService.extract_relevant(combined_text, queries)
-            relevant_parts = []
-            for item in information:
-                if isinstance(item, str):
-                    relevant_parts.append(item)
-            combined_text += "\n\nRelevant extracts: " + " ".join(relevant_parts)
-        except Exception as e:
-            logger.warning(f"[Utility] Could not extract relevant info: {e}")
     
     return combined_text
 
