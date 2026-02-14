@@ -278,7 +278,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             "context_sufficient": False  # Early exit marker
         }
         
-        max_iterations = 2  # OPTIMIZATION: Reduced from 5 to 2 - most queries resolve in 1-2 iterations
+        max_iterations = 2 
         current_iteration = 0
         collected_sources = []
         collected_images_from_web = []
@@ -286,7 +286,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         final_message_content = None
         tool_call_count = 0  # Track cumulative tools executed
         
-        # CRITICAL FIX #4: Simple RAG context - retrieve from vector store if available
         rag_context = ""
         if core_service:
             try:
@@ -742,7 +741,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 if __name__ == "__main__":
     import asyncio
     async def main():
-        user_query = "What's the time in kolkata now?"
+        user_query = "hii"
         user_image = None
         event_id = None
         start_time = asyncio.get_event_loop().time()

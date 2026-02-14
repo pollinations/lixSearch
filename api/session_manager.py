@@ -11,10 +11,7 @@ import warnings
 from pathlib import Path
 from config import EMBEDDING_DIMENSION
 
-# Suppress NVML warnings (expected in non-GPU environments)
 warnings.filterwarnings('ignore', message='Can\'t initialize NVML')
-
-# Disable ChromaDB telemetry to prevent telemetry event errors
 os.environ['CHROMA_TELEMETRY_DISABLED'] = '1'
 
 
