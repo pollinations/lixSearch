@@ -6,10 +6,21 @@ from typing import List, Union, Dict, Tuple, Optional
 import threading
 import json
 import os
+import warnings
+import logging
 from datetime import datetime
 from pathlib import Path
 import chromadb
 from config import EMBEDDING_DIMENSION
+
+# Suppress NVML warnings (expected in non-GPU environments)
+warnings.filterwarnings('ignore', message='Can\'t initialize NVML')
+
+# Disable ChromaDB telemetry to prevent telemetry event errors
+os.environ['CHROMA_TELEMETRY_DISABLED'] = '1'
+
+# Suppress ChromaDB telemetry warnings
+logging.getLogger('chromadb').setLevel(logging.ERROR)
 
 
 class EmbeddingService:
@@ -61,13 +72,19 @@ class VectorStore:
         Path(embeddings_dir).mkdir(parents=True, exist_ok=True)
         
         try:
-            # Initialize ChromaDB with persistent storage using new API
-            self.client = chromadb.PersistentClient(path=embeddings_dir)
+            # Initialize ChromaDB with persistent storage and telemetry disabled
+            chroma_settings = chromadb.config.Settings(
+                anonymized_telemetry=False
+            )
+            self.client = chromadb.PersistentClient(
+                path=embeddings_dir,
+                settings=chroma_settings
+            )
             self.collection = self.client.get_or_create_collection(
                 name="document_embeddings",
                 metadata={"hnsw:space": "cosine"}
             )
-            logger.info(f"[VectorStore] ChromaDB collection initialized on {self.device}")
+            logger.info(f"[VectorStore] ChromaDB collection initialized successfully on {self.device}")
         except Exception as e:
             logger.error(f"[VectorStore] Failed to initialize ChromaDB: {e}")
             raise

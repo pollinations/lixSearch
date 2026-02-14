@@ -19,4 +19,5 @@ node_modules/
 cached_audio/
 nltk_data/
 model_cache/
+session_embeddings/
 embeddings/

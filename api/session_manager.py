@@ -7,8 +7,15 @@ import numpy as np
 import chromadb
 import torch
 import os
+import warnings
 from pathlib import Path
 from config import EMBEDDING_DIMENSION
+
+# Suppress NVML warnings (expected in non-GPU environments)
+warnings.filterwarnings('ignore', message='Can\'t initialize NVML')
+
+# Disable ChromaDB telemetry to prevent telemetry event errors
+os.environ['CHROMA_TELEMETRY_DISABLED'] = '1'
 
 
 class SessionData:
@@ -41,12 +48,18 @@ class SessionData:
             session_dir = os.path.join("./session_embeddings", session_id)
             Path(session_dir).mkdir(parents=True, exist_ok=True)
             
-            self.chroma_client = chromadb.PersistentClient(path=session_dir)
+            chroma_settings = chromadb.config.Settings(
+                anonymized_telemetry=False
+            )
+            self.chroma_client = chromadb.PersistentClient(
+                path=session_dir,
+                settings=chroma_settings
+            )
             self.chroma_collection = self.chroma_client.get_or_create_collection(
                 name=f"session_{session_id}",
                 metadata={"hnsw:space": "cosine"}
             )
-            logger.info(f"[SessionData] {session_id}: ChromaDB collection created")
+            logger.info(f"[SessionData] {session_id}: ChromaDB collection created successfully")
         except Exception as e:
             logger.warning(f"[SessionData] {session_id}: Failed to create ChromaDB collection: {e}")
             self.chroma_collection = None

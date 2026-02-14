@@ -1,3 +1,16 @@
+import warnings
+import os
+import logging
+
+# Suppress NVML warnings (expected in non-GPU environments)
+warnings.filterwarnings('ignore', message='Can\'t initialize NVML')
+
+# Disable ChromaDB telemetry to prevent telemetry event errors
+os.environ['CHROMA_TELEMETRY_DISABLED'] = '1'
+
+# Suppress ChromaDB telemetry event warnings at logging level
+logging.getLogger('chromadb').setLevel(logging.ERROR)
+
 from multiprocessing.managers import BaseManager
 import torch
 import threading
@@ -11,7 +24,6 @@ import asyncio
 import json
 import whisper
 import random
-import os
 import shutil
 import stat
 import numpy as np

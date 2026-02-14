@@ -321,12 +321,36 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 if event_id:
                     yield format_sse("error", "<TASK>Request Timeout - Retrying</TASK>")
                 break
+            except requests.exceptions.HTTPError as http_err:
+                # Print detailed HTTP error information
+                print(f"\n{'='*80}")
+                print(f"[HTTP ERROR] Status Code: {http_err.response.status_code}")
+                print(f"[HTTP ERROR] URL: {http_err.response.url}")
+                print(f"[HTTP ERROR] Headers: {http_err.response.headers}")
+                print(f"[HTTP ERROR] Response Text:\n{http_err.response.text}")
+                print(f"{'='*80}\n")
+                logger.error(f"Pollinations API HTTP error at iteration {current_iteration}: {http_err}")
+                logger.error(f"Response content: {http_err.response.text}")
+                if event_id:
+                    yield format_sse("error", "<TASK>API Error - Invalid Request</TASK>")
+                break
             except requests.exceptions.RequestException as e:
+                print(f"\n{'='*80}")
+                print(f"[REQUEST ERROR] Type: {type(e).__name__}")
+                print(f"[REQUEST ERROR] Message: {str(e)}")
+                if hasattr(e, 'response') and e.response is not None:
+                    print(f"[REQUEST ERROR] Status Code: {e.response.status_code}")
+                    print(f"[REQUEST ERROR] Response: {e.response.text}")
+                print(f"{'='*80}\n")
                 logger.error(f"Pollinations API request failed at iteration {current_iteration}: {e}")
                 if event_id:
                     yield format_sse("error", "<TASK>Connection Error</TASK>")
                 break
             except Exception as e:
+                print(f"\n{'='*80}")
+                print(f"[UNEXPECTED ERROR] Type: {type(e).__name__}")
+                print(f"[UNEXPECTED ERROR] Message: {str(e)}")
+                print(f"{'='*80}\n")
                 logger.error(f"Unexpected API error at iteration {current_iteration}: {e}", exc_info=True)
                 if event_id:
                     yield format_sse("error", "<TASK>System Error</TASK>")
@@ -427,9 +451,28 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 final_message_content = response_data["choices"][0]["message"].get("content")
             except asyncio.TimeoutError:
                 logger.error("Synthesis step timed out")
+                print(f"[SYNTHESIS TIMEOUT] Request timed out after 30s")
+            except requests.exceptions.HTTPError as http_err:
+                print(f"\n{'='*80}")
+                print(f"[SYNTHESIS HTTP ERROR] Status Code: {http_err.response.status_code}")
+                print(f"[SYNTHESIS HTTP ERROR] URL: {http_err.response.url}")
+                print(f"[SYNTHESIS HTTP ERROR] Response Text:\n{http_err.response.text}")
+                print(f"{'='*80}\n")
+                logger.error(f"Synthesis API HTTP error: {http_err}")
             except requests.exceptions.RequestException as e:
+                print(f"\n{'='*80}")
+                print(f"[SYNTHESIS REQUEST ERROR] Type: {type(e).__name__}")
+                print(f"[SYNTHESIS REQUEST ERROR] Message: {str(e)}")
+                if hasattr(e, 'response') and e.response is not None:
+                    print(f"[SYNTHESIS REQUEST ERROR] Status Code: {e.response.status_code}")
+                    print(f"[SYNTHESIS REQUEST ERROR] Response: {e.response.text}")
+                print(f"{'='*80}\n")
                 logger.error(f"Synthesis API call failed: {e}")
             except Exception as e:
+                print(f"\n{'='*80}")
+                print(f"[SYNTHESIS ERROR] Type: {type(e).__name__}")
+                print(f"[SYNTHESIS ERROR] Message: {str(e)}")
+                print(f"{'='*80}\n")
                 logger.error(f"Synthesis step failed: {e}")
 
         if final_message_content:
@@ -479,7 +522,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 if __name__ == "__main__":
     import asyncio
     async def main():
-        user_query = "summarize me the content here in details https://www.geeksforgeeks.org/dsa/greedy-algorithms/"
+        user_query = "what's the weather of kolkata now?"
         user_image = None
         event_id = None
         start_time = asyncio.get_event_loop().time()
