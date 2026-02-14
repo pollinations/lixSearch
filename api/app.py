@@ -8,8 +8,6 @@ from datetime import datetime
 import re
 import subprocess
 import time
-import os
-
 from searchPipeline import run_elixposearch_pipeline
 from session_manager import get_session_manager
 from rag_engine import get_retrieval_system
@@ -75,13 +73,12 @@ def start_model_server():
             return True
         
         # Start model_server.py in a new process
-        cwd = os.path.dirname(os.path.abspath(__file__))
-        model_server_path = os.path.join(cwd, "model_server.py")
+        
+        model_server_path = "model_server.py"
         
         logger.info(f"[APP] Starting model server from {model_server_path}...")
         model_server_process = subprocess.Popen(
             [sys.executable, model_server_path],
-            cwd=cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
