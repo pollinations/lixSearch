@@ -413,7 +413,18 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             tool_outputs = []
             print(tool_calls)
             logger.info(f"Processing {len(tool_calls)} tool call(s):")
-            for idx, tool_call in enumerate(tool_calls):
+            
+            # Separate fetch_full_text calls for parallel execution
+            fetch_calls = []
+            other_calls = []
+            for tool_call in tool_calls:
+                if tool_call["function"]["name"] == "fetch_full_text":
+                    fetch_calls.append(tool_call)
+                else:
+                    other_calls.append(tool_call)
+            
+            # Execute other tools first
+            for idx, tool_call in enumerate(other_calls):
                 function_name = tool_call["function"]["name"]
                 function_args = json.loads(tool_call["function"]["arguments"])
                 print(f"\n[TOOL CALL #{idx+1}]")
@@ -448,14 +459,79 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 elif function_name == "web_search":
                     if "current_search_urls" in memoized_results:
                         collected_sources.extend(memoized_results["current_search_urls"])
-                elif function_name == "fetch_full_text":
-                    collected_sources.append(function_args.get("url"))
                 tool_outputs.append({
                     "role": "tool",
                     "tool_call_id": tool_call["id"],
                     "name": function_name,
                     "content": str(tool_result) if tool_result else "No result"
                 })
+            
+            if fetch_calls:
+                logger.info(f"Executing {len(fetch_calls)} fetch_full_text calls in PARALLEL")
+                if event_id:
+                    yield format_sse("INFO", f"<TASK>Fetching {len(fetch_calls)} URLs in parallel</TASK>")
+                
+                async def execute_fetch(idx, tool_call):
+                    function_name = tool_call["function"]["name"]
+                    function_args = json.loads(tool_call["function"]["arguments"])
+                    print(f"\n[PARALLEL FETCH #{idx+1}]")
+                    print(f"  URL: {function_args.get('url', 'N/A')[:60]}...")
+                    logger.info(f"[PARALLEL] Fetching URL #{idx+1}: {function_args.get('url', 'N/A')[:60]}")
+                    
+                    tool_result_gen = optimized_tool_execution(function_name, function_args, memoized_results, emit_event)
+                    tool_result = None
+                    async for result in tool_result_gen:
+                        if not isinstance(result, str) or not result.startswith("event:"):
+                            tool_result = result
+                    
+                    return {
+                        "tool_call_id": tool_call["id"],
+                        "function_name": function_name,
+                        "url": function_args.get("url"),
+                        "result": tool_result
+                    }
+                
+
+                fetch_results = await asyncio.gather(
+                    *[execute_fetch(idx, tc) for idx, tc in enumerate(fetch_calls)],
+                    return_exceptions=True
+                )
+                
+                ingest_tasks = []
+                for fetch_result in fetch_results:
+                    if isinstance(fetch_result, Exception):
+                        logger.error(f"Fetch failed: {fetch_result}")
+                        continue
+                    
+                    url = fetch_result["url"]
+                    tool_result = fetch_result["result"]
+                    
+                    # Add to sources
+                    collected_sources.append(url)
+                    
+                    # Queue ingestion to vector store
+                    async def ingest_url_async(url_to_ingest):
+                        try:
+                            model_server = get_model_server()
+                            core_service = model_server.CoreEmbeddingService()
+                            ingest_result = await asyncio.to_thread(core_service.ingest_url, url_to_ingest)
+                            chunks = ingest_result.get('chunks_ingested', 0)
+                            logger.info(f"[PARALLEL INGEST] Ingested {chunks} chunks from {url_to_ingest}")
+                        except Exception as e:
+                            logger.warning(f"[PARALLEL INGEST] Failed to ingest {url_to_ingest}: {e}")
+                    
+                    ingest_tasks.append(ingest_url_async(url))
+                    
+                    tool_outputs.append({
+                        "role": "tool",
+                        "tool_call_id": fetch_result["tool_call_id"],
+                        "name": "fetch_full_text",
+                        "content": str(tool_result) if tool_result else "No result"
+                    })
+                
+                # Run all ingestion tasks in parallel
+                if ingest_tasks:
+                    await asyncio.gather(*ingest_tasks, return_exceptions=True)
             messages.extend(tool_outputs)
             logger.info(f"Completed iteration {current_iteration}. Messages: {len(messages)}")
             if event_id:
@@ -562,7 +638,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 if __name__ == "__main__":
     import asyncio
     async def main():
-        user_query = "what's the weather of kolkata now?"
+        user_query = "Give me an insight on github repository called elixpo_chapter"
         user_image = None
         event_id = None
         start_time = asyncio.get_event_loop().time()

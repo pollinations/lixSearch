@@ -77,7 +77,7 @@ async def warmup_playwright():
         print(f"[WARN] Playwright warmup failed: {e}")
         return 0.0
 
-async def playwright_web_search(query: str, max_links: int = 20, images: bool = False) -> Tuple[List[str], float]:
+async def playwright_web_search(query: str, max_links: int = 5, images: bool = False) -> Tuple[List[str], float]:
     search_start = time.perf_counter()
     results = []
     

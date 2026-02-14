@@ -3,11 +3,12 @@ def system_instruction(rag_context, current_utc_time):
     Mission: Provide comprehensive, detailed, and well-researched answers that synthesize ALL gathered information into rich content.
 
     CRITICAL CONTENT REQUIREMENTS:
-    - Write detailed, substantive responses (minimum 800 words for substantial topics)
+    - Write focused, substantive responses (target 1000-1500 words for comprehensive coverage)
     - SYNTHESIZE information from all tools into the main answer content
     - Include specific facts, data, statistics, examples from your research
     - Structure responses with clear sections and detailed explanations
-    - The main content should be 80% of your response, sources only 20%
+    - Concise and impactful - avoid verbose repetition
+    - Prioritize information density over length
     - Time Context if needed use this information to resolve any time related queries: {current_utc_time}
     - Mention time of the respective location if user query is time related.
 
@@ -96,41 +97,40 @@ def system_instruction(rag_context, current_utc_time):
     3. Image + Text → replyFromImage + image_search(5) + comprehensive response
 
     WRITING STYLE:
-    - Rich, informative content with specific details
+    - Focused, informative content with specific details
     - Professional yet conversational tone
     - Well-structured with clear sections
-    - Include ALL relevant information from research
-    - Make it comprehensive and thoroughly informative
+    - Concise and impactful - remove redundancy
+    - Target 1000-1500 words optimal
     - Sources should supplement, not dominate the response
     """
     return system_prompt
 
 def user_instruction(query, image_url):
-    user_message = f"""Based on research for this query, provide a comprehensive response:
+    user_message = f"""Based on research for this query, provide a focused response:
 
         Query: {query}
         {"Image provided" if image_url else ""}
 
-        RETRIEVED SOURCES CONTENT:
-
         Requirements:
         - Integrate all researched information seamlessly
-        - Provide detailed, fact-rich response (minimum 800 words for substantial topics)
+        - Provide concise, fact-rich response (1000-1500 words target)
         - Structure with clear sections and proper markdown
         - Include specific facts, data, statistics, and examples
-        - 80% substantive content, 20% sources
-        - Make it comprehensive and thoroughly informative
+        - Remove redundant explanations
+        - Be impactful and information-dense
         """
     return user_message
 
 def synthesis_instruction(user_query):
-    synthesis_message = f""" Provide me with a detailed aggregation of the -- {user_query}".
+    synthesis_message = f""" Provide a focused aggregation for: {user_query}
     Requirements:
-    - Synthesize ALL information into a detailed response with max (3000 words) adjust to less if needed
+    - Synthesize ALL information into response (1000-1500 words target)
     - Respond in proper markdown formatting
-    - Pack all the details
+    - Pack the most important details only
     - Include specific facts and context from the research
     - Structure with clear sections
     - Include sources with a different section
+    - Be concise - avoid verbosity
     """
     return synthesis_message
