@@ -15,47 +15,6 @@ from multiprocessing.managers import BaseManager
 __all__ = ['fetch_full_text', 'playwright_web_search', 'warmup_playwright', 'ingest_url_to_vector_store', 'retrieve_from_vector_store']
 
 
-
-def _validate_url_for_fetch(url: str) -> bool:
-    try:
-        parsed = urlparse(url)
-        
-        if not parsed.scheme or parsed.scheme not in ['http', 'https']:
-            logger.warning(f"[Fetch] Invalid URL scheme: {parsed.scheme}")
-            return False
-        
-        if not parsed.netloc:
-            logger.warning(f"[Fetch] No network location in URL")
-            return False
-        
-        hostname = parsed.hostname
-        if not hostname:
-            logger.warning(f"[Fetch] No hostname in URL")
-            return False
-        
-        try:
-            ip = ipaddress.ip_address(hostname)
-            if ip.is_private or ip.is_loopback or ip.is_link_local:
-                logger.warning(f"[Fetch] URL targets private/loopback IP: {hostname}")
-                return False
-        except ValueError:
-            pass
-        
-        if hostname in ['localhost', '127.0.0.1', '0.0.0.0']:
-            logger.warning(f"[Fetch] URL targets localhost: {hostname}")
-            return False
-        
-        port = parsed.port
-        if port and port in [22, 23, 25, 135, 139, 445, 1433, 3306, 5432, 5010]:
-            logger.warning(f"[Fetch] URL targets restricted port: {port}")
-            return False
-        
-        return True
-    except Exception as e:
-        logger.error(f"[Fetch] URL validation error: {e}")
-        return False
-
-
 def fetch_full_text(
     url,
     total_word_count_limit=MAX_TOTAL_SCRAPE_WORD_COUNT,

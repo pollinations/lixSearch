@@ -2,6 +2,9 @@ import random
 import time
 import asyncio
 from playwright.async_api import async_playwright
+from loguru import logger
+from urllib.parse import urlparse
+import ipaddress
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
@@ -66,4 +69,44 @@ async def warmup_playwright():
     except Exception as e:
         print(f"[WARN] Playwright warmup failed: {e}")
         return 0.0
+
+
+def validate_url_for_fetch(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+        
+        if not parsed.scheme or parsed.scheme not in ['http', 'https']:
+            logger.warning(f"[Fetch] Invalid URL scheme: {parsed.scheme}")
+            return False
+        
+        if not parsed.netloc:
+            logger.warning(f"[Fetch] No network location in URL")
+            return False
+        
+        hostname = parsed.hostname
+        if not hostname:
+            logger.warning(f"[Fetch] No hostname in URL")
+            return False
+        
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                logger.warning(f"[Fetch] URL targets private/loopback IP: {hostname}")
+                return False
+        except ValueError:
+            pass
+        
+        if hostname in ['localhost', '127.0.0.1', '0.0.0.0']:
+            logger.warning(f"[Fetch] URL targets localhost: {hostname}")
+            return False
+        
+        port = parsed.port
+        if port and port in [22, 23, 25, 135, 139, 445, 1433, 3306, 5432, 5010]:
+            logger.warning(f"[Fetch] URL targets restricted port: {port}")
+            return False
+        
+        return True
+    except Exception as e:
+        logger.error(f"[Fetch] URL validation error: {e}")
+        return False
 
