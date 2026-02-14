@@ -21,7 +21,7 @@ manager.connect()
 search_service = manager.accessSearchAgents()
 
 # Load Whisper model directly here
-AUDIO_TRANSCRIBE_SIZE = "base"  # or set to your preferred model size
+AUDIO_TRANSCRIBE_SIZE = "small"  # or set to your preferred model size
 device = "cuda" if torch.cuda.is_available() else "cpu"
 whisper_model = whisper.load_model(AUDIO_TRANSCRIBE_SIZE).to(device)
 
@@ -79,7 +79,7 @@ async def download_audio(url):
     return wav_path
 
 
-async def transcribe_audio(url, full_transcript: Optional[str] = None, query: Optional[str] = None):
+async def transcribe_audio_deprecated(url, full_transcript: Optional[str] = None, query: Optional[str] = None):
     start_time = time.time()
     transcription = ""
     video_id = get_youtube_video_id(url)
@@ -107,5 +107,5 @@ if __name__ == "__main__":
     full_transcript = True
     query = None
 
-    transcript = asyncio.run(transcribe_audio(url, full_transcript, query))
+    transcript = asyncio.run(transcribe_audio_deprecated(url, full_transcript, query))
     

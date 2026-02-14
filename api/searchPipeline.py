@@ -25,7 +25,6 @@ logger = logging.getLogger("elixpo")
 dotenv.load_dotenv()
 POLLINATIONS_TOKEN = os.getenv("TOKEN")
 MODEL = os.getenv("MODEL")
-REFRRER = os.getenv("REFERRER")
 print(MODEL, POLLINATIONS_TOKEN)
 
 
@@ -129,6 +128,16 @@ async def optimized_tool_execution(function_name: str, function_args: dict, memo
                 logger.error(f"Failed to process image search results: {e}")
                 yield ("Image search completed but results processing failed", [])
 
+        elif function_name == "youtubeMetadata":
+            url = function_args.get("url")
+            web_event = emit_event_func("INFO", f"<TASK>Fetching YouTube Metadata</TASK>")
+            if web_event:
+                yield web_event
+            metadata = await youtubeMetadata(url)
+            result = f"YouTube Metadata:\n{metadata if metadata else '[No metadata available]'}"
+            memoized_results["youtube_metadata"][url] = result
+            yield result
+            
         elif function_name == "transcribe_audio":
             logger.info(f"Getting YouTube transcript")
             web_event = emit_event_func("INFO", f"<TASK>Processing Video, This will take a minute</TASK>")
@@ -240,11 +249,8 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 "messages": messages,
                 "tools": tools,
                 "tool_choice": "auto",
-                "n": 1,
                 "seed": random.randint(1000, 9999),
                 "max_tokens": 3000,
-                "temperature": 1,
-                "top_p": 1
             }
 
             try:
@@ -348,13 +354,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             payload = {
                 "model": MODEL,
                 "messages": messages,
-                "n": 1,
                 "seed": random.randint(1000, 9999),
                 "max_tokens": 3000,
-                "temperature": 1,
-                "top_p": 1,
                 "stream": False,
-                "retry": {}
             }
 
             try:

@@ -3,15 +3,14 @@ import random
 import os
 import requests
 from typing import List, Dict, Optional, AsyncGenerator
-from datetime import datetime
 from dotenv import load_dotenv
 from loguru import logger
+from config import POLLINATIONS_ENDPOINT, LLM_MODEL
 
 load_dotenv()
 
-POLLINATIONS_ENDPOINT = os.getenv("POLLINATIONS_ENDPOINT", "https://enter.pollinations.ai/api/generate/v1/chat/completions")
 POLLINATIONS_TOKEN = os.getenv("TOKEN")
-MODEL = os.getenv("MODEL", "claude-3.5-sonnet")
+MODEL = LLM_MODEL
 
 
 class ChatEngine:

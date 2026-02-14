@@ -18,8 +18,6 @@ from config import (
     SESSION_SUMMARY_THRESHOLD,
 )
 
-
-
 class RAGEngine:
     def __init__(
         self,
