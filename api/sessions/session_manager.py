@@ -1,12 +1,12 @@
 from typing import Dict, Optional
 import threading
-from session_manager import SessionMemory
 from .sessionData import SessionData
 from loguru import logger
 import uuid
 from datetime import datetime, timedelta
 import numpy as np
 from typing import List, Tuple
+from config import EMBEDDING_DIMENSION
 
 
 
