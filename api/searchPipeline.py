@@ -615,18 +615,23 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 break
 
         if not final_message_content and current_iteration >= max_iterations:
+            logger.info(f"[SYNTHESIS CONDITION MET] final_message_content={bool(final_message_content)}, current_iteration={current_iteration}, max_iterations={max_iterations}")
             if event_id:
                 yield format_sse("INFO", f"<TASK>Generating Final Response</TASK>")
             
+            logger.info("[SYNTHESIS] Starting synthesis of gathered information")
             synthesis_prompt = {
                 "role": "user",
                 "content": synthesis_instruction(user_query)
             }
             
             # OPTIMIZATION: Trim messages before final synthesis
+            original_msg_count = len(messages)
             if len(messages) > 6:
                 messages = messages[:2] + messages[-4:]
-                logger.info(f"[SYNTHESIS] Trimmed messages to {len(messages)}")
+                logger.info(f"[SYNTHESIS] Trimmed messages from {original_msg_count} to {len(messages)}")
+            else:
+                logger.info(f"[SYNTHESIS] Messages count: {len(messages)} (no trim needed)")
             
             messages.append(synthesis_prompt)
             payload = {
@@ -650,35 +655,41 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 )
                 response.raise_for_status()
                 response_data = response.json()
-                final_message_content = response_data["choices"][0]["message"].get("content")
+                logger.info(f"[SYNTHESIS] Raw API response status: {response.status_code}, response keys: {response_data.keys() if isinstance(response_data, dict) else 'unknown'}")
+                try:
+                    final_message_content = response_data["choices"][0]["message"].get("content")
+                    if not final_message_content:
+                        logger.error(f"[SYNTHESIS] API returned empty content. Full response: {response_data}")
+                    else:
+                        logger.info(f"[SYNTHESIS] Successfully extracted content. Length: {len(final_message_content)}")
+                except (KeyError, IndexError, TypeError) as e:
+                    logger.error(f"[SYNTHESIS] Failed to extract content from response. Expected structure not found. Error: {e}")
+                    logger.error(f"[SYNTHESIS] Response data keys: {response_data.keys() if isinstance(response_data, dict) else 'Not a dict'}")
+                    logger.error(f"[SYNTHESIS] Full response: {response_data}")
+                    final_message_content = None
             except asyncio.TimeoutError:
-                logger.error("Synthesis step timed out")
-                print(f"[SYNTHESIS TIMEOUT] Request timed out after 30s")
+                logger.error("[SYNTHESIS TIMEOUT] Request timed out")
+                logger.warning(f"[SYNTHESIS FALLBACK] Using collected information as response")
+                final_message_content = f"Based on the gathered information about '{user_query}', here's what I found:"
+                if collected_sources:
+                    final_message_content += f"\n\nRelevant sources: {', '.join(collected_sources[:3])}"
             except requests.exceptions.HTTPError as http_err:
-                print(f"\n{'='*80}")
-                print(f"[SYNTHESIS HTTP ERROR] Status Code: {http_err.response.status_code}")
-                print(f"[SYNTHESIS HTTP ERROR] URL: {http_err.response.url}")
-                print(f"[SYNTHESIS HTTP ERROR] Response Text:\n{http_err.response.text}")
-                print(f"{'='*80}\n")
-                logger.error(f"Synthesis API HTTP error: {http_err}")
+                logger.error(f"[SYNTHESIS HTTP ERROR] Status Code: {http_err.response.status_code} - {str(http_err)[:100]}")
+                final_message_content = f"I gathered information related to '{user_query}' but encountered an API error while synthesizing the response."
+                if collected_sources:
+                    final_message_content += f" Sources: {', '.join(collected_sources[:3])}"
             except requests.exceptions.RequestException as e:
-                print(f"\n{'='*80}")
-                print(f"[SYNTHESIS REQUEST ERROR] Type: {type(e).__name__}")
-                print(f"[SYNTHESIS REQUEST ERROR] Message: {str(e)}")
-                if hasattr(e, 'response') and e.response is not None:
-                    print(f"[SYNTHESIS REQUEST ERROR] Status Code: {e.response.status_code}")
-                    print(f"[SYNTHESIS REQUEST ERROR] Response: {e.response.text}")
-                print(f"{'='*80}\n")
-                logger.error(f"Synthesis API call failed: {e}")
+                logger.error(f"[SYNTHESIS REQUEST ERROR] {type(e).__name__}: {str(e)[:100]}")
+                final_message_content = f"I found relevant information about '{user_query}' but encountered a connection error while formatting the response."
+                if collected_sources:
+                    final_message_content += f" Sources: {', '.join(collected_sources[:3])}"
             except Exception as e:
-                print(f"\n{'='*80}")
-                print(f"[SYNTHESIS ERROR] Type: {type(e).__name__}")
-                print(f"[SYNTHESIS ERROR] Message: {str(e)}")
-                print(f"{'='*80}\n")
-                logger.error(f"Synthesis step failed: {e}")
+                logger.error(f"[SYNTHESIS ERROR] {type(e).__name__}: {str(e)[:100]}", exc_info=True)
+                final_message_content = f"I processed your query about '{user_query}' but encountered an error while generating the final response."
 
         if final_message_content:
             logger.info(f"Preparing optimized final response")
+            logger.info(f"[FINAL] final_message_content starts with: {final_message_content[:100] if final_message_content else 'None'}")
             response_parts = [final_message_content]
             if user_image and not user_query.strip() and collected_similar_images:
                 response_parts.append("\n\n**Similar Images:**\n")
@@ -697,10 +708,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 for i, src in enumerate(unique_sources):
                     response_parts.append(f"{i+1}. [{src}]({src})\n")
             response_with_sources = "".join(response_parts)
-            # OPTIMIZATION: Cap response length to improve transmission speed
-            if len(response_with_sources) > 8000:
-                response_with_sources = response_with_sources[:8000] + "\n\n...[Response truncated for speed]\n"
-            logger.info(f"Optimized response ready. Length: {len(response_with_sources)}")
             if event_id:
                 yield format_sse("INFO", "<TASK>SUCCESS - Sending response</TASK>")
                 chunk_size = 8000
@@ -712,10 +719,18 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 yield format_sse("final", response_with_sources)
             return
         else:
-            error_msg = f"[ERROR] ElixpoSearch failed after {max_iterations} iterations"
+            error_msg = f"[ERROR] ElixpoSearch failed - no final content after {max_iterations} iterations (tool_calls: {tool_call_count})"
             logger.error(error_msg)
-            if event_id:
-                yield format_sse("error", "Ooops! I crashed, can you please query again?")
+            logger.error(f"[DIAGNOSTIC] final_message_content is: {repr(final_message_content)}, type: {type(final_message_content)}")
+            logger.error(f"[DIAGNOSTIC] collected_sources: {collected_sources}, tool_call_count: {tool_call_count}")
+            if collected_sources or tool_call_count > 0:
+                logger.warning(f"[FALLBACK] Generating response from {len(collected_sources)} sources and {tool_call_count} tools")
+                final_message_content = f"I searched for information about '{user_query}' and found some relevant sources. "
+                if collected_sources:
+                    final_message_content += f"Sources: {', '.join(collected_sources[:3])}"
+            else:
+                if event_id:
+                    yield format_sse("error", "Ooops! I crashed, can you please query again?")
                 return
     except Exception as e:
         logger.error(f"Pipeline error: {e}", exc_info=True)
@@ -727,7 +742,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 if __name__ == "__main__":
     import asyncio
     async def main():
-        user_query = "Give me an insight on github repository called elixpo_chapter"
+        user_query = "What's the time in kolkata now?"
         user_image = None
         event_id = None
         start_time = asyncio.get_event_loop().time()
