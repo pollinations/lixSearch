@@ -35,6 +35,7 @@ from config import (
 
 from session_manager import SessionMemory
 from .coreEmbeddingService import CoreEmbeddingService
+from .searchPortManager import searchPortManager
 
 class SessionManager:
     def __init__(self):
@@ -79,6 +80,7 @@ class SessionManager:
             if session_id in self.sessions:
                 self.sessions[session_id].clear()
                 del self.sessions[session_id]
+
 
 
 class SearchAgentPool:
