@@ -25,7 +25,11 @@ AUDIO_TRANSCRIBE_SIZE = "small"  # or set to your preferred model size
 device = "cuda" if torch.cuda.is_available() else "cpu"
 whisper_model = whisper.load_model(AUDIO_TRANSCRIBE_SIZE).to(device)
 
-def youtubeMetadata(url: str):
+async def youtubeMetadata(url: str):
+    """
+    Async wrapper for YouTube metadata retrieval via search_service.
+    Returns metadata like title, description, views, etc. from YouTube.
+    """
     metadata = search_service.get_youtube_metadata(url)
     return metadata
 

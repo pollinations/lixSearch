@@ -151,5 +151,22 @@ tools = [
                 "required": ["image_query"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "youtubeMetadata",
+            "description": "Fetch metadata (title, description, duration, views) from a YouTube URL",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The YouTube URL"
+                    }
+                },
+                "required": ["url"]
+            }
+        }
     }
 ]
