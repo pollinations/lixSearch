@@ -4,11 +4,11 @@ import numpy as np
 from loguru import logger
 from typing import List, Union, Dict, Tuple, Optional
 import threading
-import faiss
 import json
 import os
 from datetime import datetime
 from pathlib import Path
+import chromadb
 from config import EMBEDDING_DIMENSION
 
 
@@ -60,24 +60,21 @@ class VectorStore:
         
         Path(embeddings_dir).mkdir(parents=True, exist_ok=True)
         
-        if self.device == "cuda":
-            try:
-                # Use GPU-accelerated FAISS with GpuIndexFlatIP (inner product) for better performance
-                res = faiss.StandardGpuResources()
-                self.index = faiss.GpuIndexFlatIP(res, embedding_dim)
-                logger.info(f"[VectorStore] FAISS GPU index created (GpuIndexFlatIP)")
-            except Exception as e:
-                logger.warning(f"[VectorStore] Failed to create GPU index: {e}, falling back to CPU")
-                self.index = faiss.IndexFlatIP(embedding_dim)
-                self.device = "cpu"
-        else:
-            self.index = faiss.IndexFlatIP(embedding_dim)
+        try:
+            # Initialize ChromaDB with persistent storage using new API
+            self.client = chromadb.PersistentClient(path=embeddings_dir)
+            self.collection = self.client.get_or_create_collection(
+                name="document_embeddings",
+                metadata={"hnsw:space": "cosine"}
+            )
+            logger.info(f"[VectorStore] ChromaDB collection initialized on {self.device}")
+        except Exception as e:
+            logger.error(f"[VectorStore] Failed to initialize ChromaDB: {e}")
+            raise
         
-        self.metadata = []
         self.chunk_count = 0
         self.lock = threading.RLock()
         
-        self.index_path = os.path.join(embeddings_dir, "faiss_index.bin")
         self.metadata_path = os.path.join(embeddings_dir, "metadata.json")
         
         self._load_from_disk()
@@ -85,10 +82,12 @@ class VectorStore:
     
     def add_chunks(self, chunks: List[Dict]) -> None:
         with self.lock:
+            ids = []
             embeddings = []
-            new_metadata = []
+            documents = []
+            metadatas = []
             
-            for chunk in chunks:
+            for i, chunk in enumerate(chunks):
                 emb = chunk["embedding"]
                 if isinstance(emb, list):
                     emb = np.array(emb, dtype=np.float32)
@@ -98,20 +97,25 @@ class VectorStore:
                     emb = np.array(emb, dtype=np.float32)
                 
                 emb = emb / (np.linalg.norm(emb) + 1e-8)
-                embeddings.append(emb)
                 
-                new_metadata.append({
+                chunk_id = str(self.chunk_count + i)
+                ids.append(chunk_id)
+                embeddings.append(emb.tolist())
+                documents.append(chunk["text"])
+                metadatas.append({
                     "url": chunk["url"],
-                    "chunk_id": chunk.get("chunk_id", self.chunk_count),
-                    "text": chunk["text"],
+                    "chunk_id": chunk.get("chunk_id", chunk_id),
                     "timestamp": chunk.get("timestamp", datetime.now().isoformat())
                 })
                 self.chunk_count += 1
             
-            if embeddings:
-                embeddings_array = np.array(embeddings, dtype=np.float32)
-                self.index.add(embeddings_array)
-                self.metadata.extend(new_metadata)
+            if ids:
+                self.collection.add(
+                    ids=ids,
+                    embeddings=embeddings,
+                    documents=documents,
+                    metadatas=metadatas
+                )
     
     def search(self, query_embedding: np.ndarray, top_k: int = 5) -> List[Dict]:
         with self.lock:
@@ -121,60 +125,48 @@ class VectorStore:
                 query_embedding = np.array(query_embedding, dtype=np.float32)
             
             query_embedding = query_embedding / (np.linalg.norm(query_embedding) + 1e-8)
-            query_embedding = query_embedding.reshape(1, -1)
             
-            distances, indices = self.index.search(query_embedding, min(top_k, self.index.ntotal))
+            results = self.collection.query(
+                query_embeddings=[query_embedding.tolist()],
+                n_results=min(top_k, self.chunk_count if self.chunk_count > 0 else 1)
+            )
             
-            results = []
-            for i, idx in enumerate(indices[0]):
-                if idx >= 0 and idx < len(self.metadata):
-                    results.append({
-                        "score": float(distances[0][i]),
-                        "metadata": self.metadata[idx]
+            output = []
+            if results["ids"] and len(results["ids"]) > 0:
+                for i, (doc_id, distance, metadata, document) in enumerate(
+                    zip(results["ids"][0], 
+                        results["distances"][0], 
+                        results["metadatas"][0], 
+                        results["documents"][0])
+                ):
+                    output.append({
+                        "score": float(1 - distance),  # Convert distance to similarity
+                        "metadata": {
+                            **metadata,
+                            "text": document
+                        }
                     })
             
-            return results
+            return output
     
     def persist_to_disk(self) -> None:
         with self.lock:
             try:
-                if self.device == "cuda":
-                    cpu_index = faiss.index_gpu_to_cpu(self.index)
-                    faiss.write_index(cpu_index, self.index_path)
-                else:
-                    faiss.write_index(self.index, self.index_path)
-                
-                with open(self.metadata_path, "w") as f:
-                    json.dump(self.metadata, f)
-                
+                self.client.persist()
                 logger.info(f"[VectorStore] Persisted {self.chunk_count} chunks to {self.embeddings_dir}")
             except Exception as e:
                 logger.error(f"[VectorStore] Failed to persist: {e}")
     
     def _load_from_disk(self) -> None:
         try:
-            if os.path.exists(self.index_path) and os.path.exists(self.metadata_path):
-                index = faiss.read_index(self.index_path)
-                
-                if self.device == "cuda":
-                    try:
-                        # Move CPU index to GPU using index_cpu_to_all_gpus (supports all GPUs)
-                        self.index = faiss.index_cpu_to_all_gpus(index)
-                        logger.info(f"[VectorStore] Loaded index moved to GPU")
-                    except Exception as e:
-                        logger.warning(f"[VectorStore] Failed to move loaded index to GPU: {e}")
-                        self.index = index
-                        self.device = "cpu"
-                else:
-                    self.index = index
-                
-                with open(self.metadata_path, "r") as f:
-                    self.metadata = json.load(f)
-                
-                self.chunk_count = len(self.metadata)
-                logger.info(f"[VectorStore] Loaded {self.chunk_count} chunks from disk")
+            # ChromaDB automatically loads from persistent storage
+            count = self.collection.count()
+            self.chunk_count = count
+            if count > 0:
+                logger.info(f"[VectorStore] Loaded {count} chunks from disk")
         except Exception as e:
             logger.warning(f"[VectorStore] Could not load from disk: {e}")
+            self.chunk_count = 0
     
     def get_stats(self) -> Dict:
         with self.lock:

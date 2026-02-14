@@ -188,39 +188,55 @@ class RAGEngine:
             return ""
     
     def _get_session_content_context(self, query_embedding: np.ndarray, top_k: int = 5) -> Dict:
-        """CRITICAL FIX #8: Get relevant content from session's fetched URLs using FAISS."""
-        if not self.session_data or self.session_data.faiss_index.ntotal == 0:
+        """CRITICAL FIX #8: Get relevant content from session's fetched URLs using ChromaDB."""
+        if not self.session_data or not hasattr(self.session_data, 'processed_content'):
             return {"texts": [], "sources": [], "combined": ""}
         
         try:
-            # Use session's FAISS index to find relevant content
-            if len(query_embedding.shape) == 1:
-                query_embedding = query_embedding.reshape(1, -1)
-            query_embedding = query_embedding.astype(np.float32)
-            
-            k = min(top_k, self.session_data.faiss_index.ntotal)
-            distances, indices = self.session_data.faiss_index.search(query_embedding, k)
-            
-            content_texts = []
-            sources = []
-            
-            for idx, distance in zip(indices[0], distances[0]):
-                if idx < len(self.session_data.content_order):
-                    url = self.session_data.content_order[idx]
-                    content = self.session_data.processed_content.get(url, "")
-                    if content:
-                        content_texts.append(content[:500])  # Limit content size
-                        sources.append(url)
-            
-            combined = "\n\n[Session Content]\n".join(content_texts) if content_texts else ""
-            
-            logger.info(f"[RAG] Retrieved {len(content_texts)} session content chunks (FAISS score: {distances[0][0] if len(distances[0]) > 0 else 'N/A'})")
-            
-            return {
-                "texts": content_texts,
-                "sources": sources,
-                "combined": combined
-            }
+            # If session has its own ChromaDB collection, use it for retrieval
+            if hasattr(self.session_data, 'chroma_collection') and self.session_data.chroma_collection:
+                results = self.session_data.chroma_collection.query(
+                    query_embeddings=[query_embedding.tolist() if isinstance(query_embedding, np.ndarray) else query_embedding],
+                    n_results=min(top_k, self.session_data.chroma_collection.count())
+                )
+                
+                content_texts = []
+                sources = []
+                
+                if results["documents"] and len(results["documents"]) > 0:
+                    for document, metadata in zip(results["documents"][0], results["metadatas"][0]):
+                        content_texts.append(document[:500])
+                        if "url" in metadata:
+                            sources.append(metadata["url"])
+                
+                combined = "\n\n[Session Content]\n".join(content_texts) if content_texts else ""
+                logger.info(f"[RAG] Retrieved {len(content_texts)} session content chunks from ChromaDB")
+                
+                return {
+                    "texts": content_texts,
+                    "sources": sources,
+                    "combined": combined
+                }
+            else:
+                # Fallback: use simple similarity matching without ChromaDB
+                content_texts = []
+                sources = []
+                
+                if hasattr(self.session_data, 'content_order'):
+                    for url in self.session_data.content_order[:top_k]:
+                        content = self.session_data.processed_content.get(url, "")
+                        if content:
+                            content_texts.append(content[:500])
+                            sources.append(url)
+                
+                combined = "\n\n[Session Content]\n".join(content_texts) if content_texts else ""
+                logger.info(f"[RAG] Retrieved {len(content_texts)} session content chunks (fallback mode)")
+                
+                return {
+                    "texts": content_texts,
+                    "sources": sources,
+                    "combined": combined
+                }
         except Exception as e:
             logger.warning(f"[RAG] Failed to get session content context: {e}")
             return {"texts": [], "sources": [], "combined": ""}
