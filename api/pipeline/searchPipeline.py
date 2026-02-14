@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import requests
 import json
 from functionCalls.getImagePrompt import generate_prompt_from_image, replyFromImage
@@ -752,7 +756,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
 if __name__ == "__main__":
     import asyncio
-    from api.commons.requestID import reqID
+    from commons.requestID import reqID
     async def main():
         user_query = "hii"
         user_image = None
