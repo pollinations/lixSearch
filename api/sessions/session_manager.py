@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timedelta
 import numpy as np
 from typing import List, Tuple
-from config import EMBEDDING_DIMENSION
+from pipeline.config import EMBEDDING_DIMENSION
 
 
 

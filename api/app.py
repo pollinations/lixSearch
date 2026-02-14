@@ -10,10 +10,10 @@ import re
 import subprocess
 import time
 from pipeline.searchPipeline import run_elixposearch_pipeline
-from sessions.session_manager import get_session_manager
+from sessions.main import get_session_manager
 from ragService.ragEngine import get_retrieval_system
 from chatEngine.chat_engine import initialize_chat_engine, get_chat_engine
-from api.commons.requestID import RequestIDMiddleware
+from commons.requestID import RequestIDMiddleware
 
 
 def _validate_query(query: str, max_length: int = 5000) -> bool:
@@ -49,6 +49,33 @@ logging.basicConfig(
 )
 logger = logging.getLogger("elixpo-api")
 
+
+def _start_ipc_service():
+    """Start the IPC service subprocess."""
+    global model_server_process
+    
+    if model_server_process is not None:
+        logger.info("[APP] IPC service already running with PID {model_server_process.pid}")
+        return
+    
+    try:
+        logger.info("[APP] Starting IPC service...")
+        import sys
+        python_executable = sys.executable
+        ipc_service_path = os.path.join(os.path.dirname(__file__), "ipcService", "main.py")
+        
+        model_server_process = subprocess.Popen(
+            [python_executable, ipc_service_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            preexec_fn=os.setsid if sys.platform != 'win32' else None
+        )
+        logger.info(f"[APP] IPC service started with PID {model_server_process.pid}")
+    except Exception as e:
+        logger.error(f"[APP] Failed to start IPC service: {e}", exc_info=True)
+        raise
+
 app = Quart(__name__)
 cors(app)
 
@@ -61,20 +88,26 @@ model_server_process = None
 
 @app.before_serving
 async def startup():
-    global pipeline_initialized
+    global pipeline_initialized, model_server_process
 
     async with initialization_lock:
         if pipeline_initialized:
             return
 
-        logger.info("[APP] Starting ElixpoSearch...")
+        logger.info("[APP] Starting ElixpoSearch and IPC Service...")
         try:
+            # Start the IPC service (ipcService) if not already running
+            _start_ipc_service()
+            
+            # Wait for IPC service to be ready
+            await asyncio.sleep(2)
+            
             session_manager = get_session_manager()
             retrieval_system = get_retrieval_system()
             initialize_chat_engine(session_manager, retrieval_system)
 
             pipeline_initialized = True
-            logger.info("[APP] ElixpoSearch ready")
+            logger.info("[APP] ElixpoSearch ready with IPC Service")
         except Exception as e:
             logger.error(f"[APP] Initialization failed: {e}", exc_info=True)
             raise
@@ -85,18 +118,28 @@ async def shutdown():
     global model_server_process
     logger.info("[APP] Shutting down...")
     
-    # CRITICAL FIX #8: Stop model server gracefully
+    # Gracefully stop IPC service and model server
     if model_server_process:
         try:
-            logger.info("[APP] Terminating model server...")
-            model_server_process.terminate()
+            logger.info(f"[APP] Terminating IPC service (PID {model_server_process.pid})...")
+            if sys.platform != 'win32':
+                # On Unix, kill the process group to ensure child processes are terminated
+                import signal
+                os.killpg(os.getpgid(model_server_process.pid), signal.SIGTERM)
+            else:
+                model_server_process.terminate()
+            
             model_server_process.wait(timeout=5)
-            logger.info("[APP] Model server terminated")
+            logger.info("[APP] IPC service terminated")
         except subprocess.TimeoutExpired:
-            logger.warning("[APP] Model server did not terminate gracefully, killing...")
-            model_server_process.kill()
+            logger.warning("[APP] IPC service did not terminate gracefully, killing...")
+            if sys.platform != 'win32':
+                import signal
+                os.killpg(os.getpgid(model_server_process.pid), signal.SIGKILL)
+            else:
+                model_server_process.kill()
         except Exception as e:
-            logger.warning(f"[APP] Error terminating model server: {e}")
+            logger.warning(f"[APP] Error terminating IPC service: {e}")
 
 
 @app.route('/api/health', methods=['GET'])

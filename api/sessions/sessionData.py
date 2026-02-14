@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import os 
 from loguru import logger
-from config import EMBEDDING_DIMENSION
+from pipeline.config import EMBEDDING_DIMENSION
 
 
 class SessionData:

@@ -1,5 +1,5 @@
 from typing import List
-from config import  RETRIEVAL_TOP_K
+from pipeline.config import  RETRIEVAL_TOP_K
 from loguru import logger
 from multiprocessing.managers import BaseManager
 from ragService.embeddingService import EmbeddingService
@@ -41,7 +41,7 @@ def _ensure_retrieval_services():
     
     if _global_embedding_service is None:
         try:
-            from config import EMBEDDING_MODEL, EMBEDDINGS_DIR
+            from pipeline.config import EMBEDDING_MODEL, EMBEDDINGS_DIR
             
             logger.info("[SEARCH] Initializing retrieval services...")
             _global_embedding_service = EmbeddingService(model_name=EMBEDDING_MODEL)

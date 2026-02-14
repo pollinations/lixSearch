@@ -1,7 +1,7 @@
-from config import MAX_TOTAL_SCRAPE_WORD_COUNT
+from pipeline.config import MAX_TOTAL_SCRAPE_WORD_COUNT
 from loguru import logger
 from typing import Optional
-from utils import validate_url_for_fetch
+from searching.utils import validate_url_for_fetch
 import requests
 from bs4 import BeautifulSoup
 import re

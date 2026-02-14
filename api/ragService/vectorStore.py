@@ -4,7 +4,7 @@ import chromadb
 from pathlib import Path
 import threading
 import numpy as np
-from config import EMBEDDING_DIMENSION
+from pipeline.config import EMBEDDING_DIMENSION
 from typing import List, Dict
 from datetime import datetime
 import os

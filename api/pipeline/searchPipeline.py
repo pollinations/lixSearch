@@ -1,11 +1,12 @@
 import requests
 import json
 from functionCalls.getImagePrompt import generate_prompt_from_image, replyFromImage
-from tools import tools
+from pipeline.tools import tools
 from datetime import datetime, timezone
 from functionCalls.getYoutubeDetails import transcribe_audio, youtubeMetadata
 from functionCalls.getTimeZone import get_local_time
-from commons.searching_based import fetch_url_content_parallel, webSearch, imageSearch, cleanQuery
+from commons.searching_based import fetch_url_content_parallel, webSearch, imageSearch
+from commons.minimal import cleanQuery
 from ragService.semanticCache import SemanticCache
 import random
 import logging
@@ -16,8 +17,8 @@ import time
 from multiprocessing.managers import BaseManager
 
 from functools import lru_cache
-from config import POLLINATIONS_ENDPOINT, RAG_CONTEXT_REFRESH
-from instruction import system_instruction, user_instruction, synthesis_instruction
+from pipeline.config import POLLINATIONS_ENDPOINT, RAG_CONTEXT_REFRESH
+from pipeline.instruction import system_instruction, user_instruction, synthesis_instruction
 
 
 logging.basicConfig(level=logging.INFO)

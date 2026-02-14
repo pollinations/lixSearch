@@ -10,7 +10,7 @@ from sessions.main import get_session_manager
 
 _retrieval_system = None
 
-from config import (
+from pipeline.config import (
     EMBEDDING_MODEL,
     EMBEDDING_DIMENSION,
     EMBEDDINGS_DIR,

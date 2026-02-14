@@ -2,8 +2,9 @@ import re
 from loguru import logger
 from .main import _init_ipc_manager
 import asyncio
+from searching.fetch_full_text import fetch_full_text
+
 search_service = None
-from commons.searching_based import fetch_full_text
 
 def webSearch(query: str):
     if not _init_ipc_manager() or search_service is None:

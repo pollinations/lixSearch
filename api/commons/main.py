@@ -1,7 +1,17 @@
 
 from loguru import logger
 import time
+from multiprocessing.managers import BaseManager
 
+search_service = None
+_ipc_ready = False
+_ipc_initialized = False
+
+class ModelManager(BaseManager):
+    pass
+
+ModelManager.register('CoreEmbeddingService')
+ModelManager.register('accessSearchAgents')
 
 def _init_ipc_manager(max_retries: int = 3, retry_delay: float = 1.0):
     """Lazily initialize IPC connection to the model server."""
@@ -15,7 +25,7 @@ def _init_ipc_manager(max_retries: int = 3, retry_delay: float = 1.0):
     
     for attempt in range(max_retries):
         try:
-            manager = modelManager(address=("localhost", 5010), authkey=b"ipcService")
+            manager = ModelManager(address=("localhost", 5010), authkey=b"ipcService")
             manager.connect()
             search_service = manager.accessSearchAgents()
             _ipc_ready = True
