@@ -1,5 +1,5 @@
 from loguru import logger 
-from embedding_service import EmbeddingService
+from ragService.embedding_service import EmbeddingService
 from embedding_service import VectorStore
 from semantic_cache import SemanticCache
 import uuid
