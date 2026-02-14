@@ -758,7 +758,7 @@ if __name__ == "__main__":
     import asyncio
     from commons.requestID import reqID
     async def main():
-        user_query = "hii"
+        user_query = "what was the first thing I asked you?"
         user_image = None
         event_id = None
         request_id = "test-request-001"
