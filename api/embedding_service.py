@@ -169,8 +169,9 @@ class VectorStore:
     def persist_to_disk(self) -> None:
         with self.lock:
             try:
-                self.client.persist()
-                logger.info(f"[VectorStore] Persisted {self.chunk_count} chunks to {self.embeddings_dir}")
+                # ChromaDB's PersistentClient automatically persists to disk
+                # No explicit persist() call needed - data is saved immediately
+                logger.info(f"[VectorStore] Data auto-persisted by ChromaDB to {self.embeddings_dir}")
             except Exception as e:
                 logger.error(f"[VectorStore] Failed to persist: {e}")
     

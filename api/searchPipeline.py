@@ -12,11 +12,10 @@ import dotenv
 import os
 import asyncio
 import time
+from multiprocessing.managers import BaseManager
 
 from functools import lru_cache
 from config import POLLINATIONS_ENDPOINT, RAG_CONTEXT_REFRESH
-from session_manager import get_session_manager
-from rag_engine import get_retrieval_system
 from instruction import system_instruction, user_instruction, synthesis_instruction
 
 
@@ -26,6 +25,29 @@ dotenv.load_dotenv()
 POLLINATIONS_TOKEN = os.getenv("TOKEN")
 MODEL = os.getenv("MODEL")
 logger.debug(f"Model configured: {MODEL}")
+
+
+# Connect to model_server via IPC (don't reinitialize services)
+class ModelServerClient(BaseManager):
+    pass
+
+ModelServerClient.register('CoreEmbeddingService')
+ModelServerClient.register('accessSearchAgents')
+
+_model_server = None
+
+def get_model_server():
+    """Lazy connect to model_server via IPC"""
+    global _model_server
+    if _model_server is None:
+        try:
+            _model_server = ModelServerClient(address=("localhost", 5010), authkey=b"ipcService")
+            _model_server.connect()
+            logger.info("[SearchPipeline] Connected to model_server via IPC")
+        except Exception as e:
+            logger.error(f"[SearchPipeline] Failed to connect to model_server: {e}")
+            raise
+    return _model_server
 
 
 @lru_cache(maxsize=100)
@@ -38,7 +60,7 @@ def format_sse(event: str, data: str) -> str:
     return f"event: {event}\n{data_str}\n\n"
 
 
-async def optimized_tool_execution(function_name: str, function_args: dict, memoized_results: dict, emit_event_func, retrieval_system, session_id):
+async def optimized_tool_execution(function_name: str, function_args: dict, memoized_results: dict, emit_event_func):
     try:
         if function_name == "cleanQuery":
             websites, youtube, cleaned_query = cleanQuery(function_args.get("query"))
@@ -192,11 +214,14 @@ async def optimized_tool_execution(function_name: str, function_args: dict, memo
                     timeout=15.0
                 )
                 
-                # CRITICAL FIX #2: Ingest fetched content into vector store for RAG
+                # CRITICAL FIX #2: Ingest fetched content into vector store for RAG via IPC
                 try:
-                    rag_engine = retrieval_system.get_rag_engine(session_id)
-                    ingest_result = rag_engine.ingest_and_cache(url)
-                    logger.info(f"[Pipeline] Ingested {ingest_result.get('chunks', 0)} chunks from {url} into vector store")
+                    model_server = get_model_server()
+                    core_service = model_server.CoreEmbeddingService()
+                    # Run ingest_url in thread to avoid blocking
+                    ingest_result = await asyncio.to_thread(core_service.ingest_url, url)
+                    chunks_count = ingest_result.get('chunks_ingested', 0)
+                    logger.info(f"[Pipeline] Ingested {chunks_count} chunks from {url} into vector store")
                 except Exception as e:
                     logger.warning(f"[Pipeline] Failed to ingest content to vector store: {e}")
                 
@@ -231,12 +256,14 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         headers = {"Content-Type": "application/json",
                    "Authorization": f"Bearer {POLLINATIONS_TOKEN}"}
         
-        retrieval_system = get_retrieval_system()
-        session_manager = get_session_manager()
-        session_id = session_manager.create_session(user_query)
-        
-        rag_engine = retrieval_system.get_rag_engine(session_id)
-        logger.info(f"[Pipeline] RAG engine initialized for session {session_id}")
+        # Connect to model_server via IPC instead of reinitializing
+        try:
+            model_server = get_model_server()
+            core_service = model_server.CoreEmbeddingService()
+            logger.info("[Pipeline] Connected to model_server CoreEmbeddingService via IPC")
+        except Exception as e:
+            logger.warning(f"[Pipeline] Could not connect to model_server, using standalone mode: {e}")
+            core_service = None
                    
         memoized_results = {
             "timezone_info": {},
@@ -254,14 +281,20 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         collected_similar_images = []
         final_message_content = None
         
-        # CRITICAL FIX #4: Use RAG engine's retrieve_context which checks semantic cache first
-        retrieval_result = rag_engine.retrieve_context(user_query, url=None, top_k=5)
-        rag_context = retrieval_result.get("context", "")
-        cache_hit = retrieval_result.get("source") == "semantic_cache"
-        if cache_hit:
-            logger.info(f"[Pipeline] ✅ Semantic cache HIT for initial query")
+        # CRITICAL FIX #4: Simple RAG context - retrieve from vector store if available
+        rag_context = ""
+        if core_service:
+            try:
+                retrieval_result = core_service.retrieve(user_query, top_k=3)
+                if retrieval_result.get("count", 0) > 0:
+                    rag_context = "\n".join([r["metadata"]["text"] for r in retrieval_result.get("results", [])])
+                    logger.info(f"[Pipeline] Retrieved {retrieval_result.get('count', 0)} chunks from vector store")
+            except Exception as e:
+                logger.warning(f"[Pipeline] Vector store retrieval failed, continuing without context: {e}")
         else:
-            logger.info(f"[Pipeline] Initial RAG context built: {len(rag_context)} chars")
+            logger.info("[Pipeline] Skipping vector store retrieval (model_server unavailable)")
+        
+        logger.info(f"[Pipeline] RAG context prepared: {len(rag_context)} chars")
         
         messages = [
             
@@ -382,7 +415,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 logger.info(f"Executing optimized tool: {function_name}")
                 if event_id:
                     yield format_sse("INFO", f"<TASK>Running Task</TASK>")
-                tool_result_gen = optimized_tool_execution(function_name, function_args, memoized_results, emit_event, retrieval_system, session_id)
+                tool_result_gen = optimized_tool_execution(function_name, function_args, memoized_results, emit_event)
                 if hasattr(tool_result_gen, '__aiter__'):
                     tool_result = None
                     image_urls = []
@@ -409,7 +442,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         collected_sources.extend(memoized_results["current_search_urls"])
                 elif function_name == "fetch_full_text":
                     collected_sources.append(function_args.get("url"))
-                    session_manager.add_content_to_session(session_id, function_args.get("url"), str(tool_result)[:2000])
                 tool_outputs.append({
                     "role": "tool",
                     "tool_call_id": tool_call["id"],
