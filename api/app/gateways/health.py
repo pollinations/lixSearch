@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 from quart import jsonify
 
-logger = logging.getLogger("elixpo-api")
+logger = logging.getLogger("lixsearch-api")
 
 
 async def health_check(pipeline_initialized: bool):

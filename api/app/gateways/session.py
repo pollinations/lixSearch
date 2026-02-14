@@ -7,7 +7,7 @@ from sessions.main import get_session_manager
 from ragService.main import get_retrieval_system
 from app.utils import validate_query, validate_session_id
 
-logger = logging.getLogger("elixpo-api")
+logger = logging.getLogger("lixsearch-api")
 
 
 async def create_session():

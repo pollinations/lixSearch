@@ -5,7 +5,7 @@ from datetime import datetime
 from quart import request, jsonify
 from sessions.main import get_session_manager
 
-logger = logging.getLogger("elixpo-api")
+logger = logging.getLogger("lixsearch-api")
 
 
 async def get_stats():

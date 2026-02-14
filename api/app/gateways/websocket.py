@@ -4,7 +4,7 @@ import uuid
 from quart import websocket
 from pipeline.searchPipeline import run_elixposearch_pipeline
 
-logger = logging.getLogger("elixpo-api")
+logger = logging.getLogger("lixsearch-api")
 
 
 async def websocket_search():

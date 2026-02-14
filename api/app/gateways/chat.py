@@ -7,7 +7,7 @@ from sessions.main import get_session_manager
 from chatEngine.main import get_chat_engine
 from app.utils import validate_query
 
-logger = logging.getLogger("elixpo-api")
+logger = logging.getLogger("lixsearch-api")
 
 
 async def chat(pipeline_initialized: bool):

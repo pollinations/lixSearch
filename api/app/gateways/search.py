@@ -5,7 +5,7 @@ from quart import request, jsonify, Response
 from pipeline.searchPipeline import run_elixposearch_pipeline
 from app.utils import validate_query, validate_url
 
-logger = logging.getLogger("elixpo-api")
+logger = logging.getLogger("lixsearch-api")
 
 
 async def search(pipeline_initialized: bool):
