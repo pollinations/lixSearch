@@ -9,7 +9,7 @@ import json
 from commons.searching_based import fetch_url_content_parallel, webSearch, imageSearch
 from commons.minimal import cleanQuery
 from functionCalls.getYoutubeDetails import transcribe_audio, youtubeMetadata
-
+from pipeline.utils import get_model_server, cached_web_search_key
 
 
 async def optimized_tool_execution(function_name: str, function_args: dict, memoized_results: dict, emit_event_func):
