@@ -8,7 +8,12 @@ from pipeline.config import EMBEDDING_DIMENSION
 from typing import List, Dict
 from datetime import datetime
 import os
+from chromadb.telemetry.product import ProductTelemetryClient, ProductTelemetryEvent
 
+
+class NoOpProductTelemetry(ProductTelemetryClient):
+    def capture(self, event: ProductTelemetryEvent) -> None:
+        return
 
 
 class VectorStore:
@@ -22,9 +27,10 @@ class VectorStore:
         Path(embeddings_dir).mkdir(parents=True, exist_ok=True)
         
         try:
-            # Initialize ChromaDB with persistent storage and telemetry disabled
             chroma_settings = chromadb.config.Settings(
-                anonymized_telemetry=False
+                anonymized_telemetry=False,
+                chroma_telemetry_impl="ragService.vectorStore.NoOpProductTelemetry",
+                chroma_product_telemetry_impl="ragService.vectorStore.NoOpProductTelemetry",
             )
             self.client = chromadb.PersistentClient(
                 path=embeddings_dir,

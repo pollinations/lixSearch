@@ -42,7 +42,9 @@ class SessionData:
             Path(session_dir).mkdir(parents=True, exist_ok=True)
             
             chroma_settings = chromadb.config.Settings(
-                anonymized_telemetry=False
+                anonymized_telemetry=False,
+                chroma_telemetry_impl="ragService.vectorStore.NoOpProductTelemetry",
+                chroma_product_telemetry_impl="ragService.vectorStore.NoOpProductTelemetry",
             )
             self.chroma_client = chromadb.PersistentClient(
                 path=session_dir,
@@ -203,4 +205,3 @@ class SessionData:
     def set_search_context(self, context: str):
         self.search_context = context
         self.last_activity = datetime.now()
-
