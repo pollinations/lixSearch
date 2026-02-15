@@ -205,3 +205,79 @@ class SessionData:
     def set_search_context(self, context: str):
         self.search_context = context
         self.last_activity = datetime.now()
+    
+    def check_cache_relevance(self, query_text: str, query_embedding: Optional[np.ndarray] = None, similarity_threshold: float = 0.80) -> Tuple[bool, Optional[Dict]]:
+        """
+        Check if a similar query exists in the cache and return cached results.
+        Returns (cache_hit, cached_data)
+        """
+        with self.lock:
+            if not self.chroma_collection or self.chroma_collection.count() == 0:
+                return False, None
+            
+            if query_embedding is None:
+                logger.debug(f"[SessionData] No embedding provided for cache check")
+                return False, None
+            
+            try:
+                if isinstance(query_embedding, np.ndarray):
+                    query_emb_list = query_embedding.tolist() if query_embedding.ndim == 1 else query_embedding[0].tolist()
+                else:
+                    query_emb_list = query_embedding
+                
+                results = self.chroma_collection.query(
+                    query_embeddings=[query_emb_list],
+                    n_results=min(3, self.chroma_collection.count())
+                )
+                
+                if results["ids"] and len(results["ids"]) > 0:
+                    best_distance = results["distances"][0][0]
+                    best_similarity = 1.0 - best_distance
+                    
+                    if best_similarity >= similarity_threshold:
+                        logger.info(f"[SessionData] Cache hit! Similarity: {best_similarity:.3f}")
+                        best_match_id = results["ids"][0][0]
+                        best_match_doc = results["documents"][0][0]
+                        best_match_metadata = results["metadatas"][0][0]
+                        
+                        return True, {
+                            "similarity_score": best_similarity,
+                            "cached_document": best_match_doc,
+                            "cached_metadata": best_match_metadata,
+                            "original_query": self.query
+                        }
+                    else:
+                        logger.debug(f"[SessionData] Cache similarity below threshold: {best_similarity:.3f} < {similarity_threshold}")
+                        return False, None
+                else:
+                    return False, None
+            except Exception as e:
+                logger.warning(f"[SessionData] Cache check failed: {e}")
+                return False, None
+    
+    def get_mixed_results(self, cached_results: List[Dict], new_results: List[Dict], max_results: int = 10) -> List[Dict]:
+        """
+        Combine cached results with new search results, avoiding duplicates.
+        Prioritizes cached results (they are already validated) but includes new results.
+        """
+        combined = []
+        seen_urls = set()
+        
+        # Add cached results first (higher priority)
+        for cached in cached_results:
+            url = cached.get('url') or cached.get('metadata', {}).get('url')
+            if url and url not in seen_urls:
+                combined.append(cached)
+                seen_urls.add(url)
+        
+        # Add new results (up to max_results)
+        for new in new_results:
+            if len(combined) >= max_results:
+                break
+            url = new.get('url') or new.get('metadata', {}).get('url')
+            if url and url not in seen_urls:
+                combined.append(new)
+                seen_urls.add(url)
+        
+        logger.info(f"[SessionData] Mixed results: {len(cached_results)} cached + {len(new_results)} new = {len(combined)} total")
+        return combined[:max_results]

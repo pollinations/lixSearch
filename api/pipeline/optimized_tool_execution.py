@@ -10,6 +10,7 @@ from commons.searching_based import fetch_url_content_parallel, webSearch, image
 from commons.minimal import cleanQuery
 from functionCalls.getYoutubeDetails import transcribe_audio, youtubeMetadata
 from pipeline.utils import get_model_server, cached_web_search_key
+from pipeline.config import MAX_IMAGES_TO_INCLUDE
 
 async def optimized_tool_execution(function_name: str, function_args: dict, memoized_results: dict, emit_event_func):
     try:
@@ -133,7 +134,7 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
                 if web_event:
                     yield web_event
             image_query = function_args.get("image_query")
-            max_images = function_args.get("max_images", 5)
+            max_images = function_args.get("max_images", MAX_IMAGES_TO_INCLUDE)
             search_results_raw = await imageSearch(image_query, max_images=max_images)
             logger.info(f"Image search for '{image_query[:50]}...' completed.")
             image_urls = []

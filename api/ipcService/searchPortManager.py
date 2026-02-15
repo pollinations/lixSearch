@@ -8,7 +8,7 @@ from playwright.async_api import async_playwright
 from urllib.parse import quote
 import atexit
 import time
-from pipeline.config import MAX_LINKS_TO_TAKE, isHeadless
+from pipeline.config import MAX_LINKS_TO_TAKE, isHeadless, MAX_IMAGES_TO_INCLUDE
 import shutil
 import os
 import json
@@ -454,7 +454,7 @@ class YahooSearchAgentImage:
                 port_manager.release_port(self.custom_port)
             raise
 
-    async def search_images(self, query, max_images=5, agent_idx=None):
+    async def search_images(self, query, max_images=MAX_IMAGES_TO_INCLUDE, agent_idx=None):
         results = []
         os.makedirs(self.save_dir, exist_ok=True)
         page = None

@@ -125,15 +125,12 @@ class VectorStore:
     def persist_to_disk(self) -> None:
         with self.lock:
             try:
-                # ChromaDB's PersistentClient automatically persists to disk
-                # No explicit persist() call needed - data is saved immediately
                 logger.info(f"[VectorStore] Data auto-persisted by ChromaDB to {self.embeddings_dir}")
             except Exception as e:
                 logger.error(f"[VectorStore] Failed to persist: {e}")
     
     def _load_from_disk(self) -> None:
         try:
-            # ChromaDB automatically loads from persistent storage
             count = self.collection.count()
             self.chunk_count = count
             if count > 0:
@@ -148,4 +145,49 @@ class VectorStore:
                 "total_chunks": self.chunk_count,
                 "device": self.device,
                 "embedding_dim": self.embedding_dim
+            }
+    
+    def search_with_cache_check(self, query_embedding: np.ndarray, top_k: int = 5, cache_similarity_threshold: float = 0.85) -> Dict:
+        with self.lock:
+            if isinstance(query_embedding, torch.Tensor):
+                query_embedding = query_embedding.cpu().numpy().astype(np.float32)
+            else:
+                query_embedding = np.array(query_embedding, dtype=np.float32)
+            
+            query_embedding = query_embedding / (np.linalg.norm(query_embedding) + 1e-8)
+            
+            results = self.collection.query(
+                query_embeddings=[query_embedding.tolist()],
+                n_results=min(top_k, self.chunk_count if self.chunk_count > 0 else 1)
+            )
+            
+            output = []
+            similarities = []
+            
+            if results["ids"] and len(results["ids"]) > 0:
+                for i, (doc_id, distance, metadata, document) in enumerate(
+                    zip(results["ids"][0], 
+                        results["distances"][0], 
+                        results["metadatas"][0], 
+                        results["documents"][0])
+                ):
+                    similarity = float(1 - distance)
+                    similarities.append(similarity)
+                    output.append({
+                        "score": similarity,
+                        "metadata": {
+                            **metadata,
+                            "text": document
+                        }
+                    })
+            
+            best_match_similarity = similarities[0] if similarities else 0.0
+            avg_similarity = sum(similarities) / len(similarities) if similarities else 0.0
+            cache_hit = best_match_similarity >= cache_similarity_threshold
+            
+            return {
+                'results': output,
+                'cache_hit': cache_hit,
+                'avg_similarity': avg_similarity,
+                'best_match_similarity': best_match_similarity
             }

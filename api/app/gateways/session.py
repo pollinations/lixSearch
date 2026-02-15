@@ -11,7 +11,6 @@ logger = logging.getLogger("lixsearch-api")
 
 
 async def create_session():
-    """Create a new session."""
     try:
         data = await request.get_json()
         query = data.get("query", "").strip()
