@@ -18,7 +18,38 @@ from pipeline.instruction import system_instruction, user_instruction, synthesis
 from pipeline.optimized_tool_execution import optimized_tool_execution
 from pipeline.utils import format_sse, get_model_server
 import asyncio
+import uuid
 load_dotenv()
+
+
+def format_openai_response(content: str, request_id: str = None) -> str:
+    """Format response as OpenAI-compatible JSON with proper markdown newline escaping."""
+    # Replace actual newlines with \n escape sequences for proper JSON parsing
+    escaped_content = content.replace('\n', '\\n')
+    
+    response = {
+        "id": request_id or f"chatcmpl-{uuid.uuid4().hex[:8]}",
+        "object": "chat.completion",
+        "created": int(datetime.now(timezone.utc).timestamp()),
+        "model": MODEL or "kimi",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": escaped_content
+                },
+                "finish_reason": "stop"
+            }
+        ],
+        "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": len(content.split()),
+            "total_tokens": len(content.split())
+        }
+    }
+    return json.dumps(response, ensure_ascii=False)
+
 
 POLLINATIONS_TOKEN = os.getenv("TOKEN")
 MODEL = os.getenv("MODEL")
@@ -563,7 +594,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     event_name = "final" if i + chunk_size >= len(response_with_sources) else "final-part"
                     yield format_sse(event_name, chunk)
             else:
-                yield format_sse("final", response_with_sources)
+                yield format_openai_response(response_with_sources, request_id)
             return
         else:
             error_msg = f"[ERROR] ElixpoSearch failed - no final content after {max_iterations} iterations (tool_calls: {tool_call_count})"
@@ -593,7 +624,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         event_name = "final" if i + chunk_size >= len(response_with_fallback) else "final-part"
                         yield format_sse(event_name, chunk)
                 else:
-                    yield format_sse("final", response_with_fallback)
+                    yield format_openai_response(response_with_fallback, request_id)
                 return
             else:
                 if event_id:

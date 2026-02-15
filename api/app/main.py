@@ -21,7 +21,6 @@ class lixSearch:
         self.app = Quart(__name__)
         self.pipeline_initialized = False
         self.initialization_lock = asyncio.Lock()
-        self.model_server_process = None
         
         self._setup_cors()
         self._setup_middleware()
@@ -53,7 +52,7 @@ class lixSearch:
             return await chat.chat_completions(session_id, self.pipeline_initialized)
         
         self.app.route('/api/health', methods=['GET'])(health_check_wrapper)
-        self.app.route('/api/search', methods=['POST'])(search_wrapper)
+        self.app.route('/api/search', methods=['POST', 'GET'])(search_wrapper)
         self.app.route('/api/session/create', methods=['POST'])(session.create_session)
         self.app.route('/api/session/<session_id>', methods=['GET'])(session.get_session_info)
         self.app.route('/api/session/<session_id>/kg', methods=['GET'])(session.get_session_kg)
@@ -91,73 +90,21 @@ class lixSearch:
                 if self.pipeline_initialized:
                     return
                 
-                logger.info("[APP] Starting lixSearch and IPC Service...")
+                logger.info("[APP] Initializing lixSearch (IPC service must be started manually)...")
                 try:
-                    self._start_ipc_service()
-                    await asyncio.sleep(2)
-                    
                     session_manager = get_session_manager()
                     retrieval_system = get_retrieval_system()
                     initialize_chat_engine(session_manager, retrieval_system)
                     
                     self.pipeline_initialized = True
-                    logger.info("[APP] lixSearch ready with IPC Service")
+                    logger.info("[APP] lixSearch initialized and ready")
                 except Exception as e:
                     logger.error(f"[APP] Initialization failed: {e}", exc_info=True)
                     raise
         
         @self.app.after_serving
         async def shutdown():
-            logger.info("[APP] Shutting down...")
-            self._stop_ipc_service()
-    
-    def _start_ipc_service(self):
-        if self.model_server_process is not None:
-            logger.info(f"[APP] IPC service already running with PID {self.model_server_process.pid}")
-            return
-        
-        try:
-            logger.info("[APP] Starting IPC service...")
-            python_executable = sys.executable
-            ipc_service_path = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)), 
-                "ipcService", 
-                "main.py"
-            )
-            
-            self.model_server_process = subprocess.Popen(
-                [python_executable, ipc_service_path],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                preexec_fn=os.setsid if sys.platform != 'win32' else None
-            )
-            logger.info(f"[APP] IPC service started with PID {self.model_server_process.pid}")
-        except Exception as e:
-            logger.error(f"[APP] Failed to start IPC service: {e}", exc_info=True)
-            raise
-    
-    def _stop_ipc_service(self):
-        if not self.model_server_process:
-            return
-        
-        try:
-            logger.info(f"[APP] Terminating IPC service (PID {self.model_server_process.pid})...")
-            if sys.platform != 'win32':
-                os.killpg(os.getpgid(self.model_server_process.pid), signal.SIGTERM)
-            else:
-                self.model_server_process.terminate()
-            
-            self.model_server_process.wait(timeout=5)
-            logger.info("[APP] IPC service terminated")
-        except subprocess.TimeoutExpired:
-            logger.warning("[APP] IPC service did not terminate gracefully, killing...")
-            if sys.platform != 'win32':
-                os.killpg(os.getpgid(self.model_server_process.pid), signal.SIGKILL)
-            else:
-                self.model_server_process.kill()
-        except Exception as e:
-            logger.warning(f"[APP] Error terminating IPC service: {e}")
+            logger.info("[APP] Shutting down lixSearch...")
     
     def run(self, host: str = "0.0.0.0", port: int = 8000, workers: int = 1):
         import hypercorn.asyncio

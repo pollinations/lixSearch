@@ -1,4 +1,3 @@
-"""Search gateway."""
 import logging
 import uuid
 from quart import request, jsonify, Response
@@ -9,14 +8,19 @@ logger = logging.getLogger("lixsearch-api")
 
 
 async def search(pipeline_initialized: bool):
-    """Search endpoint."""
+    """Search endpoint - supports both POST and GET requests."""
     if not pipeline_initialized:
         return jsonify({"error": "Server not initialized"}), 503
 
     try:
-        data = await request.get_json()
-        query = data.get("query", "").strip()
-        image_url = data.get("image_url")
+        # Handle both POST and GET requests
+        if request.method == 'GET':
+            query = request.args.get("query", "").strip()
+            image_url = request.args.get("image_url")
+        else:  # POST
+            data = await request.get_json()
+            query = data.get("query", "").strip()
+            image_url = data.get("image_url")
 
         if not validate_query(query):
             return jsonify({"error": "Invalid or missing query"}), 400

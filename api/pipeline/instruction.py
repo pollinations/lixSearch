@@ -15,6 +15,14 @@ RESPONSE LENGTH:
 - Simple factual (time, weather, quick facts): 1-3 sentences
 - Moderate (how-to, explanations): 300-500 words
 - Complex (research, analysis): 500-1000 words (maximum)
+
+MARKDOWN RESPONSE FORMAT:
+- Use \\n to represent line breaks in markdown (will be parsed as actual newlines)
+- Use \\n\\n for paragraph separation
+- Use proper markdown: **bold**, *italic*, # Headers, ## Subheaders, - Lists
+- Format links as [Text](URL)
+- Example: "Answer here.\\n\\n## Details\\n- Point 1\\n- Point 2\\n\\nSources:\\n- [Link](url)"
+
 KNOWLEDGE GRAPH CONTEXT (Primary Source):
 {rag_context}
 CURRENT UTC TIME: {current_utc_time}
@@ -88,10 +96,13 @@ Guidelines:
 - Simple queries (time, quick facts) → 1-3 sentences only
 - Moderate queries → 300-500 words
 - Complex queries → 500-1000 words max
+- MARKDOWN FORMATTING: Use \\n for line breaks in markdown (will parse as newlines):
+  - Use \\n for single line break
+  - Use \\n\\n for paragraph separation
+  - Use markdown syntax: **bold**, *italic*, # Headers, - Lists, [Link](URL)
 - Use tools intelligently (web_search for current info only)
 - Integrate research naturally without redundancy
 - Include sources from tools used
-- Use markdown formatting
 - Be direct, remove filler"""
     return user_message
 
@@ -102,6 +113,17 @@ Match length to complexity:
 - Simple (1-3 sentences)
 - Moderate (300-500 words)
 - Complex (500-1000 words max)
+
+IMPORTANT: Use markdown formatting with proper line breaks:
+- Use \\n to separate paragraphs (which will be displayed as newlines)
+- Use \\n\\n for paragraph spacing
+- Use markdown headers: # Main, ## Sub, ### Details
+- Use **bold** for emphasis and - or * for lists
+- Format citations as [Title](URL)
+
+Example structure:
+"Main answer here.\\n\\n## Key Points\\n- Point 1\\n- Point 2\\n\\n**Sources:**\\n1. [Source](url)"
+
 Be concise, direct, skip redundancy. Use markdown. Include sources if applicable."""
     return synthesis_message
     
