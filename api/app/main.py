@@ -12,7 +12,6 @@ from ragService.main import get_retrieval_system
 from chatEngine.main import initialize_chat_engine
 from commons.requestID import RequestIDMiddleware
 from app.gateways import health, search, session, chat, stats, websocket
-from app.utils import format_openai_response
 logger = logging.getLogger("lixsearch-api")
 
 

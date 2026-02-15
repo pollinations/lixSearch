@@ -5,7 +5,7 @@ import json
 import uuid
 import os
 from datetime import datetime, timezone
-
+import tiktoken
 
 def setup_logger(name: str) -> logging.Logger:
     logging.basicConfig(
@@ -16,9 +16,20 @@ def setup_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 
+def count_tokens(text: str, model: str = "gpt-5-") -> int:
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+        return len(encoding.encode(text))
+    except Exception as e:
+        logging.warning(f"tiktoken encoding failed for model {model}: {e}, using fallback")
+        return len(text) // 4
+
+
 def format_openai_response(content: str, request_id: str = None) -> str:
-    model = os.getenv("MODEL")
+    model = os.getenv("MODEL", "gpt-3.5-turbo")
     escaped_content = content.replace('\n', '\\n')
+    completion_tokens = count_tokens(content, model)
+    prompt_tokens = 0 
     
     response = {
         "id": request_id or f"chatcmpl-{uuid.uuid4().hex[:8]}",
@@ -36,9 +47,9 @@ def format_openai_response(content: str, request_id: str = None) -> str:
             }
         ],
         "usage": {
-            "prompt_tokens": 0,
-            "completion_tokens": len(content.split()),
-            "total_tokens": len(content.split())
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens
         }
     }
     return json.dumps(response, ensure_ascii=False)
