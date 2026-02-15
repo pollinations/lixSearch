@@ -6,7 +6,7 @@ import requests
 import json
 from pipeline.tools import tools
 from datetime import datetime, timezone
-from api.sessions.conversation_cache import ConversationCacheManager
+from sessions.conversation_cache import ConversationCacheManager
 import os 
 from dotenv import load_dotenv
 from pipeline.config import (POLLINATIONS_ENDPOINT, 
