@@ -168,5 +168,30 @@ tools = [
                 "required": ["url"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_conversation_cache",
+            "description": "Query cached conversation history using semantic similarity to find relevant previous answers within the context window. Returns cached responses if similarity threshold is exceeded, reducing need for RAG/web searches.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The user query to search in conversation cache"
+                    },
+                    "use_window": {
+                        "type": "boolean",
+                        "description": "Whether to limit search to recent context window (default: true for faster lookup)"
+                    },
+                    "similarity_threshold": {
+                        "type": "number",
+                        "description": "Minimum similarity score (0-1) to consider a cache hit (default: 0.85)"
+                    }
+                },
+                "required": ["query"]
+            }
+        }
     }
 ]

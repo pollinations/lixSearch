@@ -56,3 +56,13 @@ RETRIEVAL_TOP_K = 5
 SESSION_SUMMARY_THRESHOLD = 6
 
 PERSIST_VECTOR_STORE_INTERVAL = 300
+
+# Conversation Cache Window Configuration
+CACHE_WINDOW_SIZE = 10  # Number of conversation turns to maintain in active cache window
+CACHE_COMPRESSION_ENABLED = True  # Enable semantic compression of cache entries
+CACHE_SIMILARITY_THRESHOLD = 0.85  # Threshold for cache hit on semantic similarity (0-1)
+CACHE_MAX_ENTRIES = 50  # Maximum cached conversation entries per session
+CACHE_TTL_SECONDS = 1800  # Cache entry time-to-live in seconds (30 minutes)
+CACHE_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # Model for cache embeddings
+CACHE_MIN_QUERY_LENGTH = 10  # Minimum query length to cache lookup
+CACHE_COMPRESSION_METHOD = "zlib"  # Compression method: zlib, gzip, or lz4

@@ -1,0 +1,20 @@
+(searchenv) ubuntu@ip-172-31-1-3:~/lixSearch$ python api/pipeline/searchPipeline.py 
+2026-02-14 21:12:49.774 | INFO     | functionCalls.getYoutubeDetails:<module>:25 - [YoutubeDetails] Loading faster-whisper model small on cuda
+INFO:elixpo:Starting Optimized ElixpoSearch Pipeline for query: 'what was the first thing I asked you?' with image: 'None' [RequestID: test-request-001]
+INFO:elixpo:[SearchPipeline] Connected to model_server via IPC
+INFO:elixpo:[Pipeline] Connected to model_server CoreEmbeddingService via IPC
+2026-02-14 21:12:52.288 | INFO     | ragService.semanticCache:__init__:19 - [SemanticCache] Initialized with TTL=300s, cache_dir=./cache
+2026-02-14 21:12:52.288 | INFO     | ragService.semanticCache:load_for_request:69 - [SemanticCache] Loaded cache for request test-request-001
+INFO:elixpo:[Pipeline] Loaded persistent cache for request test-request-001
+INFO:elixpo:[Pipeline] Retrieved 3 chunks from vector store
+INFO:elixpo:[Pipeline] RAG context prepared: 12549 chars
+INFO:elixpo:Tool calls suggested by model: 0 tools
+INFO:elixpo:Preparing optimized final response
+INFO:elixpo:[FINAL] final_message_content starts with: This appears to be the beginning of our conversation, so I don't have a record of any previous quest
+
+--- Final Answer Received in 2.98s ---
+This appears to be the beginning of our conversation, so I don't have a record of any previous question from you. I can only see this current query asking about your first question.If you're referring to a previous conversation session, I don't have access to conversation history or memory of past interactions. Each conversation starts fresh.Is there something specific you'd like to ask or discuss?
+2026-02-14 21:12:54.763 | INFO     | ragService.semanticCache:save_for_request:81 - [SemanticCache] Saved cache for request test-request-001
+INFO:elixpo:[Pipeline] Saved persistent cache for request test-request-001
+INFO:elixpo:Optimized Search Completed
+(searchenv) ubuntu@ip-172-31-1-3:~/lixSearch$ 

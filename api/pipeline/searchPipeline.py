@@ -11,6 +11,7 @@ from functionCalls.getYoutubeDetails import transcribe_audio, youtubeMetadata
 from functionCalls.getTimeZone import get_local_time
 from commons.searching_based import fetch_url_content_parallel, webSearch, imageSearch
 from commons.minimal import cleanQuery
+from commons.conversation_cache import ConversationCacheManager, create_cache_manager_from_config
 from ragService.semanticCache import SemanticCache
 import random
 import logging
@@ -21,7 +22,10 @@ import time
 from multiprocessing.managers import BaseManager
 
 from functools import lru_cache
-from pipeline.config import POLLINATIONS_ENDPOINT, RAG_CONTEXT_REFRESH
+from pipeline.config import (POLLINATIONS_ENDPOINT, RAG_CONTEXT_REFRESH, 
+                             CACHE_WINDOW_SIZE, CACHE_MAX_ENTRIES, CACHE_TTL_SECONDS, 
+                             CACHE_SIMILARITY_THRESHOLD, CACHE_COMPRESSION_METHOD, 
+                             CACHE_EMBEDDING_MODEL, CACHE_MIN_QUERY_LENGTH)
 from pipeline.instruction import system_instruction, user_instruction, synthesis_instruction
 
 
@@ -76,6 +80,46 @@ async def optimized_tool_execution(function_name: str, function_args: dict, memo
         if function_name == "cleanQuery":
             websites, youtube, cleaned_query = cleanQuery(function_args.get("query"))
             yield f"Cleaned Query: {cleaned_query}\nWebsites: {websites}\nYouTube URLs: {youtube}"
+
+        elif function_name == "query_conversation_cache":
+            logger.info("[Pipeline] Query conversation cache tool called")
+            query = function_args.get("query")
+            use_window = function_args.get("use_window", True)
+            threshold = function_args.get("similarity_threshold")
+            
+            if "conversation_cache" not in memoized_results:
+                yield "[CACHE] No conversation cache available"
+                return
+            
+            cache_manager = memoized_results["conversation_cache"]
+            cache_hit, similarity_score = cache_manager.query_cache(
+                query=query,
+                use_window=use_window,
+                similarity_threshold=threshold,
+                return_compressed=False
+            )
+            
+            if cache_hit:
+                cached_response = cache_hit.get("response", "")
+                cache_metadata = cache_hit.get("metadata", {})
+                result = f"""[CACHE HIT] Found relevant previous answer (similarity: {similarity_score:.2%})
+
+Original Query: {cache_hit.get('query')}
+
+Cached Response:
+{cached_response}
+
+---
+Sources: {cache_metadata.get('sources', 'N/A')}"""
+                memoized_results["cache_hit"] = True
+                memoized_results["cached_response"] = cached_response
+                logger.info(f"[Pipeline] Cache hit with similarity: {similarity_score:.2%}")
+                yield result
+            else:
+                msg = f"[CACHE] No match found (best similarity: {similarity_score:.2%}). Proceeding with RAG/web search..."
+                logger.info(msg)
+                memoized_results["cache_hit"] = False
+                yield msg
 
         elif function_name == "get_local_time":
             location_name = function_args.get("location_name")
@@ -281,8 +325,22 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             "youtube_metadata": {},
             "youtube_transcripts": {},
             "base64_cache": {},
-            "context_sufficient": False  # Early exit marker
+            "context_sufficient": False,  # Early exit marker
+            "cache_hit": False,
+            "cached_response": None
         }
+        
+        # Initialize Conversation Cache Manager
+        conversation_cache = ConversationCacheManager(
+            window_size=CACHE_WINDOW_SIZE,
+            max_entries=CACHE_MAX_ENTRIES,
+            ttl_seconds=CACHE_TTL_SECONDS,
+            compression_method=CACHE_COMPRESSION_METHOD,
+            embedding_model=CACHE_EMBEDDING_MODEL,
+            similarity_threshold=CACHE_SIMILARITY_THRESHOLD
+        )
+        memoized_results["conversation_cache"] = conversation_cache
+        logger.info(f"[Pipeline] Initialized Conversation Cache Manager (window_size={CACHE_WINDOW_SIZE}, max_entries={CACHE_MAX_ENTRIES})")
         
         # Initialize persistent semantic cache with 5-min TTL per request
         semantic_cache = SemanticCache(ttl_seconds=300, cache_dir="./cache")
@@ -719,6 +777,25 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 for i, src in enumerate(unique_sources):
                     response_parts.append(f"{i+1}. [{src}]({src})\n")
             response_with_sources = "".join(response_parts)
+            
+            # Save to conversation cache for future queries
+            try:
+                cache_metadata = {
+                    "sources": collected_sources[:5],
+                    "tool_calls": tool_call_count,
+                    "iteration": current_iteration,
+                    "had_cache_hit": memoized_results.get("cache_hit", False)
+                }
+                conversation_cache.add_to_cache(
+                    query=user_query, 
+                    response=final_message_content,
+                    metadata=cache_metadata
+                )
+                cache_stats = conversation_cache.get_cache_stats()
+                logger.info(f"[Pipeline] Saved to conversation cache. Stats: {cache_stats}")
+            except Exception as e:
+                logger.warning(f"[Pipeline] Failed to save to conversation cache: {e}")
+            
             if event_id:
                 yield format_sse("INFO", "<TASK>SUCCESS - Sending response</TASK>")
                 chunk_size = 8000
