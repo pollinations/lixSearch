@@ -33,6 +33,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             return format_sse(event_type, message)
         return None
 
+    original_user_query = user_query or ""
+    image_only_mode = bool(user_image and not original_user_query.strip())
+
     initial_event = emit_event("INFO", "<TASK>Understanding Query</TASK>")
     if initial_event:
         yield initial_event
@@ -56,7 +59,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             "youtube_metadata": {},
             "youtube_transcripts": {},
             "base64_cache": {},
-            "context_sufficient": False,  # Early exit marker
+            "context_sufficient": False,  
             "cache_hit": False,
             "cached_response": None
         }
@@ -86,7 +89,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         
         # IMAGE HANDLING: Detect and process image-only queries
         image_context_provided = False
-        if user_image and not user_query.strip():
+        if image_only_mode:
             logger.info(f"[Pipeline] Image-only query detected. Generating search query from image...")
             try:
                 image_event = emit_event("INFO", "<TASK>Analyzing image to generate search query</TASK>")
@@ -144,7 +147,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             }
         ]
 
-        # OPTIMIZATION FIX #13: Cache RAG context to avoid regeneration in multi-turn
         rag_context_cache = rag_context
         last_context_refresh = current_iteration
 
@@ -295,7 +297,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     "image_urls": image_urls
                 }
             
-            # Run web searches in parallel
             if web_search_calls:
                 emit_sse = emit_event("INFO", f"<TASK>Running {len(web_search_calls)} parallel searches</TASK>")
                 if emit_sse:
@@ -335,8 +336,10 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         else:
                             tool_result = result
                     if function_name == "image_search" and image_urls:
-                        if user_image and user_query.strip():
-                            collected_images_from_web.extend(image_urls[:5])
+                        if image_only_mode:
+                            collected_similar_images.extend(image_urls)
+                        else:
+                            collected_images_from_web.extend(image_urls)
                 else:
                     tool_result = await tool_result_gen if asyncio.iscoroutine(tool_result_gen) else tool_result_gen
                 
@@ -584,31 +587,35 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             has_image_markdown = bool(re.search(r'!\[([^\]]*)\]\(https?://[^\)]+\)', final_message_content))
             image_count_in_synthesis = len(re.findall(r'!\[', final_message_content))
             logger.info(f"[FINAL] Synthesis content has embedded images: {has_image_markdown} ({image_count_in_synthesis} found)")
+            existing_image_urls = set(re.findall(r'!\[[^\]]*\]\((https?://[^\)]+)\)', final_message_content))
             
             response_parts = [final_message_content]
             images_added = 0
             
-            # Only append additional images if synthesis didn't already include them
-            if not has_image_markdown:
-                if user_image and not user_query.strip() and collected_similar_images:
-                    response_parts.append("\n\n**Similar Images:**\n")
-                    # Ensure at least 4 images, cap at 10
-                    limit = min(10, max(4, len(collected_similar_images)))
-                    for img in collected_similar_images[:limit]:
-                        if img and img.startswith("http"):
-                            response_parts.append(f"![Similar Image]({img})\n")
+            image_pool = collected_similar_images if (image_only_mode and collected_similar_images) else collected_images_from_web
+            if image_pool:
+                deduped_pool = []
+                seen_urls = set()
+                for img in image_pool:
+                    if img and img.startswith("http") and img not in seen_urls:
+                        seen_urls.add(img)
+                        deduped_pool.append(img)
+
+                missing_images = [img for img in deduped_pool if img not in existing_image_urls]
+                if missing_images:
+                    # Keep at least 4 total images when available, cap at 10
+                    desired_total = min(10, max(4, len(deduped_pool)))
+                    images_to_add = max(0, desired_total - len(existing_image_urls))
+                    if images_to_add > 0:
+                        title = "Similar Images" if image_only_mode else "Related Images"
+                        label = "Similar Image" if image_only_mode else "Image"
+                        response_parts.append(f"\n\n**{title}:**\n")
+                        for img in missing_images[:images_to_add]:
+                            response_parts.append(f"![{label}]({img})\n")
                             images_added += 1
-                elif collected_images_from_web:
-                    response_parts.append("\n\n**Related Images:**\n")
-                    # Ensure at least 4 images, cap at 10
-                    limit = min(10, max(4, len(collected_images_from_web)))
-                    for img in collected_images_from_web[:limit]:
-                        if img and img.startswith("http"):
-                            response_parts.append(f"![Image]({img})\n")
-                            images_added += 1
-                logger.info(f"[FINAL] Added {images_added} images from web search (total images: {images_added})")
-            else:
-                logger.info(f"[FINAL] Skipping image append - synthesis already contains {image_count_in_synthesis} image references")
+                logger.info(f"[FINAL] Added {images_added} images from collected results (existing in synthesis: {len(existing_image_urls)})")
+            elif has_image_markdown:
+                logger.info(f"[FINAL] No collected image pool; using {image_count_in_synthesis} image references from synthesis")
             if collected_sources:
                 response_parts.append("\n\n---\n**Sources:**\n")
                 unique_sources = sorted(list(set(collected_sources)))[:5]
@@ -636,11 +643,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             
             if event_id:
                 yield format_sse("INFO", "<TASK>SUCCESS - Sending response</TASK>")
-                chunk_size = 8000
-                for i in range(0, len(response_with_sources), chunk_size):
-                    chunk = response_with_sources[i:i+chunk_size]
-                    event_name = "final" if i + chunk_size >= len(response_with_sources) else "final-part"
-                    yield format_sse(event_name, chunk)
+                yield format_sse("final", response_with_sources)
             else:
                 yield response_with_sources
             return
@@ -698,4 +701,3 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 logger.warning(f"[Pipeline] Failed to save conversation cache: {e}")
         
         logger.info("Optimized Search Completed")
-
