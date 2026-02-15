@@ -464,8 +464,13 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 response.raise_for_status()
                 response_data = response.json()
                 logger.info(f"[SYNTHESIS] Raw API response status: {response.status_code}, response keys: {response_data.keys() if isinstance(response_data, dict) else 'unknown'}")
+                logger.debug(f"[SYNTHESIS] Full response data: {json.dumps(response_data, indent=2)[:500]}")
                 try:
                     message = response_data["choices"][0]["message"]
+                    logger.debug(f"[SYNTHESIS] Message keys: {message.keys()}")
+                    logger.debug(f"[SYNTHESIS] Content value: {repr(message.get('content'))}")
+                    logger.debug(f"[SYNTHESIS] Tool calls: {message.get('tool_calls')}")
+                    
                     final_message_content = message.get("content", "").strip()
                     
                     # If content is empty but we have reasoning_content, use that
@@ -481,7 +486,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                             final_message_content += f"\n\nKey sources:\n" + "\n".join([f"- {src}" for src in collected_sources[:5]])
                     
                     if not final_message_content:
-                        logger.error(f"[SYNTHESIS] API returned empty content. Full response: {response_data}")
+                        logger.error(f"[SYNTHESIS] API returned empty content after all fallbacks. Full response: {response_data}")
                         # Provide fallback response
                         final_message_content = f"I processed your query about '{user_query}'."
                         if collected_sources:
@@ -492,7 +497,10 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     logger.error(f"[SYNTHESIS] Failed to extract content from response. Expected structure not found. Error: {e}")
                     logger.error(f"[SYNTHESIS] Response data keys: {response_data.keys() if isinstance(response_data, dict) else 'Not a dict'}")
                     logger.error(f"[SYNTHESIS] Full response: {response_data}")
-                    final_message_content = None
+                    # Provide fallback instead of None
+                    final_message_content = f"I gathered {len(collected_sources)} relevant sources about '{user_query}'."
+                    if collected_sources:
+                        final_message_content += f"\n\nRelevant sources:\n" + "\n".join([f"- {src}" for src in collected_sources[:5]])
             except asyncio.TimeoutError:
                 logger.error("[SYNTHESIS TIMEOUT] Request timed out")
                 logger.warning(f"[SYNTHESIS FALLBACK] Using collected information as response")
@@ -573,6 +581,26 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 final_message_content = f"I searched for information about '{user_query}' and found some relevant sources. "
                 if collected_sources:
                     final_message_content += f"Sources: {', '.join(collected_sources[:3])}"
+                
+                # Send the fallback response
+                response_parts = [final_message_content]
+                if collected_sources:
+                    response_parts.append("\n\n---\n**Sources:**\n")
+                    unique_sources = sorted(list(set(collected_sources)))[:5]
+                    for i, src in enumerate(unique_sources):
+                        response_parts.append(f"{i+1}. [{src}]({src})\n")
+                response_with_fallback = "".join(response_parts)
+                
+                if event_id:
+                    yield format_sse("INFO", "<TASK>FALLBACK - Sending collected information</TASK>")
+                    chunk_size = 8000
+                    for i in range(0, len(response_with_fallback), chunk_size):
+                        chunk = response_with_fallback[i:i+chunk_size]
+                        event_name = "final" if i + chunk_size >= len(response_with_fallback) else "final-part"
+                        yield format_sse(event_name, chunk)
+                else:
+                    yield format_sse("final", response_with_fallback)
+                return
             else:
                 if event_id:
                     yield format_sse("error", "Ooops! I crashed, can you please query again?")
