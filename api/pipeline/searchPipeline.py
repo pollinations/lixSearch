@@ -11,7 +11,7 @@ from functionCalls.getYoutubeDetails import transcribe_audio, youtubeMetadata
 from functionCalls.getTimeZone import get_local_time
 from commons.searching_based import fetch_url_content_parallel, webSearch, imageSearch
 from commons.minimal import cleanQuery
-from commons.conversation_cache import ConversationCacheManager, create_cache_manager_from_config
+from api.sessions.conversation_cache import ConversationCacheManager, create_cache_manager_from_config
 from ragService.semanticCache import SemanticCache
 import random
 import logging

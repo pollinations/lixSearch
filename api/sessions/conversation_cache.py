@@ -9,6 +9,7 @@ from typing import Dict, List, Tuple, Optional
 from datetime import datetime, timedelta
 from collections import deque
 import numpy as np
+from pipeline.config import CACHE_WINDOW_SIZE, CACHE_MAX_ENTRIES, CACHE_TTL_SECONDS, CACHE_COMPRESSION_METHOD, CACHE_EMBEDDING_MODEL, CACHE_SIMILARITY_THRESHOLD, CONVERSATION_CACHE_DIR
 
 logger = logging.getLogger("elixpo")
 
@@ -22,13 +23,13 @@ except ImportError:
 
 class ConversationCacheManager:
     def __init__(self, 
-                 window_size: int = 10,
-                 max_entries: int = 50,
-                 ttl_seconds: int = 1800,
-                 compression_method: str = "zlib",
-                 embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2",
-                 similarity_threshold: float = 0.85,
-                 cache_dir: str = "./data/cache/conversation"):
+                 window_size: int = CACHE_WINDOW_SIZE,
+                 max_entries: int = CACHE_MAX_ENTRIES,
+                 ttl_seconds: int = CACHE_TTL_SECONDS,
+                 compression_method: str = CACHE_COMPRESSION_METHOD,
+                 embedding_model: str = CACHE_EMBEDDING_MODEL,
+                 similarity_threshold: float = CACHE_SIMILARITY_THRESHOLD,
+                 cache_dir: str = CONVERSATION_CACHE_DIR):
         
         self.window_size = window_size
         self.max_entries = max_entries
@@ -37,7 +38,6 @@ class ConversationCacheManager:
         self.similarity_threshold = similarity_threshold
         self.cache_dir = cache_dir
         
-        # Create cache directory if it doesn't exist
         os.makedirs(self.cache_dir, exist_ok=True)
         
         self.embedding_model = None
