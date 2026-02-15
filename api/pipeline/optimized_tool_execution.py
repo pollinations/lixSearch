@@ -11,7 +11,6 @@ from commons.minimal import cleanQuery
 from functionCalls.getYoutubeDetails import transcribe_audio, youtubeMetadata
 from pipeline.utils import get_model_server, cached_web_search_key
 
-
 async def optimized_tool_execution(function_name: str, function_args: dict, memoized_results: dict, emit_event_func):
     try:
         VALID_TOOL_NAMES = {tool["function"]["name"] for tool in tools}
@@ -140,12 +139,9 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
             image_urls = []
             url_context = ""
             try:
-                # Handle different return types from imageSearch
                 if isinstance(search_results_raw, list):
-                    # Direct list of URLs from IPC service
                     image_urls = search_results_raw[:max_images]
                 elif isinstance(search_results_raw, str):
-                    # Try to parse as JSON (fallback for older format)
                     try:
                         image_dict = json.loads(search_results_raw)
                         if isinstance(image_dict, dict):
@@ -158,7 +154,6 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
                     except json.JSONDecodeError:
                         logger.warning(f"Could not parse image search results as JSON")
                 
-                # Build context string from URLs
                 for url in image_urls:
                     if url.startswith("http"):
                         url_context += f"\t{url}\n"
@@ -207,17 +202,14 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
                 queries = memoized_results.get("search_query", "")
                 if isinstance(queries, str):
                     queries = [queries]
-                # Use async directly instead of ThreadPoolExecutor
                 parallel_results = await asyncio.wait_for(
                     asyncio.to_thread(fetch_url_content_parallel, queries, [url]),
                     timeout=15.0
                 )
                 
-                # CRITICAL FIX #2: Ingest fetched content into vector store for RAG via IPC
                 try:
                     model_server = get_model_server()
                     core_service = model_server.CoreEmbeddingService()
-                    # Run ingest_url in thread to avoid blocking
                     ingest_result = await asyncio.to_thread(core_service.ingest_url, url)
                     chunks_count = ingest_result.get('chunks_ingested', 0)
                     logger.info(f"[Pipeline] Ingested {chunks_count} chunks from {url} into vector store")

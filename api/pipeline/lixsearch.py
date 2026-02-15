@@ -83,7 +83,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             semantic_cache.load_for_request(request_id)
             logger.info(f"[Pipeline] Loaded persistent cache for request {request_id}")
         
-        max_iterations = 2 
+        max_iterations = 3 
         current_iteration = 0
         collected_sources = []
         collected_images_from_web = []
@@ -127,10 +127,12 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             if messages and len(messages) > 0:
                 for m in messages:
                     if m.get("role") == "assistant":
-                        if m.get("content") is None:
-                            m["content"] = "Processing your request..."
-                        if "tool_calls" in m and not m.get("content"):
-                            m["content"] = "Processing your request..."
+                        # Ensure assistant messages have content even if tool_calls exist
+                        if m.get("content") is None or m.get("content") == "":
+                            if "tool_calls" in m and len(m.get("tool_calls", [])) > 0:
+                                m["content"] = f"Executing {len(m['tool_calls'])} tool(s)..."
+                            else:
+                                m["content"] = "Processing your request..."
 
             iteration_event = emit_event("INFO", f"<TASK>Iteration {current_iteration}: Analyzing query</TASK>")
             if iteration_event:
@@ -222,6 +224,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             logger.info(f"Tool calls suggested by model: {len(tool_calls) if tool_calls else 0} tools")
             if not tool_calls:
                 final_message_content = assistant_message.get("content")
+                logger.info(f"[COMPLETION] No tool calls found, setting final message: {final_message_content[:100] if final_message_content else 'EMPTY'}")
                 break
             tool_outputs = []
             print(tool_calls)
@@ -412,10 +415,11 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             if event_id:
                 yield format_sse("INFO", f"<TASK>Processing responses ({tool_call_count} tools completed)</TASK>")
             
-            # OPTIMIZATION: Early exit if we processed many tools (good signal of completeness)
-            if tool_call_count >= 6 and current_iteration >= 1:
-                logger.info(f"[EARLY EXIT] Processed {tool_call_count} tools, stopping early")
-                final_message_content = "Have gathered sufficient information. Let me compile the comprehensive response now."
+            # OPTIMIZATION: Early exit if we have good information or too many iterations
+            if (tool_call_count >= 3 and len(collected_sources) >= 2 and current_iteration >= 1) or \
+               (current_iteration >= 2 and len(collected_sources) >= 1):
+                logger.info(f"[EARLY EXIT] Processed {tool_call_count} tools with {len(collected_sources)} sources, stopping for synthesis")
+                final_message_content = None  # Force synthesis
                 break
 
         if not final_message_content and current_iteration >= max_iterations:
@@ -461,9 +465,27 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 response_data = response.json()
                 logger.info(f"[SYNTHESIS] Raw API response status: {response.status_code}, response keys: {response_data.keys() if isinstance(response_data, dict) else 'unknown'}")
                 try:
-                    final_message_content = response_data["choices"][0]["message"].get("content")
+                    message = response_data["choices"][0]["message"]
+                    final_message_content = message.get("content", "").strip()
+                    
+                    # If content is empty but we have reasoning_content, use that
+                    if not final_message_content and "reasoning_content" in message:
+                        final_message_content = message.get("reasoning_content", "").strip()
+                        logger.info("[SYNTHESIS] Using reasoning_content as fallback")
+                    
+                    # If still empty and model returned tool_calls, extract meaningful info or respond directly
+                    if not final_message_content and message.get("tool_calls"):
+                        logger.warning(f"[SYNTHESIS] Model returned tool_calls instead of content in synthesis")
+                        final_message_content = f"I searched for information about '{user_query}' and gathered {len(collected_sources)} relevant sources."
+                        if collected_sources:
+                            final_message_content += f"\n\nKey sources:\n" + "\n".join([f"- {src}" for src in collected_sources[:5]])
+                    
                     if not final_message_content:
                         logger.error(f"[SYNTHESIS] API returned empty content. Full response: {response_data}")
+                        # Provide fallback response
+                        final_message_content = f"I processed your query about '{user_query}'."
+                        if collected_sources:
+                            final_message_content += f"\n\nRelevant sources found:\n" + "\n".join([f"- {src}" for src in collected_sources[:5]])
                     else:
                         logger.info(f"[SYNTHESIS] Successfully extracted content. Length: {len(final_message_content)}")
                 except (KeyError, IndexError, TypeError) as e:
