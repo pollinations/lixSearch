@@ -1,6 +1,70 @@
 # lixSearch API Architecture
 
+## API Endpoints
 
+### Search Endpoint: `/api/search`
+- **Methods**: `GET`, `POST`
+- **Default Mode**: Streaming (SSE)
+
+#### Parameters
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `query` | string | required | Search query |
+| `image_url` | string | optional | URL of image for visual search |
+| `stream` | boolean | `true` | Stream results as Server-Sent Events |
+
+#### Streaming Mode (`stream=true` or default)
+Returns Server-Sent Events with real-time updates:
+```bash
+# GET request
+curl "http://localhost:8000/api/search?query=latest%20news&stream=true"
+
+# or POST request
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"query":"latest news","stream":true}' \
+  http://localhost:8000/api/search
+```
+
+Response format: `text/event-stream` with events:
+- `INFO` - Status updates (task descriptions)
+- `final-part` - Content chunks (for large responses)
+- `final` - Complete response content
+- `error` - Error messages
+
+#### Non-Streaming Mode (`stream=false`)
+Returns single OpenAI-format JSON response:
+```bash
+# GET request
+curl "http://localhost:8000/api/search?query=latest%20news&stream=false"
+
+# or POST request
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"query":"latest news","stream":false}' \
+  http://localhost:8000/api/search
+```
+
+Response format: `application/json`
+```json
+{
+  "id": "chatcmpl-abc123",
+  "object": "chat.completion",
+  "created": 1708014000,
+  "model": "kimi",
+  "choices": [{
+    "index": 0,
+    "message": {
+      "role": "assistant",
+      "content": "Response with \\n escaped newlines..."
+    },
+    "finish_reason": "stop"
+  }],
+  "usage": {
+    "prompt_tokens": 0,
+    "completion_tokens": 247,
+    "total_tokens": 247
+  }
+}
+```
 
 ## Module Hierarchies
 
