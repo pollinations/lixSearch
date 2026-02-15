@@ -43,7 +43,7 @@ EXAMPLES OF CORRECT OUTPUT:
 NOW GENERATE ONLY THE SEARCH QUERY FOR THIS IMAGE - NO OTHER TEXT:"""
 
     data = {
-        "model": "gemini-fast",
+        "model": os.getenv("IMAGE_MODEL"),
         "messages": [
             {
                 "role": "user",
@@ -122,7 +122,7 @@ Prioritize:
 Avoid vague words. Be descriptive but concise. Don't assume, only describe what's clearly visible. If a person's face is clearly visible and recognizable, include their name."""
 
     data = {
-        "model": "gemini-fast",
+        "model": os.getenv("IMAGE_MODEL"),
         "messages": [
             {
                 "role": "system",
