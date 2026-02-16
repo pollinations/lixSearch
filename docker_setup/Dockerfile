@@ -9,7 +9,6 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
@@ -19,6 +18,11 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 COPY . .
 
-EXPOSE 5000
-ENV FLASK_APP=src/app.py
-CMD ["python3", "src/app.py"]
+# Create entrypoint script
+RUN mkdir -p /app/docker_setup
+COPY docker_setup/entrypoint.sh /app/docker_setup/entrypoint.sh
+RUN chmod +x /app/docker_setup/entrypoint.sh
+
+EXPOSE 8000
+ENV PYTHONUNBUFFERED=1
+ENTRYPOINT ["/app/docker_setup/entrypoint.sh"]
