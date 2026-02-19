@@ -16,7 +16,6 @@ Where:
 - L_i = latency of layer i
 - L_web = web search latency
 """
-
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
@@ -27,7 +26,6 @@ from collections import defaultdict
 
 
 class CacheLayer(Enum):
-    """Enumeration of cache layers."""
     CONVERSATION = "conversation"
     SEMANTIC = "semantic"
     SESSION = "session"
@@ -37,7 +35,6 @@ class CacheLayer(Enum):
 
 @dataclass
 class LayerLatency:
-    """Latency characteristics of a cache layer."""
     avg_ms: float = 0.0
     p95_ms: float = 0.0
     p99_ms: float = 0.0
@@ -46,13 +43,11 @@ class LayerLatency:
     sample_count: int = 0
     
     def update(self, latency_ms: float):
-        """Update latency statistics with new observation."""
         if self.sample_count == 0:
             self.avg_ms = latency_ms
             self.min_ms = latency_ms
             self.max_ms = latency_ms
         else:
-            # Running average
             self.avg_ms = (self.avg_ms * self.sample_count + latency_ms) / (self.sample_count + 1)
             self.min_ms = min(self.min_ms, latency_ms)
             self.max_ms = max(self.max_ms, latency_ms)
@@ -62,7 +57,6 @@ class LayerLatency:
 
 @dataclass
 class LayerMetrics:
-    """Per-layer metrics for Markov chain model."""
     layer: CacheLayer
     hit_count: int = 0
     miss_count: int = 0
@@ -71,7 +65,6 @@ class LayerMetrics:
     
     @property
     def hit_probability(self) -> float:
-        """Empirical hit probability P(hit_i)."""
         total = self.total_lookups
         if total == 0:
             return self._get_default_probability()
@@ -79,22 +72,19 @@ class LayerMetrics:
     
     @property
     def miss_probability(self) -> float:
-        """Empirical miss probability P(miss_i)."""
         return 1.0 - self.hit_probability
     
     def _get_default_probability(self) -> float:
-        """Default hit probability for layer (when no data)."""
         defaults = {
             CacheLayer.CONVERSATION: 0.30,
             CacheLayer.SEMANTIC: 0.25,
             CacheLayer.SESSION: 0.20,
             CacheLayer.GLOBAL: 0.15,
-            CacheLayer.WEB: 1.0  # Web always "hits" (no miss)
+            CacheLayer.WEB: 1.0
         }
         return defaults.get(self.layer, 0.1)
     
     def get_default_latency(self) -> float:
-        """Default latency for layer in ms (when no data)."""
         defaults = {
             CacheLayer.CONVERSATION: 5.0,
             CacheLayer.SEMANTIC: 15.0,
@@ -105,13 +95,11 @@ class LayerMetrics:
         return defaults.get(self.layer, 100.0)
     
     def record_hit(self, latency_ms: float):
-        """Record a cache hit."""
         self.hit_count += 1
         self.total_lookups += 1
         self.latencies.update(latency_ms)
     
     def record_miss(self, latency_ms: float = 0.0):
-        """Record a cache miss."""
         self.miss_count += 1
         self.total_lookups += 1
         if latency_ms > 0:
@@ -119,21 +107,14 @@ class LayerMetrics:
 
 
 class CacheMarkovChain:
-    """
-    Markov chain model for multi-layer cache retrieval.
-    
-    State space: {conversation, semantic, session, global, web}
-    Transition: Hit → response, Miss → next layer
-    """
     
     def __init__(self):
-        """Initialize Markov chain with default layer metrics."""
         self.layers: Dict[CacheLayer, LayerMetrics] = {
             layer: LayerMetrics(layer=layer)
             for layer in CacheLayer
         }
         self.transition_history: List[Tuple[CacheLayer, bool]] = []
-        self.observation_window = 500  # Keep recent history
+        self.observation_window = 500
         
         logger.info("[CacheMarkovChain] Initialized with 5-layer cache model")
     
@@ -141,14 +122,6 @@ class CacheMarkovChain:
                      layer: CacheLayer,
                      was_hit: bool,
                      latency_ms: float):
-        """
-        Record a cache lookup event.
-        
-        Args:
-            layer: Which cache layer was accessed
-            was_hit: Whether it resulted in a hit
-            latency_ms: Latency of the lookup
-        """
         metrics = self.layers[layer]
         
         if was_hit:
@@ -156,7 +129,6 @@ class CacheMarkovChain:
         else:
             metrics.record_miss(latency_ms)
         
-        # Track transition history
         self.transition_history.append((layer, was_hit))
         if len(self.transition_history) > self.observation_window:
             self.transition_history = self.transition_history[-self.observation_window:]
@@ -167,28 +139,16 @@ class CacheMarkovChain:
         )
     
     def get_layer_metrics(self, layer: CacheLayer) -> LayerMetrics:
-        """Get metrics for specific layer."""
         return self.layers[layer]
     
     def compute_hit_probability(self, layer: CacheLayer) -> float:
-        """
-        Compute P(hit_i) = probability of hit at layer i.
-        
-        Uses empirical data if available, else defaults.
-        """
         metrics = self.layers[layer]
         return metrics.hit_probability
     
     def compute_expected_latency(self) -> Dict:
-        """
-        Compute expected latency: E[L] = Σ_i P(hit_i)·L_i + P(miss_all)·L_web
-        
-        Returns detailed breakdown and total expected latency.
-        """
         total_expected_latency = 0.0
         layer_contributions = {}
         
-        # Compute probability of reaching each layer
         prob_miss_previous = 1.0
         
         for i, layer in enumerate([
@@ -201,13 +161,11 @@ class CacheMarkovChain:
             metrics = self.layers[layer]
             hit_prob = self.compute_hit_probability(layer)
             
-            # Probability of reaching this layer = miss all previous AND hit this
-            # (or reaching web layer always)
             if layer == CacheLayer.WEB:
                 prob_reach = prob_miss_previous
                 contribution = prob_reach * metrics.latencies.avg_ms
             else:
-                prob_reach = prob_miss_previous * 1.0  # Assume we always try
+                prob_reach = prob_miss_previous * 1.0
                 contribution = prob_reach * hit_prob * metrics.latencies.avg_ms
                 prob_miss_previous *= (1.0 - hit_prob)
             
@@ -232,10 +190,6 @@ class CacheMarkovChain:
         }
     
     def compute_layer_utilization(self) -> Dict[str, float]:
-        """
-        Compute utilization rates for each layer.
-        Useful for identifying bottlenecks and optimization opportunities.
-        """
         utilization = {}
         
         for layer in CacheLayer:
@@ -251,20 +205,14 @@ class CacheMarkovChain:
         return utilization
     
     def predict_latency_percentiles(self) -> Dict[str, float]:
-        """
-        Predict latency percentiles (p50, p95, p99) based on layer distribution.
-        """
         samples = []
         
-        # Generate synthetic samples based on empirical distribution
         for layer in [CacheLayer.CONVERSATION, CacheLayer.SEMANTIC,
                       CacheLayer.SESSION, CacheLayer.GLOBAL, CacheLayer.WEB]:
             metrics = self.layers[layer]
             hit_prob = self.compute_hit_probability(layer)
             
-            # Sample hits
             hit_latencies = [metrics.latencies.avg_ms] * int(hit_prob * 1000)
-            # Sample misses (go to next layer)
             miss_latencies = [0.1] * int((1 - hit_prob) * 1000)
             
             samples.extend(hit_latencies)
@@ -289,23 +237,17 @@ class CacheMarkovChain:
         }
     
     def get_convergence_status(self) -> Dict:
-        """
-        Check convergence of empirical hit probabilities.
-        Returns confidence metrics for each layer.
-        """
         convergence = {}
         
         for layer in CacheLayer:
             metrics = self.layers[layer]
             total = metrics.total_lookups
             
-            # Compute confidence interval (wilson score)
             if total == 0:
                 confidence = 0.0
             else:
                 p = metrics.hit_probability
-                # Simplified confidence: higher sample count = higher confidence
-                confidence = min(1.0, total / 100.0)  # Converge after ~100 samples
+                confidence = min(1.0, total / 100.0)
             
             convergence[layer.value] = {
                 "sample_count": total,
@@ -316,15 +258,9 @@ class CacheMarkovChain:
         return convergence
     
     def plot_expected_latency_curve(self, sample_count_range: range = range(10, 501, 50)) -> Dict:
-        """
-        Plot how expected latency improves as we gather more observations.
-        Shows convergence curve.
-        """
         curve = []
         
-        # Simulate gathering more samples
         for sample_count in sample_count_range:
-            # Use current ratios but confidence increases
             expected = self.compute_expected_latency()
             curve.append({
                 "sample_count": sample_count,
@@ -338,9 +274,6 @@ class CacheMarkovChain:
         }
     
     def get_diagnostic_report(self) -> Dict:
-        """
-        Generate comprehensive diagnostic report.
-        """
         expected_latency = self.compute_expected_latency()
         percentiles = self.predict_latency_percentiles()
         utilization = self.compute_layer_utilization()
@@ -358,10 +291,8 @@ class CacheMarkovChain:
     def _generate_recommendation(self,
                                expected_latency: Dict,
                                utilization: Dict) -> str:
-        """Generate optimization recommendation based on metrics."""
         total_expected_ms = expected_latency["expected_latency_ms"]
         
-        # Find bottleneck layer
         max_contribution = 0.0
         bottleneck_layer = None
         
