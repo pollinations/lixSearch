@@ -15,7 +15,6 @@ Measured impacts:
 - ΔFactuality: Change in citation quality
 - ΔLatency: Change in response time
 """
-
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
@@ -25,7 +24,6 @@ import numpy as np
 
 
 class ComponentType(Enum):
-    """System components that can fail."""
     WEB_SEARCH = "web_search"
     GLOBAL_CACHE = "global_cache"
     SESSION_CACHE = "session_cache"
@@ -37,7 +35,6 @@ class ComponentType(Enum):
 
 @dataclass
 class PerformanceDegradation:
-    """Measures degradation in a single metric."""
     baseline: float
     degraded: float
     absolute_change: float = 0.0
@@ -51,13 +48,11 @@ class PerformanceDegradation:
             self.relative_change = 0.0
     
     def is_acceptable(self, threshold: float = 0.2) -> bool:
-        """Check if degradation is within acceptable threshold."""
         return abs(self.relative_change) <= threshold
 
 
 @dataclass
 class DegradationScenario:
-    """Represents a single degradation scenario."""
     disabled_components: List[ComponentType] = field(default_factory=list)
     completeness_degradation: Optional[PerformanceDegradation] = None
     factuality_degradation: Optional[PerformanceDegradation] = None
@@ -65,11 +60,9 @@ class DegradationScenario:
     
     @property
     def total_impact_score(self) -> float:
-        """Compute total impact score [0, 1]."""
         scores = []
         
         if self.completeness_degradation:
-            # Completeness loss is bad
             score = 1.0 - max(0.0, 1.0 - abs(self.completeness_degradation.relative_change))
             scores.append(score)
         
@@ -78,14 +71,12 @@ class DegradationScenario:
             scores.append(score)
         
         if self.latency_degradation:
-            # Latency increase is bad but less critical than quality loss
             score = 0.5 * min(1.0, abs(self.latency_degradation.relative_change))
             scores.append(score)
         
         return np.mean(scores) if scores else 0.0
     
     def get_summary(self) -> Dict:
-        """Get human-readable summary."""
         return {
             "disabled_components": [c.value for c in self.disabled_components],
             "total_impact_score": self.total_impact_score,
@@ -108,22 +99,17 @@ class DegradationScenario:
 
 
 class GracefulDegradationSimulator:
-    """
-    Simulates system behavior under component failures.
-    """
     
     def __init__(self):
-        # Baseline performance metrics
         self.baseline_completeness = 0.85
         self.baseline_factuality = 0.80
         self.baseline_latency_ms = 500.0
         
-        # Impact of each component on metrics
         self.component_impact = {
             ComponentType.WEB_SEARCH: {
-                "completeness": 0.20,    # Web adds 20% completeness
-                "factuality": 0.15,      # Web adds 15% factuality
-                "latency": 0.40          # Web adds 40% to latency
+                "completeness": 0.20,
+                "factuality": 0.15,
+                "latency": 0.40
             },
             ComponentType.GLOBAL_CACHE: {
                 "completeness": 0.05,
@@ -146,12 +132,12 @@ class GracefulDegradationSimulator:
                 "latency": 0.15
             },
             ComponentType.EMBEDDING_SERVICE: {
-                "completeness": 0.10,   # Can't retrieve without embeddings
+                "completeness": 0.10,
                 "factuality": 0.08,
                 "latency": 0.05
             },
             ComponentType.LLM_SERVICE: {
-                "completeness": 0.50,   # Can't generate response
+                "completeness": 0.50,
                 "factuality": 0.50,
                 "latency": 0.01
             }
@@ -166,14 +152,10 @@ class GracefulDegradationSimulator:
     
     def simulate_single_component_failure(self,
                                         component: ComponentType) -> DegradationScenario:
-        """
-        Simulate failure of a single component.
-        """
         scenario = DegradationScenario(disabled_components=[component])
         
         impact = self.component_impact.get(component, {})
         
-        # Compute degraded metrics
         completeness_loss = impact.get("completeness", 0.0)
         factuality_loss = impact.get("factuality", 0.0)
         latency_increase = impact.get("latency", 0.0)
@@ -203,25 +185,19 @@ class GracefulDegradationSimulator:
     
     def simulate_multiple_component_failure(self,
                                            components: List[ComponentType]) -> DegradationScenario:
-        """
-        Simulate failure of multiple components (with interaction effects).
-        """
         scenario = DegradationScenario(disabled_components=components)
         
-        # Compute combined impact
         total_completeness_loss = 0.0
         total_factuality_loss = 0.0
-        total_latency_increase = 1.0  # Multiplicative for latency
+        total_latency_increase = 1.0
         
         for component in components:
             impact = self.component_impact.get(component, {})
             
             total_completeness_loss += impact.get("completeness", 0.0)
             total_factuality_loss += impact.get("factuality", 0.0)
-            # Latency is multiplicative: if each adds 20%, combined is 1.2x1.2=1.44x
             total_latency_increase *= (1.0 + impact.get("latency", 0.0))
         
-        # Cap losses at 100%
         total_completeness_loss = min(1.0, total_completeness_loss)
         total_factuality_loss = min(1.0, total_factuality_loss)
         
@@ -249,17 +225,12 @@ class GracefulDegradationSimulator:
         return scenario
     
     def generate_all_failure_scenarios(self) -> List[DegradationScenario]:
-        """
-        Generate degradation scenarios for all single and critical multi-component failures.
-        """
         scenarios = []
         
-        # Single component failures
         for component in ComponentType:
             scenario = self.simulate_single_component_failure(component)
             scenarios.append(scenario)
         
-        # Critical multi-component failures
         critical_combinations = [
             [ComponentType.WEB_SEARCH, ComponentType.GLOBAL_CACHE],
             [ComponentType.SESSION_CACHE, ComponentType.CONVERSATION_CACHE],
@@ -274,11 +245,6 @@ class GracefulDegradationSimulator:
         return scenarios
     
     def compute_system_resilience(self) -> Dict:
-        """
-        Compute overall system resilience metric.
-        
-        Resilience = 1 - (average impact score across all failure scenarios)
-        """
         scenarios = self.generate_all_failure_scenarios()
         
         if not scenarios:
@@ -292,7 +258,6 @@ class GracefulDegradationSimulator:
         average_impact = np.mean(impact_scores)
         resilience_score = 1.0 - average_impact
         
-        # Identify critical failure modes
         critical_scenarios = [s for s in scenarios if s.total_impact_score > 0.5]
         
         logger.info(
@@ -310,7 +275,6 @@ class GracefulDegradationSimulator:
         }
     
     def _identify_critical_components(self, scenarios: List[DegradationScenario]) -> List[ComponentType]:
-        """Identify components whose failure has highest impact."""
         impact_by_component = {}
         
         for scenario in scenarios:
@@ -318,16 +282,11 @@ class GracefulDegradationSimulator:
                 component = scenario.disabled_components[0]
                 impact_by_component[component] = scenario.total_impact_score
         
-        # Return components sorted by impact (highest first)
         sorted_components = sorted(impact_by_component.items(), key=lambda x: x[1], reverse=True)
         
-        # Return top 3 critical components
         return [comp for comp, _ in sorted_components[:3]]
     
     def generate_mitigation_strategies(self, scenarios: List[DegradationScenario]) -> Dict:
-        """
-        Generate mitigation strategies for critical failure modes.
-        """
         strategies = {
             "web_search": [
                 "Implement fallback cache warmup",
@@ -351,7 +310,6 @@ class GracefulDegradationSimulator:
             ]
         }
         
-        # Find which components should be prioritized
         critical_components = [c.value for c in self._identify_critical_components(scenarios)]
         
         recommendations = []
@@ -367,9 +325,6 @@ class GracefulDegradationSimulator:
 
 
 class DegradationMetricsTracker:
-    """
-    Tracks actual degradation metrics in production.
-    """
     
     def __init__(self):
         self.scenarios_observed: Dict[str, DegradationScenario] = {}
@@ -381,9 +336,6 @@ class DegradationMetricsTracker:
                                 observed_completeness_change: float,
                                 observed_factuality_change: float,
                                 observed_latency_change: float):
-        """
-        Record an observed component failure in production.
-        """
         record = {
             "component": component.value,
             "duration_seconds": duration_seconds,
@@ -407,9 +359,6 @@ class DegradationMetricsTracker:
         )
     
     def get_empirical_degradation_profile(self) -> Dict:
-        """
-        Compute empirical degradation profile from production data.
-        """
         profile = {}
         
         for component in ComponentType:
@@ -442,9 +391,6 @@ class DegradationMetricsTracker:
         return profile
     
     def compare_simulated_vs_actual(self, simulator: GracefulDegradationSimulator) -> Dict:
-        """
-        Compare simulated degradation predictions with actual observed data.
-        """
         empirical = self.get_empirical_degradation_profile()
         simulated = simulator.component_impact
         
