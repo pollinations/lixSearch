@@ -20,13 +20,13 @@ tools = [
         "type": "function",
         "function": {
             "name": "web_search",
-            "description": "Search the web for information",
+            "description": "Search the web for current/real-time information. MANDATORY for weather, time-sensitive data, news, prices, events, and scores. When called, you MUST fetch 3-6 URLs from results using fetch_full_text. This is not optional - all web_search calls require comprehensive URL extraction.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "The search query"
+                        "description": "The search query. For weather: include location and 'weather' or 'temperature'. For time: include location and 'time'. For news: be specific about topic/date."
                     }
                 },
                 "required": ["query"]
@@ -37,13 +37,13 @@ tools = [
         "type": "function",
         "function": {
             "name": "fetch_full_text",
-            "description": "Fetch full text content from a URL",
+            "description": "Fetch full text content from a URL. IMPORTANT: When web_search is executed, you MUST call this for 3-6 of the returned URLs. Minimum 3 URLs must be fetched - this is mandatory, not optional. Fetch diverse URLs from search results to ensure comprehensive information.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "url": {
                         "type": "string",
-                        "description": "The URL to fetch content from"
+                        "description": "The URL to fetch. Select from web_search results. For weather queries, fetch from weather sites, news sites, and data aggregators - minimum 3 URLs."
                     }
                 },
                 "required": ["url"]
@@ -79,13 +79,13 @@ tools = [
         "type": "function",
         "function": {
             "name": "get_local_time",
-            "description": "Get local time for a specific location",
+            "description": "Get CURRENT local time for a specific location (MANDATORY for any time/timezone query). Always use this when user asks 'what time is it in [location]'. If user also asks about other current info (weather), follow with web_search to avoid incomplete responses.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "location_name": {
                         "type": "string",
-                        "description": "The location name"
+                        "description": "The location name (city, region, country). Extract from user query. Required."
                     }
                 },
                 "required": ["location_name"]
@@ -173,7 +173,7 @@ tools = [
         "type": "function",
         "function": {
             "name": "query_conversation_cache",
-            "description": "Query cached conversation history using semantic similarity to find relevant previous answers within the context window. Returns cached responses if similarity threshold is exceeded, reducing need for RAG/web searches.",
+            "description": "Query cached conversation history using semantic similarity. Use FIRST before any other tools. If cache returns match (>0.85 similarity), check if query is TIME-SENSITIVE. If time-sensitive (weather/time/news), IGNORE cache and proceed with web_search. Only use cached answer for evergreen content (definitions, general knowledge, history).",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -183,11 +183,11 @@ tools = [
                     },
                     "use_window": {
                         "type": "boolean",
-                        "description": "Whether to limit search to recent context window (default: true for faster lookup)"
+                        "description": "Always true for fastest lookup"
                     },
                     "similarity_threshold": {
                         "type": "number",
-                        "description": "Minimum similarity score (0-1) to consider a cache hit (default: 0.85)"
+                        "description": "Use 0.85 for high confidence matches"
                     }
                 },
                 "required": ["query"]
