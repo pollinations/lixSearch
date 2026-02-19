@@ -11,6 +11,9 @@ from commons.minimal import cleanQuery
 from functionCalls.getYoutubeDetails import transcribe_audio, youtubeMetadata
 from pipeline.utils import get_model_server, cached_web_search_key
 from pipeline.config import MAX_IMAGES_TO_INCLUDE, LOG_MESSAGE_QUERY_TRUNCATE, LOG_MESSAGE_PREVIEW_TRUNCATE, ERROR_MESSAGE_TRUNCATE, REQUEST_ID_HEX_SLICE_SIZE
+from pipeline.queryDecomposition import QueryAnalyzer, DecompositionEvaluator
+from pipeline.formalOptimization import ConstrainedOptimizer
+from commons.robustnessFramework import ToolOutputSanitizer, SanitizationPolicy
 
 async def optimized_tool_execution(function_name: str, function_args: dict, memoized_results: dict, emit_event_func):
     try:
@@ -224,10 +227,102 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
             except Exception as e:
                 logger.error(f"URL fetch error for {url}: {e}")
                 yield f"[ERROR] Failed to fetch {url}: {str(e)[:ERROR_MESSAGE_TRUNCATE]}"
+
+        elif function_name == "analyze_query_complexity":
+            logger.info("[Pipeline] Analyzing query complexity")
+            query = function_args.get("query")
+            try:
+                analyzer = QueryAnalyzer()
+                should_decompose, reason, confidence = analyzer.should_decompose(query)
+                complexity = analyzer.detect_query_complexity(query)
+                aspects = analyzer._detect_aspects(query)
+                
+                result = {
+                    "query": query,
+                    "complexity_level": complexity.value,
+                    "aspects_detected": list(aspects),
+                    "should_decompose": should_decompose,
+                    "reasoning": reason,
+                    "confidence": confidence
+                }
+                
+                logger.info(f"[Pipeline] Query analysis: complexity={complexity.value}, decompose={should_decompose}")
+                yield json.dumps(result, indent=2)
+            except Exception as e:
+                logger.error(f"Query complexity analysis error: {e}")
+                yield f"[ERROR] Failed to analyze query: {str(e)[:ERROR_MESSAGE_TRUNCATE]}"
+
+        elif function_name == "evaluate_response_quality":
+            logger.info("[Pipeline] Evaluating response quality")
+            query = function_args.get("query")
+            response = function_args.get("response")
+            sources = function_args.get("sources", [])
+            
+            try:
+                optimizer = ConstrainedOptimizer()
+                
+                # Evaluate each quality dimension
+                completeness = optimizer.aspect_evaluator.compute_coverage_ratio(query, response, sources)
+                factuality = optimizer.factuality_evaluator.evaluate_citations(response, sources)
+                freshness = optimizer.freshness_evaluator.compute_freshness([])
+                
+                overall_score = (completeness + factuality + freshness) / 3.0
+                
+                result = {
+                    "query": query[:LOG_MESSAGE_QUERY_TRUNCATE],
+                    "response_length": len(response),
+                    "quality_metrics": {
+                        "completeness": round(completeness, 3),
+                        "factuality": round(factuality, 3),
+                        "freshness": round(freshness, 3),
+                        "overall_score": round(overall_score, 3)
+                    },
+                    "sources_used": len(sources),
+                    "assessment": "PASS" if overall_score >= 0.65 else "NEEDS_IMPROVEMENT",
+                    "recommendations": []
+                }
+                
+                if completeness < 0.75:
+                    result["recommendations"].append("Increase aspect coverage (completeness)")
+                if factuality < 0.70:
+                    result["recommendations"].append("Improve citation correctness (factuality)")
+                if freshness < 0.60:
+                    result["recommendations"].append("Use more recent sources (freshness)")
+                
+                logger.info(f"[Pipeline] Response quality: completeness={completeness:.2f}, factuality={factuality:.2f}")
+                yield json.dumps(result, indent=2)
+            except Exception as e:
+                logger.error(f"Response quality evaluation error: {e}")
+                yield f"[ERROR] Failed to evaluate response: {str(e)[:ERROR_MESSAGE_TRUNCATE]}"
+
+        elif function_name == "sanitize_output":
+            logger.info("[Pipeline] Sanitizing output")
+            output = function_args.get("output")
+            source = function_args.get("source", "unknown")
+            
+            try:
+                sanitizer = ToolOutputSanitizer(SanitizationPolicy())
+                sanitized_output, report = sanitizer.sanitize(output, source=source)
+                
+                result = {
+                    "source": source,
+                    "original_length": report["original_length"],
+                    "sanitized_length": report["sanitized_length"],
+                    "risk_level": report["risk_level"],
+                    "issues_found": report["issues"],
+                    "transformations_applied": report["transformations_applied"],
+                    "is_safe": report["risk_level"] in ["low", "medium"],
+                    "sanitized_output": sanitized_output
+                }
+                
+                logger.info(f"[Pipeline] Output sanitization: risk_level={report['risk_level']}, issues={len(report['issues'])}")
+                yield json.dumps(result, indent=2)
+            except Exception as e:
+                logger.error(f"Output sanitization error: {e}")
+                yield f"[ERROR] Failed to sanitize output: {str(e)[:ERROR_MESSAGE_TRUNCATE]}"
+    
     except asyncio.TimeoutError:
-        logger.warning(f"Tool {function_name} timed out")
-        yield f"[TIMEOUT] Tool {function_name} took too long to execute"
-    except Exception as e:
-        logger.error(f"Error executing tool {function_name}: {e}")
-        yield f"[ERROR] Tool execution failed: {str(e)[:ERROR_MESSAGE_TRUNCATE]}"
+            logger.warning(f"Tool {function_name} timed out")
+            yield f"[TIMEOUT] Tool {function_name} took too long to execute"
+        
 

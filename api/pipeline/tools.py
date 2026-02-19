@@ -193,5 +193,70 @@ tools = [
                 "required": ["query"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_query_complexity",
+            "description": "Analyze query complexity and determine if it should be decomposed into sub-queries. Returns complexity assessment, detected aspects, and decomposition recommendation with confidence score.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The user query to analyze for complexity and decomposition suitability"
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "evaluate_response_quality",
+            "description": "Evaluate the quality of a response based on completeness, factuality, and freshness. Analyzes whether the response adequately addresses the query with cited sources.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The original user query"
+                    },
+                    "response": {
+                        "type": "string",
+                        "description": "The generated response to evaluate"
+                    },
+                    "sources": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of URLs/sources used to generate the response"
+                    }
+                },
+                "required": ["query", "response", "sources"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sanitize_output",
+            "description": "Check output safety and sanitize it to prevent prompt injection attacks. Detects injection patterns, removes dangerous content, and reports any security issues found.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "output": {
+                        "type": "string",
+                        "description": "The output text to sanitize and check for security issues"
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "The source of the output (e.g., 'web_search', 'fetch_full_text')",
+                        "default": "unknown"
+                    }
+                },
+                "required": ["output"]
+            }
+        }
     }
 ]
