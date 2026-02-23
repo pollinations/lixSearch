@@ -39,20 +39,20 @@ INTERNAL_LEAK_PATTERNS = [
 
 # User-friendly message mappings to disguise technical operations
 USER_FRIENDLY_MESSAGES = {
-    "processing": "🔍 Processing your request...",
-    "analyzing": "📝 Analyzing your input...",
-    "searching": "🌐 Searching for information...",
-    "fetching": "📥 Gathering relevant data...",
-    "synthesizing": "✨ Preparing your answer...",
-    "image_analysis": "🖼️ Analyzing provided content...",
-    "generating": "⚙️ Generating results...",
-    "finalizing": "🚀 Finalizing response...",
-    "complete": "✅ Done!",
+    "processing": "<TASK>Processing your request</TASK>",
+    "analyzing": "<TASK>Analyzing your input</TASK>",
+    "searching": "<TASK>Searching for information</TASK>",
+    "fetching": "<TASK>Gathering relevant data</TASK>",
+    "synthesizing": "<TASK>Preparing your answer</TASK>",
+    "image_analysis": "<TASK>Analyzing provided content</TASK>",
+    "generating": "<TASK>Generating results</TASK>",
+    "finalizing": "<TASK>Finalizing response</TASK>",
+    "complete": "<TASK>Done</TASK>",
 }
 
 def get_user_message(operation: str) -> str:
     """Return user-friendly message for technical operations"""
-    return USER_FRIENDLY_MESSAGES.get(operation, "Processing...")
+    return USER_FRIENDLY_MESSAGES.get(operation, "<TASK>Processing</TASK>")
 
 
 def _decompose_query(query: str) -> list[str]:
