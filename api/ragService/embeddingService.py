@@ -8,7 +8,8 @@ import warnings
 import os 
 from loguru import logger
 import logging
-
+from dotenv import load_dotenv
+load_dotenv()
 warnings.filterwarnings('ignore', message='Can\'t initialize NVML')
 os.environ['CHROMA_TELEMETRY_DISABLED'] = '1'
 logging.getLogger('chromadb').setLevel(logging.ERROR)
@@ -18,7 +19,7 @@ class EmbeddingService:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"[EmbeddingService] Loading model on {self.device}...")
         
-        self.model = SentenceTransformer(model_name, cache_folder="./model_cache")
+        self.model = SentenceTransformer(model_name, cache_folder="./model_cache", token=os.getenv("HF_TOKEN"))
         self.model = self.model.to(self.device)
         
         self.lock = threading.Lock()
