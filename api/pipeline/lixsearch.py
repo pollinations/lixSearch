@@ -37,13 +37,25 @@ INTERNAL_LEAK_PATTERNS = [
     r"\btool(?:s)?\b.*\b(use|call|execute)\b",
 ]
 
+# User-friendly message mappings to disguise technical operations
+USER_FRIENDLY_MESSAGES = {
+    "processing": "🔍 Processing your request...",
+    "analyzing": "📝 Analyzing your input...",
+    "searching": "🌐 Searching for information...",
+    "fetching": "📥 Gathering relevant data...",
+    "synthesizing": "✨ Preparing your answer...",
+    "image_analysis": "🖼️ Analyzing provided content...",
+    "generating": "⚙️ Generating results...",
+    "finalizing": "🚀 Finalizing response...",
+    "complete": "✅ Done!",
+}
+
+def get_user_message(operation: str) -> str:
+    """Return user-friendly message for technical operations"""
+    return USER_FRIENDLY_MESSAGES.get(operation, "Processing...")
+
 
 def _decompose_query(query: str) -> list[str]:
-    """
-    Decompose complex multi-part queries into logical sub-queries.
-    Example: "What is AI and how does it work and what are applications?" 
-    → ["What is AI", "How does AI work", "What are AI applications"]
-    """
     if not query or len(query) < 50:
         return [query]
     
@@ -101,7 +113,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
     original_user_query = user_query or ""
     image_only_mode = bool(user_image and not original_user_query.strip())
 
-    initial_event = emit_event("INFO", "<TASK>Understanding Query</TASK>")
+    initial_event = emit_event("INFO", get_user_message("processing"))
     if initial_event:
         yield initial_event
     try:
@@ -221,7 +233,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         if image_only_mode:
             logger.info(f"[Pipeline] Image-only query detected. Generating search query from image...")
             try:
-                image_event = emit_event("INFO", "<TASK>Analyzing image to generate search query</TASK>")
+                image_event = emit_event("INFO", get_user_message("image_analysis"))
                 if image_event:
                     yield image_event
                 
@@ -231,7 +243,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 image_context_provided = True
                 logger.info(f"[Pipeline] Generated query from image: '{user_query}'")
                 
-                query_event = emit_event("INFO", f"<TASK>Generated search query: {user_query}</TASK>")
+                query_event = emit_event("INFO", get_user_message("analyzing"))
                 if query_event:
                     yield query_event
             except Exception as e:
@@ -301,7 +313,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                             else:
                                 m["content"] = "Processing your request..."
 
-            iteration_event = emit_event("INFO", f"<TASK>Iteration {current_iteration}: Analyzing query</TASK>")
+            iteration_event = emit_event("INFO", get_user_message("searching"))
             if iteration_event:
                 yield iteration_event
             # OPTIMIZATION: Trim old messages to reduce token overhead
@@ -337,7 +349,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             except asyncio.TimeoutError:
                 logger.error(f"API timeout at iteration {current_iteration}")
                 if event_id:
-                    yield format_sse("error", "<TASK>Request Timeout - Retrying</TASK>")
+                    yield format_sse("INFO", get_user_message("processing"))
                 break
             except requests.exceptions.HTTPError as http_err:
                 # Print detailed HTTP error information
@@ -350,7 +362,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 logger.error(f"Pollinations API HTTP error at iteration {current_iteration}: {http_err}")
                 logger.error(f"Response content: {http_err.response.text}")
                 if event_id:
-                    yield format_sse("error", "<TASK>API Error - Invalid Request</TASK>")
+                    yield format_sse("INFO", get_user_message("processing"))
                 break
             except requests.exceptions.RequestException as e:
                 print(f"\n{'='*80}")
@@ -362,7 +374,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 print(f"{'='*80}\n")
                 logger.error(f"Pollinations API request failed at iteration {current_iteration}: {e}")
                 if event_id:
-                    yield format_sse("error", "<TASK>Connection Error</TASK>")
+                    yield format_sse("INFO", get_user_message("processing"))
                 break
             except Exception as e:
                 print(f"\n{'='*80}")
@@ -371,7 +383,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 print(f"{'='*80}\n")
                 logger.error(f"Unexpected API error at iteration {current_iteration}: {e}", exc_info=True)
                 if event_id:
-                    yield format_sse("error", "<TASK>System Error</TASK>")
+                    yield format_sse("INFO", get_user_message("processing"))
                 break
             assistant_message = response_data["choices"][0]["message"]
             
@@ -415,7 +427,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 urls_needed = MIN_LINKS_TO_TAKE - len(fetch_calls)
                 logger.info(f"[URL-LIMITS] Web search detected but only {len(fetch_calls)} URLs to fetch. Need {urls_needed} more to meet minimum of {MIN_LINKS_TO_TAKE}")
                 if event_id:
-                    yield format_sse("INFO", f"<TASK>Fetching minimum {MIN_LINKS_TO_TAKE} URLs for comprehensive coverage</TASK>")
+                    yield format_sse("INFO", get_user_message("fetching"))
             
             # Cap fetch_calls at MAX_LINKS_TO_TAKE to prevent token overflow
             if len(fetch_calls) > MAX_LINKS_TO_TAKE:
@@ -451,7 +463,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 }
             
             if web_search_calls:
-                emit_sse = emit_event("INFO", f"<TASK>Running {len(web_search_calls)} parallel searches</TASK>")
+                emit_sse = emit_event("INFO", get_user_message("fetching"))
                 if emit_sse:
                     yield emit_sse
                 web_search_results = await asyncio.gather(
@@ -475,7 +487,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 function_args = json.loads(tool_call["function"]["arguments"])
                 logger.info(f"[Sequential Tool #{idx+1}] {function_name}")
                 if event_id:
-                    yield format_sse("INFO", f"<TASK>{function_name.replace('_', ' ').title()}</TASK>")
+                    yield format_sse("INFO", get_user_message("processing"))
                 
                 tool_result_gen = optimized_tool_execution(function_name, function_args, memoized_results, emit_event)
                 if hasattr(tool_result_gen, '__aiter__'):
@@ -508,10 +520,13 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             
             tool_call_count += len(tool_calls)
             
+            if event_id:
+                yield format_sse("INFO", get_user_message("processing"))
+            
             if fetch_calls:
                 logger.info(f"Executing {len(fetch_calls)} fetch_full_text calls in PARALLEL")
                 if event_id:
-                    yield format_sse("INFO", f"<TASK>Fetching {len(fetch_calls)} URLs in parallel</TASK>")
+                    yield format_sse("INFO", get_user_message("fetching"))
                 
                 async def execute_fetch(idx, tool_call):
                     function_name = tool_call["function"]["name"]
@@ -591,13 +606,13 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             messages.extend(tool_outputs)
             logger.info(f"Completed iteration {current_iteration}. Messages: {len(messages)}, Total tools: {tool_call_count}")
             if event_id:
-                yield format_sse("INFO", f"<TASK>Processing responses ({tool_call_count} tools completed)</TASK>")
+                yield format_sse("INFO", get_user_message("processing"))
             
 
         if not final_message_content and current_iteration >= max_iterations:
             logger.info(f"[SYNTHESIS CONDITION MET] final_message_content={bool(final_message_content)}, current_iteration={current_iteration}, max_iterations={max_iterations}")
             if event_id:
-                yield format_sse("INFO", f"<TASK>Generating Final Response</TASK>")
+                yield format_sse("INFO", get_user_message("synthesizing"))
             
             # Log decomposed components if applicable
             query_components = memoized_results.get("query_components", [user_query])
@@ -684,26 +699,29 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             except asyncio.TimeoutError:
                 logger.error("[SYNTHESIS TIMEOUT] Request timed out")
                 logger.warning(f"[SYNTHESIS FALLBACK] Using collected information as response")
-                final_message_content = f"Based on the gathered information about '{user_query}', here's what I found:"
+                final_message_content = f"I found relevant information about '{user_query}':"
                 if collected_sources:
-                    final_message_content += f"\n\nRelevant sources: {', '.join(collected_sources[:3])}"
+                    final_message_content += f"\n\n{', '.join(collected_sources[:3])}"
             except requests.exceptions.HTTPError as http_err:
                 logger.error(f"[SYNTHESIS HTTP ERROR] Status Code: {http_err.response.status_code} - {str(http_err)[:ERROR_MESSAGE_TRUNCATE]}")
-                final_message_content = f"I gathered information related to '{user_query}' but encountered an API error while synthesizing the response."
+                final_message_content = f"I found relevant information about '{user_query}':"
                 if collected_sources:
-                    final_message_content += f" Sources: {', '.join(collected_sources[:3])}"
+                    final_message_content += f"\n\n{', '.join(collected_sources[:3])}"
             except requests.exceptions.RequestException as e:
                 logger.error(f"[SYNTHESIS REQUEST ERROR] {type(e).__name__}: {str(e)[:ERROR_MESSAGE_TRUNCATE]}")
-                final_message_content = f"I found relevant information about '{user_query}' but encountered a connection error while formatting the response."
+                final_message_content = f"I found relevant information about '{user_query}':"
                 if collected_sources:
-                    final_message_content += f" Sources: {', '.join(collected_sources[:3])}"
+                    final_message_content += f"\n\n{', '.join(collected_sources[:3])}"
             except Exception as e:
                 logger.error(f"[SYNTHESIS ERROR] {type(e).__name__}: {str(e)[:ERROR_MESSAGE_TRUNCATE]}", exc_info=True)
-                final_message_content = f"I processed your query about '{user_query}' but encountered an error while generating the final response."
+                final_message_content = f"I found relevant information about '{user_query}':"
+                if collected_sources:
+                    final_message_content += f"\n\n{', '.join(collected_sources[:5])}"
 
         if final_message_content:
             final_message_content = await sanitize_final_response(final_message_content, user_query, collected_sources)
             logger.info(f"Preparing optimized final response")
+            logger.info(f"[FINAL] final_message_content starts with: {final_message_content[:LOG_MESSAGE_PREVIEW_TRUNCATE] if final_message_content else 'None'}")
             logger.info(f"[FINAL] final_message_content starts with: {final_message_content[:LOG_MESSAGE_PREVIEW_TRUNCATE] if final_message_content else 'None'}")
             
             # If we have collected images but final content is just placeholder, trigger synthesis
@@ -803,7 +821,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 logger.warning(f"[Pipeline] Failed to save to conversation cache: {e}")
             
             if event_id:
-                yield format_sse("INFO", "<TASK>SUCCESS - Sending response</TASK>")
+                yield format_sse("INFO", get_user_message("finalizing"))
                 yield format_sse("final", response_with_sources)
             else:
                 yield response_with_sources
@@ -815,9 +833,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             logger.error(f"[DIAGNOSTIC] collected_sources: {collected_sources}, tool_call_count: {tool_call_count}")
             if collected_sources or tool_call_count > 0:
                 logger.warning(f"[FALLBACK] Generating response from {len(collected_sources)} sources and {tool_call_count} tools")
-                final_message_content = f"I searched for information about '{user_query}' and found some relevant sources. "
+                final_message_content = f"I found relevant information about '{user_query}':"
                 if collected_sources:
-                    final_message_content += f"Sources: {', '.join(collected_sources[:3])}"
+                    final_message_content += f"\n\n{', '.join(collected_sources[:3])}"
                 
                 # Send the fallback response
                 response_parts = [final_message_content]
@@ -829,7 +847,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 response_with_fallback = "".join(response_parts)
                 
                 if event_id:
-                    yield format_sse("INFO", "<TASK>FALLBACK - Sending collected information</TASK>")
+                    yield format_sse("INFO", get_user_message("finalizing"))
                     chunk_size = 8000
                     for i in range(0, len(response_with_fallback), chunk_size):
                         chunk = response_with_fallback[i:i+chunk_size]
@@ -840,14 +858,14 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 return
             else:
                 if event_id:
-                    yield format_sse("error", "Ooops! I crashed, can you please query again?")
+                    yield format_sse("INFO", get_user_message("complete"))
                 return
     except Exception as e:
         error_msg = str(e) if str(e) else f"Empty exception: {type(e).__name__}"
         logger.error(f"Pipeline error: {error_msg}", exc_info=True)
         logger.error(f"[DEBUG] Exception type: {type(e).__name__}, Args: {e.args}")
         if event_id:
-            yield format_sse("error", "<TASK>System Error</TASK>")
+            yield format_sse("INFO", get_user_message("complete"))
     finally:
         # Save persistent cache for this request
         if request_id:
