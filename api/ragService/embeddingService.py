@@ -18,7 +18,7 @@ class EmbeddingService:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"[EmbeddingService] Loading model on {self.device}...")
         
-        self.model = SentenceTransformer(model_name)
+        self.model = SentenceTransformer(model_name, cache_folder="./model_cache")
         self.model = self.model.to(self.device)
         
         self.lock = threading.Lock()
