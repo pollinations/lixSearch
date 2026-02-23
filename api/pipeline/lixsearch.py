@@ -37,7 +37,6 @@ INTERNAL_LEAK_PATTERNS = [
     r"\btool(?:s)?\b.*\b(use|call|execute)\b",
 ]
 
-# User-friendly message mappings to disguise technical operations
 USER_FRIENDLY_MESSAGES = {
     "processing": "<TASK>Processing your request</TASK>",
     "analyzing": "<TASK>Analyzing your input</TASK>",
@@ -51,7 +50,6 @@ USER_FRIENDLY_MESSAGES = {
 }
 
 def get_user_message(operation: str) -> str:
-    """Return user-friendly message for technical operations"""
     return USER_FRIENDLY_MESSAGES.get(operation, "<TASK>Processing</TASK>")
 
 
@@ -59,13 +57,11 @@ def _decompose_query(query: str) -> list[str]:
     if not query or len(query) < 50:
         return [query]
     
-    # Split by common conjunctions
     parts = re.split(r'\s+(?:and|or|also|additionally|furthermore)\s+', query, maxsplit=2)
     if len(parts) > 1:
         logger.info(f"[DECOMPOSITION] Split query into {len(parts)} parts")
         return [p.strip() for p in parts if p.strip()]
     
-    # Try splitting by question marks for multiple questions
     if '?' in query:
         parts = query.split('?')
         if len(parts) > 1:
@@ -82,7 +78,6 @@ def _looks_like_internal_reasoning(content: str) -> bool:
         return False
     probe = content[:2500].lower()
     matches = sum(1 for p in INTERNAL_LEAK_PATTERNS if re.search(p, probe))
-    # Require multiple signals to avoid false positives.
     return matches >= 2
 
 
@@ -217,18 +212,15 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         memoized_results["conversation_cache"] = conversation_cache
         logger.info(f"[Pipeline] Initialized Conversation Cache Manager (window_size={CACHE_WINDOW_SIZE}, max_entries={CACHE_MAX_ENTRIES})")
         
-        # Load conversation cache from disk if session exists
         if request_id:
             if conversation_cache.load_from_disk(session_id=request_id):
                 logger.info(f"[Pipeline] Loaded conversation cache from disk (session: {request_id})")
         
-        # Initialize persistent semantic cache with 5-min TTL per request
         semantic_cache = SemanticCache(ttl_seconds=300, cache_dir=SEMANTIC_CACHE_DIR)
         if request_id:
             semantic_cache.load_for_request(request_id)
             logger.info(f"[Pipeline] Loaded persistent cache for request {request_id}")
         
-        # IMAGE HANDLING: Detect and process image-only queries
         image_context_provided = False
         if image_only_mode:
             logger.info(f"[Pipeline] Image-only query detected. Generating search query from image...")
@@ -237,7 +229,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 if image_event:
                     yield image_event
                 
-                # Generate search query from image
                 generated_query = await generate_prompt_from_image(user_image)
                 user_query = generated_query
                 image_context_provided = True
@@ -259,9 +250,8 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         collected_images_from_web = []
         collected_similar_images = []
         final_message_content = None
-        tool_call_count = 0  # Track cumulative tools executed
+        tool_call_count = 0
         
-        # QUERY DECOMPOSITION: Break down complex queries for better coverage
         query_components = _decompose_query(user_query)
         if len(query_components) > 1:
             logger.info(f"[DECOMPOSITION] Query decomposed into {len(query_components)} components for parallel processing")
@@ -286,7 +276,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         logger.info(f"[Pipeline] RAG context prepared: {len(rag_context)} chars")
         
         messages = [
-            
             {
                 "role": "system",
                 "name": "elixposearch-agent-system",
@@ -298,15 +287,11 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             }
         ]
 
-        rag_context_cache = rag_context
-        last_context_refresh = current_iteration
-
         while current_iteration < max_iterations:
             current_iteration += 1
             if messages and len(messages) > 0:
                 for m in messages:
                     if m.get("role") == "assistant":
-                        # Ensure assistant messages have content even if tool_calls exist
                         if m.get("content") is None or m.get("content") == "":
                             if "tool_calls" in m and len(m.get("tool_calls", [])) > 0:
                                 m["content"] = f"Executing {len(m['tool_calls'])} tool(s)..."
@@ -316,9 +301,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             iteration_event = emit_event("INFO", get_user_message("searching"))
             if iteration_event:
                 yield iteration_event
-            # OPTIMIZATION: Trim old messages to reduce token overhead
             if len(messages) > 8:
-                # Keep system + user messages at start, last 6 messages
                 trimmed = messages[:2] + messages[-6:]
                 logger.info(f"[OPTIMIZATION] Trimmed messages from {len(messages)} to {len(trimmed)}")
                 messages = trimmed
@@ -329,11 +312,10 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 "tools": tools,
                 "tool_choice": "auto",
                 "seed": random.randint(1000, 9999),
-                "max_tokens": 2000,  # OPTIMIZATION: Reduced from 3000
+                "max_tokens": 2000,
             }
 
             try:
-                loop = asyncio.get_event_loop()
                 response = await asyncio.wait_for(
                     asyncio.to_thread(
                         requests.post,
@@ -352,7 +334,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     yield format_sse("INFO", get_user_message("processing"))
                 break
             except requests.exceptions.HTTPError as http_err:
-                # Print detailed HTTP error information
                 print(f"\n{'='*80}")
                 print(f"[HTTP ERROR] Status Code: {http_err.response.status_code}")
                 print(f"[HTTP ERROR] URL: {http_err.response.url}")
@@ -387,14 +368,12 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 break
             assistant_message = response_data["choices"][0]["message"]
             
-            # Fix: Ensure content is always a string
             if not assistant_message.get("content"):
                 if assistant_message.get("tool_calls"):
                     assistant_message["content"] = "I'll help you with that. Let me gather the information you need."
                 else:
                     assistant_message["content"] = "Processing your request..."
             
-            # Fix: Ensure content is a string, not None
             if assistant_message.get("content") is None:
                 assistant_message["content"] = ""
                 
@@ -409,7 +388,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             print(tool_calls)
             logger.info(f"Processing {len(tool_calls)} tool call(s):")
             
-            # Separate tool calls by type for optimal parallel execution
             fetch_calls = []
             web_search_calls = []
             other_calls = []
@@ -422,14 +400,12 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 else:
                     other_calls.append(tool_call)
             
-            # URL LIMITS ENFORCEMENT: Ensure minimum URLs are fetched, cap at maximum
             if web_search_calls and len(fetch_calls) < MIN_LINKS_TO_TAKE:
                 urls_needed = MIN_LINKS_TO_TAKE - len(fetch_calls)
                 logger.info(f"[URL-LIMITS] Web search detected but only {len(fetch_calls)} URLs to fetch. Need {urls_needed} more to meet minimum of {MIN_LINKS_TO_TAKE}")
                 if event_id:
                     yield format_sse("INFO", get_user_message("fetching"))
             
-            # Cap fetch_calls at MAX_LINKS_TO_TAKE to prevent token overflow
             if len(fetch_calls) > MAX_LINKS_TO_TAKE:
                 logger.info(f"[URL-LIMITS] Capping fetch_calls from {len(fetch_calls)} to {MAX_LINKS_TO_TAKE} (MAX_LINKS_TO_TAKE)")
                 fetch_calls = fetch_calls[:MAX_LINKS_TO_TAKE]
@@ -447,7 +423,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 if hasattr(tool_result_gen, '__aiter__'):
                     async for result in tool_result_gen:
                         if isinstance(result, str) and result.startswith("event:"):
-                            pass  # SSE already handled internally
+                            pass
                         elif isinstance(result, tuple):
                             tool_result, image_urls = result
                         else:
@@ -481,7 +457,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                             "content": str(result["result"]) if result["result"] else "No result"
                         })
             
-            # Execute other non-fetch tools sequentially (usually timezone/image analysis)
             for idx, tool_call in enumerate(other_calls):
                 function_name = tool_call["function"]["name"]
                 function_args = json.loads(tool_call["function"]["arguments"])
@@ -547,13 +522,12 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         "result": tool_result
                     }
                 
-                # OPTIMIZATION: Run fetches with timeout to prevent stragglers
                 fetch_results = await asyncio.wait_for(
                     asyncio.gather(
                         *[execute_fetch(idx, tc) for idx, tc in enumerate(fetch_calls)],
                         return_exceptions=True
                     ),
-                    timeout=8.0  # OPTIMIZATION: Hard timeout for parallel fetches
+                    timeout=8.0
                 )
                 
                 ingest_tasks = []
@@ -565,18 +539,16 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     url = fetch_result["url"]
                     tool_result = fetch_result["result"]
                     
-                    # Add to sources (limit to top 5 URLs)
                     if len(collected_sources) < 5:
                         collected_sources.append(url)
                     
-                    # OPTIMIZATION: Only ingest if core_service available (skip if unavailable)
                     if core_service:
                         async def ingest_url_async(url_to_ingest):
                             try:
                                 core_svc = get_model_server().CoreEmbeddingService()
                                 ingest_result = await asyncio.wait_for(
                                     asyncio.to_thread(core_svc.ingest_url, url_to_ingest),
-                                    timeout=3.0  # OPTIMIZATION: Timeout per ingest
+                                    timeout=3.0
                                 )
                                 chunks = ingest_result.get('chunks_ingested', 0)
                                 logger.info(f"[INGEST] {chunks} chunks from {url_to_ingest[:40]}")
@@ -591,15 +563,14 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         "role": "tool",
                         "tool_call_id": fetch_result["tool_call_id"],
                         "name": "fetch_full_text",
-                        "content": str(tool_result)[:500] if tool_result else "No result"  # OPTIMIZATION: Trim content
+                        "content": str(tool_result)[:500] if tool_result else "No result"
                     })
                 
-                # Run all ingestion tasks in parallel with timeout
                 if ingest_tasks:
                     try:
                         await asyncio.wait_for(
                             asyncio.gather(*ingest_tasks, return_exceptions=True),
-                            timeout=5.0  # OPTIMIZATION: Overall timeout for all ingestions
+                            timeout=5.0
                         )
                     except asyncio.TimeoutError:
                         logger.warning("[INGESTION] Timeout reached, continuing anyway")
@@ -614,7 +585,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             if event_id:
                 yield format_sse("INFO", get_user_message("synthesizing"))
             
-            # Log decomposed components if applicable
             query_components = memoized_results.get("query_components", [user_query])
             if len(query_components) > 1:
                 logger.info(f"[SYNTHESIS] Multi-component query synthesis:")
@@ -628,7 +598,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 "content": synthesis_instruction(user_query, image_context=image_context_provided)
             }
             
-            # OPTIMIZATION: Trim messages before final synthesis
             original_msg_count = len(messages)
             if len(messages) > 6:
                 messages = messages[:2] + messages[-4:]
@@ -668,12 +637,10 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     
                     final_message_content = message.get("content", "").strip()
                     
-                    # If content is empty but we have reasoning_content, use that
                     if not final_message_content and "reasoning_content" in message:
                         final_message_content = message.get("reasoning_content", "").strip()
                         logger.info("[SYNTHESIS] Using reasoning_content as fallback")
                     
-                    # If still empty and model returned tool_calls, extract meaningful info or respond directly
                     if not final_message_content and message.get("tool_calls"):
                         logger.warning(f"[SYNTHESIS] Model returned tool_calls instead of content in synthesis")
                         final_message_content = f"I searched for information about '{user_query}' and gathered {len(collected_sources)} relevant sources."
@@ -682,7 +649,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     
                     if not final_message_content:
                         logger.error(f"[SYNTHESIS] API returned empty content after all fallbacks. Full response: {response_data}")
-                        # Provide fallback response
                         final_message_content = f"I processed your query about '{user_query}'."
                         if collected_sources:
                             final_message_content += f"\n\nRelevant sources found:\n" + "\n".join([f"- {src}" for src in collected_sources[:5]])
@@ -692,7 +658,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     logger.error(f"[SYNTHESIS] Failed to extract content from response. Expected structure not found. Error: {e}")
                     logger.error(f"[SYNTHESIS] Response data keys: {response_data.keys() if isinstance(response_data, dict) else 'Not a dict'}")
                     logger.error(f"[SYNTHESIS] Full response: {response_data}")
-                    # Provide fallback instead of None
                     final_message_content = f"I gathered {len(collected_sources)} relevant sources about '{user_query}'."
                     if collected_sources:
                         final_message_content += f"\n\nRelevant sources:\n" + "\n".join([f"- {src}" for src in collected_sources[:5]])
@@ -724,7 +689,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             logger.info(f"[FINAL] final_message_content starts with: {final_message_content[:LOG_MESSAGE_PREVIEW_TRUNCATE] if final_message_content else 'None'}")
             logger.info(f"[FINAL] final_message_content starts with: {final_message_content[:LOG_MESSAGE_PREVIEW_TRUNCATE] if final_message_content else 'None'}")
             
-            # If we have collected images but final content is just placeholder, trigger synthesis
             if (collected_images_from_web or collected_similar_images) and final_message_content in ["Processing your request...", "I'll help you with that. Let me gather the information you need."]:
                 logger.info(f"[FINAL] Detected placeholder content with collected images. Triggering synthesis...")
                 synthesis_prompt = {
@@ -742,7 +706,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 }
                 
                 try:
-                    loop = asyncio.get_event_loop()
                     response = await asyncio.wait_for(
                         asyncio.to_thread(
                             requests.post,
@@ -762,7 +725,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 except Exception as e:
                     logger.warning(f"[FINAL] Synthesis generation failed: {e}, using existing content")
             
-            # Check if synthesis already includes images (markdown format ![...](http...))
             has_image_markdown = bool(re.search(r'!\[([^\]]*)\]\(https?://[^\)]+\)', final_message_content))
             image_count_in_synthesis = len(re.findall(r'!\[', final_message_content))
             logger.info(f"[FINAL] Synthesis content has embedded images: {has_image_markdown} ({image_count_in_synthesis} found)")
@@ -782,7 +744,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
                 missing_images = [img for img in deduped_pool if img not in existing_image_urls]
                 if missing_images:
-                    # Keep at least 4 total images when available, cap at 10
                     desired_total = min(10, max(4, len(deduped_pool)))
                     images_to_add = max(0, desired_total - len(existing_image_urls))
                     if images_to_add > 0:
@@ -802,7 +763,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     response_parts.append(f"{i+1}. [{src}]({src})\n")
             response_with_sources = "".join(response_parts)
             
-            # Save to conversation cache for future queries
             try:
                 cache_metadata = {
                     "sources": collected_sources[:5],
@@ -837,7 +797,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 if collected_sources:
                     final_message_content += f"\n\n{', '.join(collected_sources[:3])}"
                 
-                # Send the fallback response
                 response_parts = [final_message_content]
                 if collected_sources:
                     response_parts.append("\n\n---\n**Sources:**\n")
@@ -867,12 +826,10 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         if event_id:
             yield format_sse("INFO", get_user_message("complete"))
     finally:
-        # Save persistent cache for this request
         if request_id:
             semantic_cache.save_for_request(request_id)
             logger.info(f"[Pipeline] Saved persistent cache for request {request_id}")
             
-            # Save conversation cache to disk
             try:
                 if "conversation_cache" in memoized_results:
                     conversation_cache.save_to_disk(session_id=request_id)
