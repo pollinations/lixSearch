@@ -15,7 +15,7 @@ os.environ['CHROMA_TELEMETRY_DISABLED'] = '1'
 logging.getLogger('chromadb').setLevel(logging.ERROR)
 
 class EmbeddingService:
-    def __init__(self, model_name: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"):
+    def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"[EmbeddingService] Loading model on {self.device}...")
         

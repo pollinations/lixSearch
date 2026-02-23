@@ -843,7 +843,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     yield format_sse("error", "Ooops! I crashed, can you please query again?")
                 return
     except Exception as e:
-        logger.error(f"Pipeline error: {e}", exc_info=True)
+        error_msg = str(e) if str(e) else f"Empty exception: {type(e).__name__}"
+        logger.error(f"Pipeline error: {error_msg}", exc_info=True)
+        logger.error(f"[DEBUG] Exception type: {type(e).__name__}, Args: {e.args}")
         if event_id:
             yield format_sse("error", "<TASK>System Error</TASK>")
     finally:
