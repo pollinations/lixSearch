@@ -1,7 +1,3 @@
-"""
-Load Balancer for distributing requests across multiple worker instances
-Uses round-robin load balancing with health checks
-"""
 import logging
 import asyncio
 import aiohttp
@@ -21,8 +17,6 @@ class LoadBalancer:
         self.current_worker_index = 0
         self.healthy_workers = set(self.worker_ports)
         self.worker_health_status = {port: True for port in self.worker_ports}
-        
-        # Aiohttp session for proxying requests
         self.session = None
         
         self._setup_cors()
@@ -33,10 +27,6 @@ class LoadBalancer:
         cors(self.app)
     
     def get_next_worker(self) -> int:
-        """
-        Round-robin load balancing with health-aware selection.
-        Returns only healthy worker ports.
-        """
         if not self.healthy_workers:
             logger.warning("[LB] No healthy workers available, falling back to all workers")
             self.healthy_workers = set(self.worker_ports)
@@ -53,11 +43,9 @@ class LoadBalancer:
                 return worker_port
             attempts += 1
         
-        # Fallback: return first available
         return self.worker_ports[0]
     
     async def health_check_workers(self):
-        """Periodically check worker health"""
         while True:
             try:
                 await asyncio.sleep(10)  # Check every 10 seconds
@@ -85,11 +73,9 @@ class LoadBalancer:
                 logger.error(f"[LB] Health check loop error: {e}")
     
     async def proxy_request(self, path: str, worker_port: int):
-        """Proxy request to a worker"""
         try:
             worker_url = f"http://localhost:{worker_port}{path}"
             
-            # Prepare headers (exclude hop-by-hop headers)
             headers = {k: v for k, v in request.headers.items() 
                       if k.lower() not in ['host', 'connection', 'transfer-encoding']}
             
@@ -122,11 +108,9 @@ class LoadBalancer:
             return jsonify({"error": "Worker unavailable"}), 503, {}
     
     def _register_routes(self):
-        """Register proxy routes for all API endpoints"""
         
         @self.app.route('/api/health', methods=['GET'])
         async def health():
-            """LB health check endpoint"""
             healthy_count = len(self.healthy_workers)
             return jsonify({
                 "status": "healthy" if healthy_count > 0 else "degraded",
@@ -156,13 +140,6 @@ class LoadBalancer:
             worker_port = self.get_next_worker()
             logger.info(f"[LB] Routing /api/session/{session_id} to worker {worker_port}")
             path = f"/api/session/{session_id}"
-            body, status, headers = await self.proxy_request(path, worker_port)
-            return body, status, headers
-        
-        @self.app.route('/api/session/<session_id>/kg', methods=['GET'])
-        async def get_session_kg(session_id):
-            worker_port = self.get_next_worker()
-            path = f"/api/session/{session_id}/kg"
             body, status, headers = await self.proxy_request(path, worker_port)
             return body, status, headers
         
@@ -229,8 +206,6 @@ class LoadBalancer:
             logger.info("[LB] Initializing Load Balancer...")
             self.session = aiohttp.ClientSession()
             logger.info(f"[LB] Load Balancer configured for {self.num_workers} workers on ports {self.worker_ports}")
-            
-            # Start health check background task
             asyncio.create_task(self.health_check_workers())
             logger.info("[LB] Health check monitor started")
         
@@ -242,5 +217,4 @@ class LoadBalancer:
 
 
 def create_load_balancer(num_workers: int = 10, start_port: int = 8001):
-    """Factory function to create load balancer instance"""
     return LoadBalancer(num_workers, start_port)
