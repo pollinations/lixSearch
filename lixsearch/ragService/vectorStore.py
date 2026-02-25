@@ -41,8 +41,16 @@ class VectorStore:
         self.embeddings_dir = embeddings_dir
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        # Determine Chroma API implementation
-        self.chroma_api_impl = os.getenv("CHROMA_API_IMPL", "embedded").lower()
+        # Determine Chroma API implementation mode from env aliases.
+        raw_api_impl = os.getenv("CHROMA_API_IMPL", "embedded").lower()
+        http_aliases = {
+            "http",
+            "rest",
+            "fastapi",
+            "chromadb.api.fastapi.fastapi",
+            "chromadb.api.async_fastapi.asyncfastapi",
+        }
+        self.chroma_api_impl = "http" if raw_api_impl in http_aliases else "embedded"
         self.client = None
         self.collection = None
         self.chunk_count = 0
@@ -75,7 +83,6 @@ class VectorStore:
                             host=host,
                             port=port,
                             settings=chromadb.config.Settings(
-                                chroma_api_impl="rest",
                                 allow_reset=True,
                                 anonymized_telemetry=False,
                             )
@@ -101,20 +108,8 @@ class VectorStore:
                 
                 logger.info(f"[VectorStore] Using embedded Chroma with path {self.embeddings_dir}")
                 
-                try:
-                    # Try with minimal settings for Chroma 1.5.1+
-                    chroma_settings = chromadb.config.Settings(
-                        anonymized_telemetry=False,
-                        is_persistent=True
-                    )
-                    self.client = chromadb.PersistentClient(
-                        path=self.embeddings_dir,
-                        settings=chroma_settings
-                    )
-                except (ValueError, TypeError):
-                    # Fallback: initialize without settings (Chroma 1.5.x doesn't require them)
-                    logger.warning("[VectorStore] Initializing Chroma without custom settings")
-                    self.client = chromadb.PersistentClient(path=self.embeddings_dir)
+                # Initialize PersistentClient without settings (is_persistent=True is not valid in newer Chroma)
+                self.client = chromadb.PersistentClient(path=self.embeddings_dir)
                 
                 logger.info(f"[VectorStore] Embedded Chroma initialized")
             
