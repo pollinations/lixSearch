@@ -51,16 +51,26 @@ services:
     depends_on:
       chroma-server:
         condition: service_healthy
-      - elixpo-search-worker-1
-      - elixpo-search-worker-2
-      - elixpo-search-worker-3
-      - elixpo-search-worker-4
-      - elixpo-search-worker-5
-      - elixpo-search-worker-6
-      - elixpo-search-worker-7
-      - elixpo-search-worker-8
-      - elixpo-search-worker-9
-      - elixpo-search-worker-10
+      elixpo-search-worker-1:
+        condition: service_healthy
+      elixpo-search-worker-2:
+        condition: service_healthy
+      elixpo-search-worker-3:
+        condition: service_healthy
+      elixpo-search-worker-4:
+        condition: service_healthy
+      elixpo-search-worker-5:
+        condition: service_healthy
+      elixpo-search-worker-6:
+        condition: service_healthy
+      elixpo-search-worker-7:
+        condition: service_healthy
+      elixpo-search-worker-8:
+        condition: service_healthy
+      elixpo-search-worker-9:
+        condition: service_healthy
+      elixpo-search-worker-10:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - elixpo-network
