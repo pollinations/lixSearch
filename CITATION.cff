@@ -14,7 +14,7 @@ contact:
     name-particle: ""
     given-names: "Support"
     email: "hello@elixpo.ai"
-    website: "https://search.elixpo.ai"
+    website: "https://elixpo.ai"
 
 date-released: 2026-02-25
 identifiers:
@@ -50,7 +50,7 @@ repository-artifact: "https://hub.docker.com/r/pollinations/lixsearch"
 preferred-citation:
   type: "software"
   authors:
-    - family-names: "Elixpo"
+    - family-names: "Ayushman Bhattacharya"
       name-particle: ""
       given-names: "Team"
   title: "lixSearch: Intelligent Multi-Worker Search & RAG System"
