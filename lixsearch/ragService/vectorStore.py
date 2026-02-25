@@ -41,23 +41,12 @@ class VectorStore:
         self.embeddings_dir = embeddings_dir
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        # Determine Chroma API implementation mode from env aliases.
-        raw_api_impl = os.getenv("CHROMA_API_IMPL", "embedded").lower()
-        http_aliases = {
-            "http",
-            "rest",
-            "fastapi",
-            "chromadb.api.fastapi.fastapi",
-            "chromadb.api.async_fastapi.asyncfastapi",
-        }
-        self.chroma_api_impl = "http" if raw_api_impl in http_aliases else "embedded"
         self.client = None
         self.collection = None
         self.chunk_count = 0
         self.lock = threading.RLock()
         self.metadata_path = os.path.join(embeddings_dir, "metadata.json")
         
-        # Initialize Chroma client
         self._initialize_chroma_client()
         self._load_from_disk()
         
@@ -65,67 +54,24 @@ class VectorStore:
         logger.info(f"[VectorStore] Initialized with {self.chunk_count} chunks on {self.device}")
     
     def _initialize_chroma_client(self) -> None:
-        """Initialize Chroma client based on API implementation"""
         try:
-            if self.chroma_api_impl == "http":
-                # Use HTTP client for server mode
-                host = os.getenv("CHROMA_SERVER_HOST", "localhost")
-                port = int(os.getenv("CHROMA_SERVER_PORT", "8000"))
-                
-                logger.info(f"[VectorStore] Connecting to Chroma server at {host}:{port}")
-                
-                max_retries = 5
-                retry_delay = 2
-                
-                for attempt in range(max_retries):
-                    try:
-                        self.client = chromadb.HttpClient(
-                            host=host,
-                            port=port,
-                            settings=chromadb.config.Settings(
-                                allow_reset=True,
-                                anonymized_telemetry=False,
-                            )
-                        )
-                        
-                        # Test connection
-                        self.client.heartbeat()
-                        logger.info(f"[VectorStore] Connected to Chroma server successfully")
-                        break
-                    except Exception as e:
-                        if attempt < max_retries - 1:
-                            logger.warning(
-                                f"[VectorStore] Connection attempt {attempt + 1}/{max_retries} failed: {e}. "
-                                f"Retrying in {retry_delay}s..."
-                            )
-                            time.sleep(retry_delay)
-                        else:
-                            logger.error(f"[VectorStore] Failed to connect to Chroma server after {max_retries} attempts")
-                            raise
-            else:
-                # Use embedded Persistent client
-                Path(self.embeddings_dir).mkdir(parents=True, exist_ok=True)
-                
-                logger.info(f"[VectorStore] Using embedded Chroma with path {self.embeddings_dir}")
-                
-                # Initialize PersistentClient without settings (is_persistent=True is not valid in newer Chroma)
-                self.client = chromadb.PersistentClient(path=self.embeddings_dir)
-                
-                logger.info(f"[VectorStore] Embedded Chroma initialized")
+            Path(self.embeddings_dir).mkdir(parents=True, exist_ok=True)
             
-            # Get or create collection
+            logger.info(f"[VectorStore] Initializing embedded Chroma at {self.embeddings_dir}")
+            
+            self.client = chromadb.PersistentClient(path=self.embeddings_dir)
+            
             self.collection = self.client.get_or_create_collection(
                 name="document_embeddings",
                 metadata={"hnsw:space": "cosine"}
             )
-            logger.info(f"[VectorStore] Collection 'document_embeddings' ready")
+            logger.info(f"[VectorStore] Embedded Chroma initialized successfully")
             
         except Exception as e:
             logger.error(f"[VectorStore] Failed to initialize Chroma: {e}")
             raise
     
     def add_chunks(self, chunks: List[Dict]) -> None:
-        """Add chunks with automatic batching for efficient vector DB operations"""
         with self.lock:
             ids = []
             embeddings = []
@@ -141,7 +87,6 @@ class VectorStore:
                 else:
                     emb = np.array(emb, dtype=np.float32)
                 
-                # Normalize embedding
                 emb = emb / (np.linalg.norm(emb) + 1e-8)
                 
                 chunk_id = str(self.chunk_count + i)
@@ -156,7 +101,6 @@ class VectorStore:
                 self.chunk_count += 1
             
             if ids:
-                # Batch add with chunking to avoid timeouts
                 batch_size = 100
                 for i in range(0, len(ids), batch_size):
                     batch_end = min(i + batch_size, len(ids))
@@ -168,20 +112,18 @@ class VectorStore:
                             metadatas=metadatas[i:batch_end]
                         )
                         logger.debug(f"[VectorStore] Added batch {i//batch_size + 1} ({batch_end - i} embeddings)")
-                        time.sleep(0.05)  # Small delay between batches
+                        time.sleep(0.05)
                     except Exception as e:
                         logger.error(f"[VectorStore] Failed to add batch: {e}")
                         raise
     
     def search(self, query_embedding: np.ndarray, top_k: int = 5) -> List[Dict]:
-        """Search vector store with fallback and retry logic"""
         with self.lock:
             if isinstance(query_embedding, torch.Tensor):
                 query_embedding = query_embedding.cpu().numpy().astype(np.float32)
             else:
                 query_embedding = np.array(query_embedding, dtype=np.float32)
             
-            # Normalize embedding
             query_embedding = query_embedding / (np.linalg.norm(query_embedding) + 1e-8)
             
             max_retries = 2
@@ -219,13 +161,9 @@ class VectorStore:
                         raise
     
     def persist_to_disk(self) -> None:
-        """Persist data (automatic with Chroma)"""
         with self.lock:
             try:
-                if self.chroma_api_impl == "embedded":
-                    logger.info(f"[VectorStore] Data will be persisted by embedded Chroma to {self.embeddings_dir}")
-                else:
-                    logger.info(f"[VectorStore] Data is persisted by Chroma server")
+                logger.info(f"[VectorStore] Data will be persisted by embedded Chroma to {self.embeddings_dir}")
             except Exception as e:
                 logger.error(f"[VectorStore] Persist check failed: {e}")
     
@@ -240,24 +178,16 @@ class VectorStore:
             self.chunk_count = 0
     
     def health_check(self) -> bool:
-        """Check if vector store is accessible"""
         try:
-            if self.chroma_api_impl == "http":
-                # For HTTP client, test heartbeat
-                self.client.heartbeat()
+            if self.client and self.collection:
+                self.collection.count()
                 return True
-            else:
-                # For embedded, check if client exists and collection is accessible
-                if self.client and self.collection:
-                    self.collection.count()
-                    return True
         except Exception as e:
             logger.warning(f"[VectorStore] Health check failed: {e}")
             return False
         return False
     
     def reconnect(self) -> None:
-        """Attempt to reconnect to vector store"""
         with self.lock:
             try:
                 logger.info("[VectorStore] Attempting to reconnect to vector store...")
@@ -273,17 +203,14 @@ class VectorStore:
                 "total_chunks": self.chunk_count,
                 "device": self.device,
                 "embedding_dim": self.embedding_dim,
-                "chroma_api_impl": self.chroma_api_impl,
+                "mode": "embedded",
+                "path": self.embeddings_dir,
                 "healthy": self.health_check()
             }
-            
-            if self.chroma_api_impl == "http":
-                stats["server"] = f"{os.getenv('CHROMA_SERVER_HOST', 'localhost')}:{os.getenv('CHROMA_SERVER_PORT', '8000')}"
             
             return stats
     
     def search_with_cache_check(self, query_embedding: np.ndarray, top_k: int = 5, cache_similarity_threshold: float = 0.85) -> Dict:
-        """Search with cache metadata (for compatibility)"""
         with self.lock:
             if isinstance(query_embedding, torch.Tensor):
                 query_embedding = query_embedding.cpu().numpy().astype(np.float32)
