@@ -2,6 +2,7 @@ import warnings
 import os
 import logging
 import sys
+import socket
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -13,35 +14,13 @@ from ipcService.searchPortManager import accessSearchAgents, _ensure_background_
 warnings.filterwarnings('ignore', message='Can\'t initialize NVML')
 os.environ['CHROMA_TELEMETRY_DISABLED'] = '1'
 
-# Configure Chroma client
-# Support both embedded and server modes via environment variables.
-# Newer Chroma versions do not accept "embedded" as CHROMA_API_IMPL.
-raw_chroma_api_impl = os.getenv("CHROMA_API_IMPL", "embedded").lower()
-http_aliases = {
-    "http",
-    "rest",
-    "fastapi",
-    "chromadb.api.fastapi.fastapi",
-    "chromadb.api.async_fastapi.asyncfastapi",
-}
-chroma_api_impl = "http" if raw_chroma_api_impl in http_aliases else "embedded"
-
-if chroma_api_impl == "http":
-    # Server mode configuration
-    chroma_host = os.getenv("CHROMA_SERVER_HOST", "localhost")
-    chroma_port = os.getenv("CHROMA_SERVER_PORT", "8000")
-    os.environ["CHROMA_API_IMPL"] = "chromadb.api.fastapi.FastAPI"
-    os.environ["CHROMA_SERVER_HOST"] = chroma_host
-    os.environ["CHROMA_SERVER_PORT"] = chroma_port
-    logger.info(f"[IPC] Chroma configured for server mode: {chroma_host}:{chroma_port}")
-else:
-    # Embedded mode
-    os.environ.pop("CHROMA_API_IMPL", None)
-    logger.info(f"[IPC] Chroma configured for embedded mode")
-
 logging.getLogger('chromadb').setLevel(logging.ERROR)
 
 if __name__ == "__main__":
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.close()
+    
     class ModelManager(BaseManager):
         pass
 
