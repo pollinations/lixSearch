@@ -101,15 +101,21 @@ class VectorStore:
                 
                 logger.info(f"[VectorStore] Using embedded Chroma with path {self.embeddings_dir}")
                 
-                chroma_settings = chromadb.config.Settings(
-                    anonymized_telemetry=False,
-                    chroma_telemetry_impl="ragService.vectorStore.NoOpProductTelemetry",
-                    chroma_product_telemetry_impl="ragService.vectorStore.NoOpProductTelemetry",
-                )
-                self.client = chromadb.PersistentClient(
-                    path=self.embeddings_dir,
-                    settings=chroma_settings
-                )
+                try:
+                    # Try with minimal settings for Chroma 1.5.1+
+                    chroma_settings = chromadb.config.Settings(
+                        anonymized_telemetry=False,
+                        is_persistent=True
+                    )
+                    self.client = chromadb.PersistentClient(
+                        path=self.embeddings_dir,
+                        settings=chroma_settings
+                    )
+                except (ValueError, TypeError):
+                    # Fallback: initialize without settings (Chroma 1.5.x doesn't require them)
+                    logger.warning("[VectorStore] Initializing Chroma without custom settings")
+                    self.client = chromadb.PersistentClient(path=self.embeddings_dir)
+                
                 logger.info(f"[VectorStore] Embedded Chroma initialized")
             
             # Get or create collection
