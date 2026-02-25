@@ -33,24 +33,49 @@
 
 ### Layer 1: API Gateway Layer (Quart/Hypercorn)
 
-```
-┌─────────────────────────────────────────┐
-│         API Gateway Layer               │
-├─────────────────────────────────────────┤
-│  HTTP/WebSocket Server (Quart)          │
-│  ├─ /api/search (POST/GET)              │
-│  ├─ /api/chat (POST)                    │
-│  ├─ /api/session/* (CRUD)               │
-│  ├─ /api/health (GET)                   │
-│  └─ /ws/search (WebSocket)              │
-├─────────────────────────────────────────┤
-│  Request Processing:                    │
-│  • RequestIDMiddleware (X-Request-ID)   │
-│  • CORS handling                        │
-│  • Error handling & logging             │
-│  • SSE (Server-Sent Events)             │
-│  • OpenAI-compatible JSON formatting    │
-└─────────────────────────────────────────┘
+```mermaid
+graph TD
+    Client["👤 Client<br/>HTTP/WebSocket"]
+    Gateway["Quart Server<br/>0.0.0.0:8000"]
+    RequestID["RequestID Middleware<br/>X-Request-ID Header"]
+    CORS["CORS Handler"]
+    Routes["Route Dispatcher"]
+    
+    Search["/api/search<br/>POST/GET"]
+    Chat["/api/chat<br/>POST"]
+    Session["/api/session<br/>Crud Ops"]
+    Health["/api/health<br/>GET"]
+    WebSocket["/ws/search<br/>WebSocket"]
+    
+    Processing["Response Processing"]
+    SSE["SSE Streaming<br/>Server-Sent Events"]
+    JSON["OpenAI-Compatible<br/>JSON Format"]
+    Error["Error Handlers"]
+    Logging["Request Logging"]
+    
+    Client -->|HTTP/WS| Gateway
+    Gateway --> RequestID
+    RequestID --> CORS
+    CORS --> Routes
+    Routes --> Search
+    Routes --> Chat
+    Routes --> Session
+    Routes --> Health
+    Routes --> WebSocket
+    
+    Search --> Processing
+    Chat --> Processing
+    Session --> Processing
+    
+    Processing --> SSE
+    Processing --> JSON
+    Processing --> Logging
+    Processing --> Error
+    
+    style Gateway fill:#E3F2FD
+    style RequestID fill:#BBDEFB
+    style Processing fill:#C8E6C9
+    style Error fill:#FFCDD2
 ```
 
 **Gateways:**
@@ -71,51 +96,65 @@
 
 ### Layer 2: Pipeline & Orchestration Layer
 
-```
-┌─────────────────────────────────────────────────────┐
-│      Pipeline & Orchestration Layer                 │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  ┌───────────────────────────────────────────────┐ │
-│  │  lixsearch.py: Main Pipeline Coordinator      │ │
-│  ├───────────────────────────────────────────────┤ │
-│  │ • Query decomposition (*_decompose_query)    │ │
-│  │ • Tool orchestration (optimized_tool_exec)   │ │
-│  │ • Response synthesis (system_instruction)    │ │
-│  │ • Internal reasoning filtering               │ │
-│  │ • Streaming SSE event generation             │ │
-│  └───────────────────────────────────────────────┘ │
-│                                                     │
-│  ┌───────────────────────────────────────────────┐ │
-│  │  searchPipeline.py: Execution Flow            │ │
-│  ├───────────────────────────────────────────────┤ │
-│  │ 1. Query validation & preprocessing           │ │
-│  │ 2. Parallel tool execution coordination       │ │
-│  │ 3. Result aggregation                         │ │
-│  │ 4. LLM synthesis with context                 │ │
-│  │ 5. Response streaming                         │ │
-│  └───────────────────────────────────────────────┘ │
-│                                                     │
-│  ┌───────────────────────────────────────────────┐ │
-│  │  optimized_tool_execution.py: Parallel Exec   │ │
-│  ├───────────────────────────────────────────────┤ │
-│  │ • Async execution of search tools             │ │
-│  │ • Web search (Playwright)                     │ │
-│  │ • YouTube video retrieval                     │ │
-│  │ • Image analysis                              │ │
-│  │ • Function calls (timezone, image gen, etc)   │ │
-│  └───────────────────────────────────────────────┘ │
-│                                                     │
-│  ┌───────────────────────────────────────────────┐ │
-│  │  Optimization Modules                         │ │
-│  ├───────────────────────────────────────────────┤ │
-│  │ • queryDecomposition.py (aspect detection)   │ │
-│  │ • tokenCostOptimization.py (token counting) │ │
-│  │ • formalOptimization.py (cost minimization) │ │
-│  │ • adaptiveThresholding.py (dynamic filtering)│ │
-│  └───────────────────────────────────────────────┘ │
-│                                                     │
-└─────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    Input["User Query +<br/>Image URL"]
+    SearchPipeline["searchPipeline.py<br/>Entry Point"]
+    
+    Validate["1. Validate Query<br/>& Image URL"]
+    CreateSession["2. Create Session<br/>& Track Request"]
+    Decompose["3. Query Decomposition<br/>Aspect Detection"]
+    
+    LixSearch["lixsearch.py<br/>Main Orchestrator"]
+    
+    ToolExec["optimized_tool_execution.py<br/>Parallel Execution"]
+    
+    WebSearch["Web Search<br/>Playwright"]
+    FetchText["Fetch Full Text<br/>BeautifulSoup"]
+    YouTubeAPI["YouTube Metadata<br/>API Call"]
+    ImageAnalysis["Image Analysis<br/>Vision API"]
+    
+    Aggregate["Aggregate Results"]
+    RAGContext["Retrieve RAG Context<br/>Semantic Cache + Vector Search"]
+    LLMSynthesize["LLM Synthesis<br/>ChatEngine"]
+    StreamResponse["Stream Response<br/>SSE Events"]
+    
+    OptModules["Optimization Modules"]
+    TokenCost["tokenCostOptimization"]
+    FormalOpt["formalOptimization"]
+    AdaptiveThresh["adaptiveThresholding"]
+    
+    Input --> SearchPipeline
+    SearchPipeline --> Validate
+    Validate --> CreateSession
+    CreateSession --> Decompose
+    Decompose --> LixSearch
+    
+    LixSearch --> ToolExec
+    ToolExec -->|parallel| WebSearch
+    ToolExec -->|parallel| FetchText
+    ToolExec -->|parallel| YouTubeAPI
+    ToolExec -->|parallel| ImageAnalysis
+    
+    WebSearch --> Aggregate
+    FetchText --> Aggregate
+    YouTubeAPI --> Aggregate
+    ImageAnalysis --> Aggregate
+    
+    Aggregate --> RAGContext
+    RAGContext --> LLMSynthesize
+    LLMSynthesize --> StreamResponse
+    
+    LixSearch -.->|uses| OptModules
+    OptModules --> TokenCost
+    OptModules --> FormalOpt
+    OptModules --> AdaptiveThresh
+    
+    style LixSearch fill:#FFF3E0
+    style ToolExec fill:#F3E5F5
+    style RAGContext fill:#E8F5E9
+    style LLMSynthesize fill:#FCE4EC
+    style OptModules fill:#FBE9E7
 ```
 
 **Key Modules:**
@@ -156,260 +195,366 @@ optimized_tool_execution(search_tools)
 
 ### Layer 3: RAG Service Layer
 
-```
-┌────────────────────────────────────────────────────┐
-│         RAG (Retrieval-Augmented Generation)       │
-├────────────────────────────────────────────────────┤
-│                                                    │
-│  ┌──────────────────────────────────────────────┐ │
-│  │  RAG Engine (ragEngine.py)                   │ │
-│  ├──────────────────────────────────────────────┤ │
-│  │ • retrieve_context(query, url) → RAG result │ │
-│  │ • ingest_and_cache(url) → store embeddings  │ │
-│  │ • build_rag_prompt_enhancement() → combine  │ │
-│  │ • get_stats() → metrics                      │ │
-│  └──────────────────────────────────────────────┘ │
-│           ↓ Dependencies                          │
-│  ┌──────────────────────────────────────────────┐ │
-│  │  Semantic Cache (semanticCache.py)           │ │
-│  ├──────────────────────────────────────────────┤ │
-│  │ Storage: URL → {query_emb → cached_response}│ │
-│  │ TTL: 300 seconds (configurable)             │ │
-│  │ Threshold: 0.90 similarity (adaptive)       │ │
-│  │ Serialization: pickle per request_id         │ │
-│  └──────────────────────────────────────────────┘ │
-│           ↓ Dependencies                          │
-│  ┌──────────────────────────────────────────────┐ │
-│  │  Embedding Service (embeddingService.py)     │ │
-│  ├──────────────────────────────────────────────┤ │
-│  │ Model: all-MiniLM-L6-v2 (384 dimensions)    │ │
-│  │ Device: CUDA if available, else CPU         │ │
-│  │ Batch: configurable (default 32)            │ │
-│  │ Methods:                                     │ │
-│  │  • embed(texts[]) → batch normalize         │ │
-│  │  • embed_single(text) → normalized vector   │ │
-│  └──────────────────────────────────────────────┘ │
-│           ↓ Dependencies                          │
-│  ┌──────────────────────────────────────────────┐ │
-│  │  Vector Store (vectorStore.py)               │ │
-│  ├──────────────────────────────────────────────┤ │
-│  │ Backend: ChromaDB (HNSW index)              │ │
-│  │ Persistence: ./embeddings/ directory        │ │
-│  │ Operations:                                  │ │
-│  │  • add_chunks(chunks[]) → batch insert      │ │
-│  │  • search(embedding, top_k) → similarity    │ │
-│  │  • persist_to_disk() → save state           │ │
-│  │ Metadata per chunk:                         │ │
-│  │  {url, chunk_id, timestamp}                 │ │
-│  └──────────────────────────────────────────────┘ │
-│           ↓ Dependencies                          │
-│  ┌──────────────────────────────────────────────┐ │
-│  │  Retrieval Pipeline (retrievalPipeline.py)   │ │
-│  ├──────────────────────────────────────────────┤ │
-│  │ 1. ingest_url(url) → fetch & embed chunks   │ │
-│  │    a. Fetch HTML (3000 words max)          │ │
-│  │    b. Clean text (remove scripts/styles)    │ │
-│  │    c. Chunk text (600 words, 60 overlap)    │ │
-│  │    d. Embed chunks in batch                 │ │
-│  │    e. Store in vector store                 │ │
-│  │                                              │ │
-│  │ 2. retrieve(query, top_k) → find similar    │ │
-│  │    a. Embed query                           │ │
-│  │    b. Search vector store (cosine sim)      │ │
-│  │    c. Return top-K results with metadata    │ │
-│  │                                              │ │
-│  │ 3. build_context(query, session_memory)     │ │
-│  │    a. Retrieve relevant chunks              │ │
-│  │    b. Combine with session context          │ │
-│  │    c. Format for LLM prompt                 │ │
-│  └──────────────────────────────────────────────┘ │
-│                                                    │
-└────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    Query["Query Input"]
+    RAGEngine["RAG Engine<br/>ragEngine.py"]
+    RetrieveContext["retrieve_context<br/>query, url -> RAG"]
+    IngestCache["ingest_and_cache<br/>url -> embeddings"]
+    BuildPrompt["build_rag_prompt_enhancement<br/>-> combine"]
+    GetStats["get_stats<br/>-> metrics"]
+    
+    SemanticCache["Semantic Cache<br/>semanticCache.py"]
+    CacheHit["✓ Cache Hit<br/>1-10ms"]
+    CacheMiss["✗ Cache Miss<br/>Continue"]
+    
+    EmbedService["Embedding Service<br/>embeddingService.py"]
+    EmbedModel["SentenceTransformer<br/>all-MiniLM-L6-v2<br/>384 dimensions"]
+    EmbedSingle["embed_single<br/>text->vector"]
+    EmbedBatch["embed<br/>texts[]->batch"]
+    
+    VectorStore["Vector Store<br/>vectorStore.py"]
+    ChromaDB["ChromaDB<br/>HNSW Index"]
+    AddChunks["add_chunks<br/>batch insert"]
+    SearchVec["search<br/>cosine similarity"]
+    PersistDisk["persist_to_disk<br/>./embeddings/"]
+    
+    RetPipeline["Retrieval Pipeline<br/>retrievalPipeline.py"]
+    IngestURL["ingest_url"]
+    FetchHTML["Fetch HTML<br/>3000 words max"]
+    CleanText["Clean Text<br/>remove scripts"]
+    ChunkText["Chunk Text<br/>600 words, 60 overlap"]
+    EmbedChunks["Embed Chunks<br/>batch mode"]
+    StoreVector["Store in Vector<br/>Store"]
+    
+    RetrieveQuery["retrieve"]
+    EmbedQueryVec["Embed Query"]
+    SearchSim["Search Similarity<br/>top-K"]
+    ReturnResults["Return Results<br/>+ metadata"]
+    
+    BuildContext["build_context"]
+    RelevantChunks["Retrieve Chunks"]
+    CombineSession["Combine with<br/>Session Memory"]
+    FormatPrompt["Format for LLM"]
+    
+    Query --> RAGEngine
+    RAGEngine --> RetrieveContext
+    RAGEngine --> IngestCache
+    RAGEngine --> BuildPrompt
+    RAGEngine --> GetStats
+    
+    RetrieveContext --> SemanticCache
+    SemanticCache -->|hit| CacheHit
+    SemanticCache -->|miss| CacheMiss
+    
+    CacheMiss --> EmbedService
+    IngestCache --> EmbedService
+    
+    EmbedService --> EmbedModel
+    EmbedService --> EmbedSingle
+    EmbedService --> EmbedBatch
+    
+    EmbedSingle --> VectorStore
+    EmbedBatch --> VectorStore
+    
+    VectorStore --> ChromaDB
+    VectorStore --> AddChunks
+    VectorStore --> SearchVec
+    VectorStore --> PersistDisk
+    
+    IngestCache --> RetPipeline
+    RetPipeline --> IngestURL
+    IngestURL --> FetchHTML
+    FetchHTML --> CleanText
+    CleanText --> ChunkText
+    ChunkText --> EmbedChunks
+    EmbedChunks --> StoreVector
+    StoreVector --> ChromaDB
+    
+    Query --> RetPipeline
+    RetPipeline --> RetrieveQuery
+    RetrieveQuery --> EmbedQueryVec
+    EmbedQueryVec --> SearchSim
+    SearchSim --> ReturnResults
+    
+    BuildPrompt --> BuildContext
+    ReturnResults --> BuildContext
+    BuildContext --> RelevantChunks
+    RelevantChunks --> CombineSession
+    CombineSession --> FormatPrompt
+    
+    style RAGEngine fill:#E8F5E9
+    style SemanticCache fill:#C8E6C9
+    style EmbedService fill:#A5D6A7
+    style VectorStore fill:#81C784
+    style RetPipeline fill:#66BB6A
+    style ChromaDB fill:#4CAF50
 ```
 
 **Retrieval Flow:**
-```
-Query
-  ↓
-embed_single(query) → 384-dim vector
-  ↓
-semanticCache.get(url, embedding)?
-  ├─ HIT → return cached_response (1-10ms)
-  └─ MISS ↓
-    vectorStore.search(embedding, top_k=5)
-      ↓
-    HNSW index finds top-5 similar chunks
-      ↓
-    Return {metadata, text, score}
-      ↓
-    semanticCache.set() for future hits
-      ↓
-    return results
+
+```mermaid
+graph TD
+    Query["New Query<br/>User Input"]
+    EmbedQuery["embed_single query<br/>-> 384-dim vector"]
+    CheckCache{"semanticCache.get<br/>url + embedding?"}
+    
+    CacheHit["✓ Cache HIT<br/>Return cached_response<br/>⚡ 1-10ms"]
+    
+    CacheMiss["✗ Cache MISS"]
+    VecSearch["vectorStore.search<br/>embedding, top_k=5"]
+    HNSWIndex["HNSW Index<br/>Find top-5 chunks"]
+    ReturnResults["Return<br/>metadata, text, score"]
+    SetCache["semanticCache.set<br/>Cache for future hits"]
+    FinalReturn["Return Results<br/>To Pipeline"]
+    
+    Query --> EmbedQuery
+    EmbedQuery --> CheckCache
+    CheckCache -->|HIT| CacheHit
+    CheckCache -->|MISS| CacheMiss
+    CacheHit --> FinalReturn
+    CacheMiss --> VecSearch
+    VecSearch --> HNSWIndex
+    HNSWIndex --> ReturnResults
+    ReturnResults --> SetCache
+    SetCache --> FinalReturn
+    
+    style CacheHit fill:#C8E6C9
+    style CacheMiss fill:#FFCDD2
+    style Query fill:#E3F2FD
+    style FinalReturn fill:#F3E5F5
 ```
 
 ---
 
 ### Layer 4: Search Service Layer
 
-```
-┌──────────────────────────────────────────────────┐
-│       Search & Content Fetching Layer            │
-├──────────────────────────────────────────────────┤
-│                                                  │
-│  ┌────────────────────────────────────────────┐ │
-│  │  searching/main.py: Service Facade         │ │
-│  ├────────────────────────────────────────────┤ │
-│  │ • IPC client connection (model_server)     │ │
-│  │ • Fallback local retrieval services        │ │
-│  │ • ingest_url_to_vector_store()             │ │
-│  │ • retrieve_from_vector_store()             │ │
-│  │ • get_vector_store_stats()                 │ │
-│  └────────────────────────────────────────────┘ │
-│                                                  │
-│  ┌────────────────────────────────────────────┐ │
-│  │  playwright_web_search.py: Web Search      │ │
-│  ├────────────────────────────────────────────┤ │
-│  │ • Async browser automation (Playwright)    │ │
-│  │ • Search engine: Google, Bing, DuckDuckGo │ │
-│  │ • Page title + snippet parsing             │ │
-│  │ • User-Agent rotation                      │ │
-│  │ • Timeout handling (30s)                   │ │
-│  │ → Returns [URL, Title, Snippet]            │ │
-│  └────────────────────────────────────────────┘ │
-│                                                  │
-│  ┌────────────────────────────────────────────┐ │
-│  │  fetch_full_text.py: Content Extraction    │ │
-│  ├────────────────────────────────────────────┤ │
-│  │ • HTTP GET with headers spoofing           │ │
-│  │ • BeautifulSoup parsing                    │ │
-│  │ • Remove scripts/styles/nav                │ │
-│  │ • Extract main content (max 3000 words)    │ │
-│  │ → Returns cleaned text for embedding       │ │
-│  └────────────────────────────────────────────┘ │
-│                                                  │
-│  ┌────────────────────────────────────────────┐ │
-│  │  tools.py: Function Calls                  │ │
-│  ├────────────────────────────────────────────┤ │
-│  │ • getYoutubeDetails() → video metadata     │ │
-│  │ • getImagePrompt() → image analysis        │ │
-│  │ • getTimeZone() → location data            │ │
-│  │ • generateImage() via Pollinations API     │ │
-│  └────────────────────────────────────────────┘ │
-│                                                  │
-└──────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    Pipeline["Tool Execution<br/>Request"]
+    
+    SearchFacade["searching/main.py<br/>Service Facade"]
+    IPCCheck{"IPC Connection<br/>Available?"}
+    IPCClient["IPC Client<br/>localhost:5010"]
+    LocalFallback["Local Services<br/>Fallback"]
+    
+    WebSearch["playwright_web_search.py<br/>Web Search"]
+    BrowserAuto["Async Browser<br/>Automation"]
+    SearchEngine["Search Engines<br/>Google/Bing/DDG"]
+    ParseResults["Parse Title +<br/>Snippets"]
+    UserAgent["User-Agent<br/>Rotation"]
+    Timeout["Timeout: 30s"]
+    WebSearchOut["Output: URL,<br/>Title, Snippet"]
+    
+    FetchText["fetch_full_text.py<br/>Content Extraction"]
+    HTTPGet["HTTP GET<br/>Spoofed Headers"]
+    BeautifulSoup["BeautifulSoup<br/>Parsing"]
+    RemoveJunk["Remove Scripts/<br/>Styles/Nav"]
+    ExtractContent["Extract Main<br/>Content"]
+    WordLimit["Limit: 3000<br/>words max"]
+    FetchOut["Output: Cleaned<br/>Text"]
+    
+    Tools["tools.py<br/>Function Calls"]
+    YouTube["getYoutubeDetails<br/>-> Video Metadata"]
+    ImagePrompt["getImagePrompt<br/>-> Image Analysis"]
+    TimeZone["getTimeZone<br/>-> Location Data"]
+    GenerateImage["generateImage<br/>-> Pollinations API"]
+    
+    Results["Aggregated Results<br/>To Pipeline"]
+    
+    Pipeline --> SearchFacade
+    SearchFacade --> IPCCheck
+    IPCCheck -->|YES| IPCClient
+    IPCCheck -->|NO| LocalFallback
+    
+    SearchFacade -->|web search| WebSearch
+    WebSearch --> BrowserAuto
+    BrowserAuto --> SearchEngine
+    SearchEngine --> ParseResults
+    ParseResults --> UserAgent
+    UserAgent --> Timeout
+    Timeout --> WebSearchOut
+    
+    SearchFacade -->|fetch content| FetchText
+    FetchText --> HTTPGet
+    HTTPGet --> BeautifulSoup
+    BeautifulSoup --> RemoveJunk
+    RemoveJunk --> ExtractContent
+    ExtractContent --> WordLimit
+    WordLimit --> FetchOut
+    
+    SearchFacade -->|function calls| Tools
+    Tools --> YouTube
+    Tools --> ImagePrompt
+    Tools --> TimeZone
+    Tools --> GenerateImage
+    
+    WebSearchOut --> Results
+    FetchOut --> Results
+    YouTube --> Results
+    ImagePrompt --> Results
+    TimeZone --> Results
+    GenerateImage --> Results
+    
+    style SearchFacade fill:#F8BBD0
+    style WebSearch fill:#F48FB1
+    style FetchText fill:#EC407A
+    style Tools fill:#E91E63
+    style Results fill:#AD1457
 ```
 
 ---
 
 ### Layer 5: Chat Engine & Session Layer
 
-```
-┌──────────────────────────────────────────────────┐
-│      Chat Engine & Session Management            │
-├──────────────────────────────────────────────────┤
-│                                                  │
-│  ┌────────────────────────────────────────────┐ │
-│  │  ChatEngine (chatEngine.py)                │ │
-│  ├────────────────────────────────────────────┤ │
-│  │ • generate_contextual_response()           │ │
-│  │   - Build message history                  │ │
-│  │   - Retrieve RAG context if enabled        │ │
-│  │   - Call LLM (Pollinations API)            │ │
-│  │   - Stream response via AsyncGenerator     │ │
-│  │                                             │ │
-│  │ • chat_with_search()                       │ │
-│  │   - Execute search query first             │ │
-│  │   - Include search results in context      │ │
-│  │   - Enhanced prompt synthesis              │ │
-│  │                                             │ │
-│  │ Dependencies:                              │ │
-│  │  • session_manager → conversation history  │ │
-│  │  • retrieval_system → RAG context          │ │
-│  └────────────────────────────────────────────┘ │
-│           ↑ Dependency                          │
-│  ┌────────────────────────────────────────────┐ │
-│  │  SessionManager (sessionManager.py)        │ │
-│  ├────────────────────────────────────────────┤ │
-│  │ Storage: Dict[session_id → SessionData]    │ │
-│  │ Max sessions: 1000 (configurable)          │ │
-│  │ TTL: 30 minutes (configurable)             │ │
-│  │ Auto-cleanup of expired sessions           │ │
-│  │ Thread-safe (RLock protected)              │ │
-│  │                                             │ │
-│  │ Operations:                                │ │
-│  │ • create_session(query) → session_id       │ │
-│  │ • get_session(id) → SessionData            │ │
-│  │ • add_message_to_history()                 │ │
-│  │ • get_conversation_history()               │ │
-│  │ • add_content_to_session() w/ embedding    │ │
-│  │ • get_rag_context() → combined memory      │ │
-│  └────────────────────────────────────────────┘ │
-│           ↑ Dependency                          │
-│  ┌────────────────────────────────────────────┐ │
-│  │  SessionData (sessionData.py)              │ │
-│  ├────────────────────────────────────────────┤ │
-│  │ Per-session state:                         │ │
-│  │  • session_id: unique identifier           │ │
-│  │  • conversation history: messages[]        │ │
-│  │  • fetched_urls: {url → content}           │ │
-│  │  • web_search_urls: search results[]       │ │
-│  │  • youtube_urls: video metadata[]          │ │
-│  │  • tool_calls: execution log               │ │
-│  │  • embeddings: session_embeddings[]        │ │
-│  │  • last_activity: timestamp                │ │
-│  │                                             │ │
-│  │ Methods:                                   │ │
-│  │ • get_rag_context() → top content summary  │ │
-│  │ • get_top_content(k) → k most relevant     │ │
-│  │ • session_memory: compressed representation│ │
-│  └────────────────────────────────────────────┘ │
-│                                                  │
-└──────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    UserMessage["User Message<br/>Multi-turn Chat"]
+    
+    ChatEngine["ChatEngine<br/>chatEngine.py"]
+    GenContextual["generate_contextual_response"]
+    ChatSearch["chat_with_search"]
+    
+    BuildHistory["Build Message<br/>History"]
+    RAGRetrieval["Retrieve RAG<br/>Context"]
+    LLMCall["Call LLM<br/>Pollinations API"]
+    StreamAsync["Stream AsyncGenerator<br/>Response Chunks"]
+    
+    SearchFirst["Execute Search<br/>First"]
+    IncludeResults["Include Search<br/>Results"]
+    EnhancedPrompt["Enhanced Prompt<br/>Synthesis"]
+    
+    SessionMgr["SessionManager<br/>sessionManager.py"]
+    Storage["Storage:<br/>Dict<br/>session_id →<br/>SessionData"]
+    MaxSessions["Max Sessions: 1000<br/>TTL: 30 min<br/>Thread-safe: RLock"]
+    
+    CreateSession["create_session<br/>query -> id"]
+    GetSession["get_session<br/>id -> Data"]
+    AddMessage["add_message_to_history"]
+    GetHistory["get_conversation_history"]
+    AddContent["add_content_to_session<br/>url + embedding"]
+    GetRAGContext["get_rag_context<br/>-> combined"]
+    
+    SessionData["SessionData<br/>sessionData.py"]
+    SessionID["session_id<br/>unique"]
+    History["conversation<br/>history[]"]
+    FetchedURLs["fetched_urls<br/>url -> content"]
+    SearchURLs["web_search_urls<br/>results[]"]
+    YouTubeURLs["youtube_urls<br/>metadata[]"]
+    ToolCalls["tool_calls<br/>exec log"]
+    Embeddings["embeddings<br/>session_emb[]"]
+    LastActivity["last_activity<br/>timestamp"]
+    
+    GetRAGCtx["get_rag_context<br/>summary"]
+    GetTopContent["get_top_content<br/>k most relevant"]
+    Memory["session_memory<br/>compressed"]
+    
+    UserMessage --> ChatEngine
+    ChatEngine --> GenContextual
+    ChatEngine --> ChatSearch
+    
+    GenContextual --> BuildHistory
+    GenContextual --> RAGRetrieval
+    GenContextual --> LLMCall
+    GenContextual --> StreamAsync
+    
+    ChatSearch --> SearchFirst
+    ChatSearch --> IncludeResults
+    ChatSearch --> EnhancedPrompt
+    
+    ChatEngine -.->|depends on| SessionMgr
+    SessionMgr --> Storage
+    SessionMgr --> MaxSessions
+    
+    SessionMgr --> CreateSession
+    SessionMgr --> GetSession
+    SessionMgr --> AddMessage
+    SessionMgr --> GetHistory
+    SessionMgr --> AddContent
+    SessionMgr --> GetRAGContext
+    
+    SessionMgr -.->|manages| SessionData
+    SessionData --> SessionID
+    SessionData --> History
+    SessionData --> FetchedURLs
+    SessionData --> SearchURLs
+    SessionData --> YouTubeURLs
+    SessionData --> ToolCalls
+    SessionData --> Embeddings
+    SessionData --> LastActivity
+    
+    SessionData --> GetRAGCtx
+    SessionData --> GetTopContent
+    SessionData --> Memory
+    
+    style ChatEngine fill:#FCE4EC
+    style SessionMgr fill:#F3E5F5
+    style SessionData fill:#E1BEE7
+    style StreamAsync fill:#C2185B
 ```
 
 ---
 
 ### Layer 6: IPC Service Layer (Optional Distributed)
 
-```
-┌────────────────────────────────────────────────────┐
-│   IPC Service Layer (Inter-Process Communication)  │
-├────────────────────────────────────────────────────┤
-│                                                    │
-│ ┌──────────────────────────────────────────────┐  │
-│ │  CoreEmbeddingService (ipcService/)          │  │
-│ ├──────────────────────────────────────────────┤  │
-│ │  Runs in separate process on port 5010      │  │
-│ │  (Optional - can be run locally without IPC) │  │
-│ │                                               │  │
-│ │ Services:                                    │  │
-│ │ • _instance_id: unique service instance ID   │  │
-│ │ • embedding_service deployed                 │  │
-│ │ • vector_store deployed                      │  │
-│ │ • semantic_cache deployed                    │  │
-│ │ • retrieval_pipeline deployed                │  │
-│ │                                               │  │
-│ │ Methods exposed via IPC:                     │  │
-│ │ • ingest_url(url) → chunks ingested          │  │
-│ │ • retrieve(query, top_k) → results           │  │
-│ │ • build_retrieval_context()                  │  │
-│ │ • get_stats() → system metrics               │  │
-│ │                                               │  │
-│ │ Thread Management:                           │  │
-│ │ • ThreadPoolExecutor(max_workers=2)          │  │
-│ │ • GPU lock for safe access                   │  │
-│ │ • Persistence worker thread (background)     │  │
-│ └──────────────────────────────────────────────┘  │
-│                                                    │
-│ ┌──────────────────────────────────────────────┐  │
-│ │  Client: searching/main.py                   │  │
-│ ├──────────────────────────────────────────────┤  │
-│ │ • IPC Client → connects to port 5010        │  │
-│ │ • Fallback to local services if IPC fails    │  │
-│ │ • Transparent service discovery              │  │
-│ └──────────────────────────────────────────────┘  │
-│                                                    │
-└────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    Main["Main API Server<br/>:8000"]
+    SearchingService["searching/main.py<br/>Service Facade"]
+    
+    IPCClient["IPC Client<br/>LocalHost:5010"]
+    IPCConnection{"IPC Connection<br/>Active?"}
+    
+    CoreService["CoreEmbeddingService<br/>ipcService/"]
+    InstanceID["_instance_id<br/>unique service ID"]
+    
+    EmbedServiceDeployed["EmbeddingService<br/>Deployed"]
+    VectorStoreDeployed["VectorStore<br/>Deployed"]
+    SemanticCacheDeployed["SemanticCache<br/>Deployed"]
+    RetPipelineDeployed["RetrievalPipeline<br/>Deployed"]
+    
+    IngestURL["ingest_url<br/>url -> chunks"]
+    RetrieveQuery["retrieve<br/>query, top_k"]
+    BuildContext["build_retrieval_context"]
+    GetStats["get_stats<br/>-> metrics"]
+    
+    ThreadPool["ThreadPoolExecutor<br/>max_workers=2"]
+    GPULock["GPU Lock<br/>Safe Access"]
+    PersistWorker["Persistence Thread<br/>Background"]
+    
+    LocalFallback["Local Services<br/>Fallback"]
+    LocalEmbed["Local Embedding<br/>Service"]
+    LocalVector["Local Vector<br/>Store"]
+    
+    Main --> SearchingService
+    SearchingService --> IPCClient
+    IPCClient --> IPCConnection
+    
+    IPCConnection -->|YES| CoreService
+    IPCConnection -->|NO| LocalFallback
+    
+    CoreService --> InstanceID
+    CoreService --> EmbedServiceDeployed
+    CoreService --> VectorStoreDeployed
+    CoreService --> SemanticCacheDeployed
+    CoreService --> RetPipelineDeployed
+    
+    CoreService --> IngestURL
+    CoreService --> RetrieveQuery
+    CoreService --> BuildContext
+    CoreService --> GetStats
+    
+    CoreService --> ThreadPool
+    CoreService --> GPULock
+    CoreService --> PersistWorker
+    
+    LocalFallback --> LocalEmbed
+    LocalFallback --> LocalVector
+    
+    style Main fill:#E3F2FD
+    style CoreService fill:#E8EAF6
+    style IPCConnection fill:#FFF9C4
+    style LocalFallback fill:#C8E6C9
 ```
 
 ---
@@ -453,80 +598,65 @@ tools.py:
 ## Data Flow
 
 ### Complete Request Flow: "/api/search"
+```mermaid
+sequenceDiagram
+  actor User
+  participant Gateway as API Gateway<br/>gateways/search.py
+  participant Pipeline as SearchPipeline<br/>searchPipeline.py
+  participant Tools as Tool Execution<br/>optimized_tool_execution
+  participant RAG as RAG Engine<br/>ragEngine.py
+  participant LLM as ChatEngine +<br/>Pollinations API
+  participant Session as SessionManager<br/>sessionManager.py
+  participant Client as Client<br/>SSE Stream
 
-```
-USER
-  ↓
-┌──────────────────────────────────────────┐
-│ 1. HTTP POST /api/search                 │
-│   {query, image_url?, stream=true}       │
-└──────────────────────────────────────────┘
-  ↓
-┌──────────────────────────────────────────┐
-│ 2. API Gateway (gateways/search.py)      │
-│   • Validate query & image_url           │
-│   • Extract X-Request-ID header          │
-│   • Route to streaming or non-streaming  │
-└──────────────────────────────────────────┘
-  ↓
-┌──────────────────────────────────────────┐
-│ 3. Pipeline (searchPipeline.py)          │
-│   → run_elixposearch_pipeline()          │
-├──────────────────────────────────────────┤
-│ a. Clean query & extract URLs            │
-│ b. Create session (sessionManager)       │
-│ c. Decompose query if complex            │
-│ d. Parallel tool execution               │
-│    ├─ Web search (Playwright)            │
-│    ├─ Fetch full text (BeautifulSoup)    │
-│    ├─ YouTube metadata                   │
-│    └─ Image analysis (if image provided) │
-└──────────────────────────────────────────┘
-  ↓
-┌──────────────────────────────────────────┐
-│ 4. RAG Context Retrieval (ragEngine.py)  │
-│   → retrieve_context(query)              │
-├──────────────────────────────────────────┤
-│ a. Embed query (embeddingService)        │
-│ b. Check semantic cache per URL          │
-│ c. If miss: search vector store (ChromaDB)
-│ d. Combine with session memory context   │
-│ e. Cache result (semanticCache)          │
-└──────────────────────────────────────────┘
-  ↓
-┌──────────────────────────────────────────┐
-│ 5. LLM Synthesis (ChatEngine)            │
-│   → generate_contextual_response()       │
-├──────────────────────────────────────────┤
-│ a. Build message history                 │
-│ b. Format system prompt (instructions)   │
-│ c. Include RAG context                   │
-│ d. POST to Pollinations API              │
-│ e. Parse response                        │
-└──────────────────────────────────────────┘
-  ↓
-┌──────────────────────────────────────────┐
-│ 6. Response Streaming (SSE)              │
-│   → AsyncGenerator yields SSE events     │
-├──────────────────────────────────────────┤
-│ Event format:                            │
-│   event: TYPE                            │
-│   data: JSON_PAYLOAD                     │
-│                                          │
-│ Types: info, final-part, final, error    │
-└──────────────────────────────────────────┘
-  ↓
-┌──────────────────────────────────────────┐
-│ 7. Update Session                        │
-│   • Store response in history            │
-│   • Log metrics                          │
-│   • TTL expiry tracking                  │
-└──────────────────────────────────────────┘
-  ↓
-USER RECEIVES STREAMED RESPONSE
-```
+  User->>Gateway: 1. POST /api/search<br/>{query, image_url, stream=true}
+  Gateway->>Gateway: Validate query & image_url<br/>Extract X-Request-ID header
+  Gateway->>Pipeline: Route to pipeline
 
----
+  Pipeline->>Pipeline: 2a. Clean query & extract URLs
+  Pipeline->>Session: 2b. Create session
+  Session-->>Pipeline: session_id
+  Pipeline->>Pipeline: 2c. Decompose query if complex
+
+  Pipeline->>Tools: 2d. Parallel tool execution
+  par Web Search
+    Tools->>Tools: Playwright web search
+  and Fetch Content
+    Tools->>Tools: Fetch full text (BeautifulSoup)
+  and YouTube Metadata
+    Tools->>Tools: YouTube API call
+  and Image Analysis
+    Tools->>Tools: Image analysis (if provided)
+  end
+  Tools-->>Pipeline: Search results aggregated
+
+  Pipeline->>RAG: 3. retrieve_context(query)
+  RAG->>RAG: 3a. Embed query (embeddingService)
+  RAG->>RAG: 3b. Check semantic cache per URL
+  alt Cache Hit
+    RAG-->>RAG: Return cached_response
+  else Cache Miss
+    RAG->>RAG: 3c. Search vector store (ChromaDB)
+    RAG->>RAG: 3d. Combine with session memory
+    RAG->>RAG: 3e. Cache result (semanticCache)
+  end
+  RAG-->>Pipeline: RAG context retrieved
+
+  Pipeline->>LLM: 4. generate_contextual_response()
+  LLM->>LLM: 4a. Build message history
+  LLM->>LLM: 4b. Format system prompt
+  LLM->>LLM: 4c. Include RAG context
+  LLM->>LLM: 4d. POST to Pollinations API
+  LLM->>LLM: 4e. Parse response
+
+  LLM-->>Client: 5. Stream SSE events<br/>(info, final-part, final, error)
+  Client-->>User: Response chunks in real-time
+
+  Pipeline->>Session: 6. Update session<br/>Store response in history
+  Session->>Session: Log metrics & TTL tracking
+
+  User->>User: 7. USER RECEIVES<br/>STREAMED RESPONSE
+```
 
 ## Request Lifecycle
 
@@ -617,73 +747,110 @@ graph TB
 
 ### Single-Process Deployment (Default)
 
-```
-┌─────────────────────────────────────┐
-│      Single Python Process          │
-├─────────────────────────────────────┤
-│                                     │
-│  ┌─────────────────────────────────┐│
-│  │ Quart App (async)               ││
-│  │ ├─ SearchPipeline               ││
-│  │ ├─ ChatEngine                   ││
-│  │ ├─ SessionManager               ││
-│  │ └─ ErrorHandlers                ││
-│  └─────────────────────────────────┘│
-│                                     │
-│  ┌─────────────────────────────────┐│
-│  │ RAG Services (same process)     ││
-│  │ ├─ RAGEngine                    ││
-│  │ ├─ EmbeddingService             ││
-│  │ ├─ VectorStore (ChromaDB)       ││
-│  │ └─ SemanticCache                ││
-│  └─────────────────────────────────┘│
-│                                     │
-│  ┌─────────────────────────────────┐│
-│  │ Search Services (same process)  ││
-│  │ ├─ Playwright (browser)         ││
-│  │ ├─ HTTP clients                 ││
-│  │ └─ Tool Executors               ││
-│  └─────────────────────────────────┘│
-│                                     │
-│  ┌─────────────────────────────────┐│
-│  │ External APIs (HTTP)            ││
-│  │ ├─ Pollinations (LLM)           ││
-│  │ ├─ YouTube API                  ││
-│  │ └─ Image APIs                   ││
-│  └─────────────────────────────────┘│
-│                                     │
-└─────────────────────────────────────┘
-       Listen: 0.0.0.0:8000
+```mermaid
+graph TB
+    Client["👤 Client<br/>HTTP/WebSocket"]
+    
+    Process["Single Python Process<br/>lixSearch API"]
+    
+    QuartApp["Quart App<br/>Async Server<br/>0.0.0.0:8000"]
+    SearchPipe["SearchPipeline"]
+    ChatEng["ChatEngine"]
+    SessionMgr["SessionManager"]
+    ErrorHandler["Error Handlers"]
+    
+    RAGServices["RAG Services<br/>Same Process"]
+    RAGEngine["RAGEngine"]
+    EmbedService["EmbeddingService"]
+    VectorStore["VectorStore<br/>ChromaDB"]
+    SemanticCache["SemanticCache"]
+    
+    SearchServices["Search Services<br/>Same Process"]
+    Playwright["Playwright<br/>Browser"]
+    HTTPClients["HTTP Clients"]
+    ToolExec["Tool Executors"]
+    
+    ExternalAPIs["External APIs<br/>HTTP"]
+    Pollinations["Pollinations<br/>LLM"]
+    YouTubeAPI["YouTube API"]
+    ImageAPIs["Image APIs"]
+    
+    Client --> QuartApp
+    
+    QuartApp --> SearchPipe
+    QuartApp --> ChatEng
+    QuartApp --> SessionMgr
+    QuartApp --> ErrorHandler
+    
+    SearchPipe --> RAGServices
+    ChatEng --> RAGServices
+    
+    RAGServices --> RAGEngine
+    RAGServices --> EmbedService
+    RAGServices --> VectorStore
+    RAGServices --> SemanticCache
+    
+    SearchPipe --> SearchServices
+    SearchServices --> Playwright
+    SearchServices --> HTTPClients
+    SearchServices --> ToolExec
+    
+    EmbedService -.-> ExternalAPIs
+    ToolExec -.-> ExternalAPIs
+    ChatEng -.-> Pollinations
+    ToolExec -.-> YouTubeAPI
+    ToolExec -.-> ImageAPIs
+    
+    style Process fill:#E3F2FD
+    style QuartApp fill:#BBDEFB
+    style RAGServices fill:#C8E6C9
+    style SearchServices fill:#FFE0B2
+    style ExternalAPIs fill:#F5F5F5
 ```
 
 ### Distributed Deployment (Optional IPC)
 
-```
-┌──────────────────────────┐
-│  Main API Server         │
-│  :8000                   │
-│  ├─ SearchPipeline       │
-│  ├─ ChatEngine           │
-│  └─ SessionManager       │
-└────────┬─────────────────┘
-         │ IPC Connection
-         │ (localhost:5010)
-         ↓
-┌──────────────────────────┐
-│  Embedding Service       │
-│  (Separate Process)      │
-│  :5010 (IPC)             │
-│  ├─ EmbeddingService     │
-│  ├─ VectorStore          │
-│  ├─ SemanticCache        │
-│  └─ RetrievalPipeline    │
-└──────────────────────────┘
-
-Benefits:
-✓ GPU isolation for embeddings
-✓ Scaled independently
-✓ Memory separated
-✓ Fallback to local if IPC fails
+```mermaid
+graph TB
+    Client["👤 Client"]
+    
+    MainServer["Main API Server<br/>:8000<br/>Process 1"]
+    SearchPipe["SearchPipeline"]
+    ChatEng["ChatEngine"]
+    SessionMgr["SessionManager"]
+    
+    IPCNetwork["IPC Network<br/>localhost:5010<br/>RPC Call"]
+    
+    EmbedProcess["Embedding Service<br/>:5010<br/>Process 2<br/>Separate Process"]
+    CoreService["CoreEmbeddingService"]
+    EmbedService2["EmbeddingService"]
+    VectorStore2["VectorStore"]
+    SemanticCache2["SemanticCache"]
+    RetPipeline2["RetrievalPipeline"]
+    
+    Client --> MainServer
+    MainServer --> SearchPipe
+    MainServer --> ChatEng
+    MainServer --> SessionMgr
+    
+    SearchPipe -->|retrieval| IPCNetwork
+    ChatEng -->|context| IPCNetwork
+    
+    IPCNetwork --> EmbedProcess
+    EmbedProcess --> CoreService
+    CoreService --> EmbedService2
+    CoreService --> VectorStore2
+    CoreService --> SemanticCache2
+    CoreService --> RetPipeline2
+    
+    Benefits["Benefits:<br/>✓ GPU isolation<br/>✓ Independent scaling<br />✓ Memory separation<br/>✓ Fallback on failure"]
+    
+    EmbedProcess -.-> Benefits
+    
+    style MainServer fill:#E3F2FD
+    style EmbedProcess fill:#E8F5E9
+    style IPCNetwork fill:#FFF9C4
+    style Benefits fill:#C8E6C9
 ```
 
 ---
