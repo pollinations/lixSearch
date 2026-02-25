@@ -1,123 +1,108 @@
-# Elixpo Search Agent
+# 🔍 lixSearch - Your Intelligent Search Assistant
 
+> **Smart searching made simple. Ask a question, get answers with sources.**
 
-A Python-based web search and synthesis API that processes user queries, performs web and YouTube searches, scrapes content, and generates detailed Markdown answers with sources and images. Built for extensibility, robust error handling, and efficient information retrieval using modern async APIs and concurrency.
+lixSearch is your personal research assistant that searches the web, watches videos, finds images, and synthesizes everything into clear, easy-to-read answers. Just ask, and get back thoughtfully researched results with sources you can trust.
 
-**NEW: Now features an IPC-based embedding model server for optimized GPU resource usage and better scalability!**
-
----
-
-### GPU Memory Optimization (IPC Architecture):
-```
-Legacy Model (Before IPC):
-App Worker 1 → Local Embedding Model (GPU: ~1GB)
-App Worker 2 → Local Embedding Model (GPU: ~1GB)  
-App Worker 3 → Local Embedding Model (GPU: ~1GB)
-Total: ~6GB GPU memory per 3 workers
-
-Optimized Model (With IPC):
-App Worker 1 ──┐
-App Worker 2 ──┤→ IPC TCP → Embedding Server (GPU: ~2GB)
-App Worker 3 ──┘
-Total: ~2GB GPU memory (67% reduction!)
-```
+![Product Demo Placeholder - Hero Image of search interface](./assets/hero-image.png)
 
 ---
 
-## Architecture Overview
+## ✨ What Makes lixSearch Different?
 
-The system uses an **IPC-based Inter-Process Communication architecture** with async task processing, semantic caching, and efficient resource pooling:
+### 🚀 Lightning Fast Responses
+Don't wait for search results. lixSearch remembers what you've already asked about and serves up answers instantly from its memory. Same question, instant answer.
 
-```mermaid
-graph TB
-  subgraph "Client Layer"
-    A1["🔷 App Worker 1<br/>Port: 5000<br/>Async Request Handler"]
-    A2["🔷 App Worker 2<br/>Port: 5001<br/>Async Request Handler"]  
-    A3["🔷 App Worker N<br/>Port: 500X<br/>Async Request Handler"]
-  end
-  
-  subgraph "Request Processing"
-    RQ["📦 Request Queue<br/>Max: 100 pending"]
-    PS["🚦 Processing Semaphore<br/>Max: 15 concurrent"]
-  end
-  
-  subgraph "IPC Communication"
-    IPC["🔌 IPC Manager<br/>TCP Port: 5010<br/>BaseManager"]
-  end
-  
-  subgraph "Model Server Layer"
-    ES["🧠 Embedding Server<br/>SentenceTransformer<br/>GPU-Optimized"]
-    SAP["🌐 Search Agent Pool<br/>Playwright Browser<br/>Automation"]
-    TRANS["🎙️ Transcription<br/>Whisper Model<br/>GPU-Optimized"]
-  end
-  
-  subgraph "Data & Cache Layer"
-    VS["📊 Vector Store<br/>FAISS Index<br/>GPU Accelerated"]
-    SC["⚡ Semantic Cache<br/>TTL: 3600s<br/>Similarity: 0.90"]
-    SM["💾 Session Memory<br/>Per-user context<br/>FAISS sessions"]
-  end
-  
-  subgraph "Search Services"
-    YS["🔍 Yahoo Search<br/>Results"]
-    YI["🖼️ Image Search<br/>Yahoo/Bing"]
-    WEB["📄 Web Scraping<br/>BeautifulSoup"]
-    YT["📹 YouTube<br/>Transcripts & Metadata"]
-  end
-  
-  subgraph "Synthesis & Response"
-    LLM["🤖 Pollinations LLM<br/>Chat Completions"]
-    RESP["📤 Response Formatter<br/>Markdown + Sources"]
-  end
-  
-  A1 --> RQ
-  A2 --> RQ
-  A3 --> RQ
-  RQ --> PS
-  
-  PS -->|TCP:5010| IPC
-  
-  IPC -->|embed, search| ES
-  IPC -->|web/image search| SAP
-  IPC -->|transcribe| TRANS
-  
-  ES --> VS
-  ES --> SC
-  
-  TRANS --> TRANS
-  VS --> FAISS["FAISS GPU Index"]
-  SM --> FAISS
-  
-  SAP --> YS
-  SAP --> YI
-  
-  A1 --> WEB
-  A2 --> WEB
-  A3 --> WEB
-  
-  A1 --> YT
-  A2 --> YT
-  A3 --> YT
-  
-  PS --> LLM
-  LLM --> RESP
-  RESP --> A1
-  RESP --> A2
-  RESP --> A3
-  
-  classDef appLayer fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
-  classDef ipcLayer fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000
-  classDef modelLayer fill:#fff3e0,stroke:#e65100,stroke-width:3px,color:#000
-  classDef cacheLayer fill:#e0f2f1,stroke:#00796b,stroke-width:2px,color:#000
-  classDef externalLayer fill:#f1f8e9,stroke:#558b2f,stroke-width:2px,color:#000
-  classDef queueLayer fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#000
-  
-  class A1,A2,A3 appLayer
-  class IPC ipcLayer
-  class ES,TRANS,SAP modelLayer
-  class VS,SC,SM cacheLayer
-  class YS,YI,WEB,YT,LLM externalLayer
-  class RQ,PS queueLayer
+### 🧠 Actually Smart Search
+Unlike regular search engines, lixSearch understands what you're really asking for. It searches the web, watches YouTube videos, analyzes images, and pieces everything together into a coherent answer.
+
+### 📚 Always Shows Its Work
+Every answer comes with sources. Read the original articles, watch the videos, see exactly where the information came from. No fluff, no guessing.
+
+### 🎯 Learns Your Context
+Ask a follow-up question and lixSearch remembers what you were just talking about. It's like chatting with someone who actually paid attention to the conversation.
+
+---
+
+## 🎬 How It Works (In Plain English)
+
+When you ask lixSearch a question, here's what happens behind the scenes:
+
+1. **You Ask** - Type your question naturally, like you're talking to a friend
+2. **We Understand** - lixSearch breaks down your question into its key parts
+3. **We Search** - Multiple search agents fan out across the web, YouTube, and images simultaneously
+4. **We Read** - Automatically extract the important information from articles and videos
+5. **We Synthesize** - An AI reads through everything and writes a clear, concise answer
+6. **You Get Results** - A beautifully formatted answer with clickable sources and relevant images
+
+![How Search Works Diagram](./assets/how-it-works.png)
+
+---
+
+## 💡 Real-World Use Cases
+
+### Research Paper ?
+Ask about any topic and get a comprehensive overview with sources you can trust.
+
+### Planning a Trip 📍 
+Get real-time info about places, hotels, activities, and travel tips all in one place.
+
+### Learning Something New 🎓
+Follow-up questions are answered in context. The assistant remembers your conversation.
+
+### Staying Updated 📰
+Ask about the latest news on any topic and get today's results with sources.
+
+![Use Cases Placeholder](./assets/use-cases.png)
+
+---
+
+## 🏗️ How The System Works (The Simple Version)
+
+Imagine lixSearch as a research assistant with superpowers:
+
 ```
+You Ask a Question
+        ↓
+The System Understands What You Mean
+        ↓
+Multiple Searchers Look for Answers (simultaneously)
+  ├─ Web pages
+  ├─ YouTube videos
+  └─ Images
+        ↓
+All Information Gets Analyzed
+        ↓
+An AI Writes a Clear Answer
+        ↓
+You Get a Result with Sources
+```
+
+**Result:** Fast, accurate answers you can trust.
+
+![Architecture Overview Placeholder](./assets/system-overview.png)
+
+---
+
+## ⚡ Key Capabilities
+
+### 🔍 **Instant Answers**
+Answers that come to you in real-time as they're being written.
+
+### 💾 **Smart Memory**
+The system learns from your searches and serves cached results instantly for repeat questions.
+
+### 🎥 **Video Content Included**
+Get summaries and transcripts from YouTube videos automatically.
+
+### 🖼️ **Visual Results**
+Relevant images are found and included with your answers.
+
+### 📝 **Always Sourced**
+Every answer includes links to where the information came from.
+
+### 💬 **Natural Conversation**
+Ask follow-up questions and the system remembers what you were discussing.
 
 ---
 
