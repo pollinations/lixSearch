@@ -1,21 +1,311 @@
 services:
-  elixpo-search:
+  # Load Balancer - Single instance on port 8000
+  # Routes requests to 10 worker instances (8001-8010) using round-robin
+  elixpo-search-lb:
     build: .
-    container_name: elixpo-search-proxy
+    container_name: elixpo-search-lb
     ports:
       - "8000:8000"
     env_file:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
+      - APP_MODE=load_balancer
+    volumes:
+      - ./logs:/app/logs
+      - ../data/embeddings:/app/data/embeddings
+      - ../data/cache:/app/data/cache
+    depends_on:
+      - elixpo-search-worker-1
+      - elixpo-search-worker-2
+      - elixpo-search-worker-3
+      - elixpo-search-worker-4
+      - elixpo-search-worker-5
+      - elixpo-search-worker-6
+      - elixpo-search-worker-7
+      - elixpo-search-worker-8
+      - elixpo-search-worker-9
+      - elixpo-search-worker-10
+    restart: unless-stopped
+    networks:
+      - elixpo-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 40s
+      retries: 3
+      start_period: 60s
+
+  # Worker 1 - Port 8001
+  elixpo-search-worker-1:
+    build: .
+    container_name: elixpo-search-worker-1
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - APP_MODE=worker
+      - WORKER_ID=1
+      - WORKER_PORT=8001
     volumes:
       - ./logs:/app/logs
       - ../data/embeddings:/app/data/embeddings
       - ../data/cache:/app/data/cache
     restart: unless-stopped
+    networks:
+      - elixpo-network
+    expose:
+      - "8001"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/test"]
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/health"]
       interval: 30s
       timeout: 40s
       retries: 3
       start_period: 60s
+
+  # Worker 2 - Port 8002
+  elixpo-search-worker-2:
+    build: .
+    container_name: elixpo-search-worker-2
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - APP_MODE=worker
+      - WORKER_ID=2
+      - WORKER_PORT=8002
+    volumes:
+      - ./logs:/app/logs
+      - ../data/embeddings:/app/data/embeddings
+      - ../data/cache:/app/data/cache
+    restart: unless-stopped
+    networks:
+      - elixpo-network
+    expose:
+      - "8002"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/api/health"]
+      interval: 30s
+      timeout: 40s
+      retries: 3
+      start_period: 60s
+
+  # Worker 3 - Port 8003
+  elixpo-search-worker-3:
+    build: .
+    container_name: elixpo-search-worker-3
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - APP_MODE=worker
+      - WORKER_ID=3
+      - WORKER_PORT=8003
+    volumes:
+      - ./logs:/app/logs
+      - ../data/embeddings:/app/data/embeddings
+      - ../data/cache:/app/data/cache
+    restart: unless-stopped
+    networks:
+      - elixpo-network
+    expose:
+      - "8003"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/api/health"]
+      interval: 30s
+      timeout: 40s
+      retries: 3
+      start_period: 60s
+
+  # Worker 4 - Port 8004
+  elixpo-search-worker-4:
+    build: .
+    container_name: elixpo-search-worker-4
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - APP_MODE=worker
+      - WORKER_ID=4
+      - WORKER_PORT=8004
+    volumes:
+      - ./logs:/app/logs
+      - ../data/embeddings:/app/data/embeddings
+      - ../data/cache:/app/data/cache
+    restart: unless-stopped
+    networks:
+      - elixpo-network
+    expose:
+      - "8004"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/api/health"]
+      interval: 30s
+      timeout: 40s
+      retries: 3
+      start_period: 60s
+
+  # Worker 5 - Port 8005
+  elixpo-search-worker-5:
+    build: .
+    container_name: elixpo-search-worker-5
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - APP_MODE=worker
+      - WORKER_ID=5
+      - WORKER_PORT=8005
+    volumes:
+      - ./logs:/app/logs
+      - ../data/embeddings:/app/data/embeddings
+      - ../data/cache:/app/data/cache
+    restart: unless-stopped
+    networks:
+      - elixpo-network
+    expose:
+      - "8005"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/api/health"]
+      interval: 30s
+      timeout: 40s
+      retries: 3
+      start_period: 60s
+
+  # Worker 6 - Port 8006
+  elixpo-search-worker-6:
+    build: .
+    container_name: elixpo-search-worker-6
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - APP_MODE=worker
+      - WORKER_ID=6
+      - WORKER_PORT=8006
+    volumes:
+      - ./logs:/app/logs
+      - ../data/embeddings:/app/data/embeddings
+      - ../data/cache:/app/data/cache
+    restart: unless-stopped
+    networks:
+      - elixpo-network
+    expose:
+      - "8006"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/api/health"]
+      interval: 30s
+      timeout: 40s
+      retries: 3
+      start_period: 60s
+
+  # Worker 7 - Port 8007
+  elixpo-search-worker-7:
+    build: .
+    container_name: elixpo-search-worker-7
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - APP_MODE=worker
+      - WORKER_ID=7
+      - WORKER_PORT=8007
+    volumes:
+      - ./logs:/app/logs
+      - ../data/embeddings:/app/data/embeddings
+      - ../data/cache:/app/data/cache
+    restart: unless-stopped
+    networks:
+      - elixpo-network
+    expose:
+      - "8007"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/api/health"]
+      interval: 30s
+      timeout: 40s
+      retries: 3
+      start_period: 60s
+
+  # Worker 8 - Port 8008
+  elixpo-search-worker-8:
+    build: .
+    container_name: elixpo-search-worker-8
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - APP_MODE=worker
+      - WORKER_ID=8
+      - WORKER_PORT=8008
+    volumes:
+      - ./logs:/app/logs
+      - ../data/embeddings:/app/data/embeddings
+      - ../data/cache:/app/data/cache
+    restart: unless-stopped
+    networks:
+      - elixpo-network
+    expose:
+      - "8008"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/api/health"]
+      interval: 30s
+      timeout: 40s
+      retries: 3
+      start_period: 60s
+
+  # Worker 9 - Port 8009
+  elixpo-search-worker-9:
+    build: .
+    container_name: elixpo-search-worker-9
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - APP_MODE=worker
+      - WORKER_ID=9
+      - WORKER_PORT=8009
+    volumes:
+      - ./logs:/app/logs
+      - ../data/embeddings:/app/data/embeddings
+      - ../data/cache:/app/data/cache
+    restart: unless-stopped
+    networks:
+      - elixpo-network
+    expose:
+      - "8009"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8009/api/health"]
+      interval: 30s
+      timeout: 40s
+      retries: 3
+      start_period: 60s
+
+  # Worker 10 - Port 8010
+  elixpo-search-worker-10:
+    build: .
+    container_name: elixpo-search-worker-10
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - APP_MODE=worker
+      - WORKER_ID=10
+      - WORKER_PORT=8010
+    volumes:
+      - ./logs:/app/logs
+      - ../data/embeddings:/app/data/embeddings
+      - ../data/cache:/app/data/cache
+    restart: unless-stopped
+    networks:
+      - elixpo-network
+    expose:
+      - "8010"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/api/health"]
+      interval: 30s
+      timeout: 40s
+      retries: 3
+      start_period: 60s
+
+networks:
+  elixpo-network:
+    driver: bridge
