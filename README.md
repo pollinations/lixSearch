@@ -106,131 +106,146 @@ Ask follow-up questions and the system remembers what you were discussing.
 
 ---
 
-## System Flow: Request to Response
+## 🎯 What You Can Do With lixSearch
 
-```mermaid
-sequenceDiagram
-  participant User
-  participant AppWorker as App Worker<br/>Async Handler
-  participant Pipeline as Search Pipeline<br/>Orchestrator
-  participant IPC as IPC Manager<br/>TCP:5010
-  participant Models as Model Server<br/>GPU Services
-  participant LLM as Pollinations<br/>API
-  participant External as External<br/>Services
+### 🔍 **Search Anything**
+Ask about products, recipes, news, ideas, places—basically anything you'd ask Google.
 
-  User->>AppWorker: POST /search<br/>{"query": "..."}
-  AppWorker->>Pipeline: run_elixposearch_pipeline()
-  
-  Pipeline->>Pipeline: Clean query<br/>Extract URLs
-  Pipeline->>IPC: retrieve(query)
-  IPC->>Models: Vector search
-  Models->>IPC: context results
-  
-  Pipeline->>LLM: Message #1<br/>Plan tools
-  LLM->>Pipeline: Tool calls<br/>web_search, etc
-  
-  alt Tool: web_search
-    Pipeline->>IPC: web_search(query)
-    IPC->>Models: Search agents
-    Models->>External: Browser automation
-    External->>IPC: Results
-  end
-  
-  alt Tool: transcribe_audio
-    Pipeline->>IPC: transcribe(url)
-    IPC->>Models: Whisper model
-    Models->>External: YouTube download
-    External->>IPC: Transcript
-  end
-  
-  alt Tool: fetch_full_text
-    Pipeline->>External: Scrape URL
-    External->>Pipeline: HTML content
-    Pipeline->>IPC: embed(content)
-    IPC->>Pipeline: Embeddings
-  end
-  
-  Pipeline->>LLM: Message #2-N<br/>Tool results
-  LLM->>Pipeline: Final response
-  
-  Pipeline->>AppWorker: Formatted markdown<br/>+ sources
-  AppWorker->>User: SSE stream<br/>event: final
+### 📖 **Get Real Context**
+Not just links. You get summaries that explain what each result is about.
+
+### 📺 **Watch Videos**
+Get information from YouTube videos, including automatic transcripts.
+
+### 🗺️ **Find Places & Info**
+Search for locations, get details about them, find reviews and information.
+
+### 🖼️ **See Relevant Images**
+Find images related to your search right there with your results.
+
+### 💬 **Have a Conversation**
+Ask follow-up questions naturally without repeating yourself.
+
+---
+
+## 🎁 Bonus Features
+
+- **Blazing Fast** - Answers show up in real-time, word by word
+- **Smart Cache** - Ask the same thing twice? Get instant answers
+- **Works Offline Content** - Upload documents, search their content
+- **Clean Interface** - Simple, beautiful results you can trust
+- **Always Sourced** - Click through to the original sources
+
+---
+
+## 💬 How to Use lixSearch
+
+### Basic Search
+```
+Ask: "What's the best way to learn Python?"
+Get: A complete guide with links to tutorials, videos, and recommended resources
+```
+
+### Follow-Up Questions  
+```
+You: "What's the best way to learn Python?"
+lixSearch: [Gives comprehensive answer]
+You: "What about free resources?"
+lixSearch: [Remembers context, answers specifically about free options]
+```
+
+### Search with Sources
+```
+You: "Latest breakthroughs in AI"
+lixSearch: [Results with links, dates, and original sources]
 ```
 
 ---
 
-## Key Architectural Components
+## 🚀 Getting Started
 
-### 1. **🚀 Async Request Processing**
-- Non-blocking async handlers using Quart
-- Asyncio-based event loop for concurrent operations
-- Thread pool executor for blocking I/O operations (only when necessary)
-- Max 15 concurrent operations with semaphore control
+**No Installation Needed**
+Just visit the app, type your question, and get answers. That's it.
 
-### 2. **🧠 GPU-Optimized IPC Embedding**
-- Single embedding model instance on GPU
-- SentenceTransformer with FAISS indexing
-- Thread-safe operations with lock management
-- Automatic batch processing for efficiency
+**Questions?**
+The system learns from how you ask. The more natural your question, the better the results.
 
-### 3. **🌐 Browser Automation Pool**
-- Playwright-based search agents
-- Automatic rotation after 20 tabs per agent
-- Dynamic port allocation (9000-19999)
-- Headless mode for lower resource usage
-
-### 4. **⚡ Semantic Caching System**
-- TTL-based cache (default: 3600 seconds)
-- Cosine similarity matching (threshold: 0.90)
-- Per-URL cache management
-- Automatic expired entry cleanup
-
-### 5. **💾 Session-Based Knowledge Management**
-- Per-user session with independent FAISS indexes
-- Conversation history tracking
-- Content embeddings for relevance scoring
-- Automatic memory summarization
-
-### 6. **📊 Tool Orchestration**
-Tools are executed via the LLM agent which chooses:
-- `cleanQuery` - Extract & validate URLs from query
-- `web_search` - Search the web for information
-- `fetch_full_text` - Scrape and embed web content
-- `image_search` - Find relevant images (async)
-- `youtubeMetadata` - Extract video metadata
-- `transcribe_audio` - Convert video to text
-- `get_local_time` - Timezone lookups
-- `generate_prompt_from_image` - Vision-based search
-- `replyFromImage` - Direct image queries
+![Getting Started Placeholder](./assets/getting-started.png)
 
 ---
 
-## File Structure
+## 📊 Why Use lixSearch?
 
-### Core Modules
+### vs. Regular Search Engines
+- **Better Understanding** - Grasps what you really want, not just keyword matching
+- **Saves Time** - One coherent answer instead of browsing 10 blue links
+- **Context Aware** - Remembers what you were just talking about
+- **Multimedia** - Automatically finds videos, images, and articles
 
-| File | Purpose | Key Classes |
-|------|---------|-------------|
-| **app.py** | Main Quart API server | FastAPI routes, initialization |
-| **searchPipeline.py** | Tool orchestration + LLM interaction | `run_elixposearch_pipeline()` |
-| **rag_engine.py** | RAG pipeline & retrieval | `RAGEngine`, `RetrievalSystem` |
-| **model_server.py** | IPC embedding/transcription server | `CoreEmbeddingService`, port manager |
-| **embedding_service.py** | SentenceTransformer wrapper | `EmbeddingService`, `VectorStore` |
-| **session_manager.py** | Per-user context management | `SessionManager`, `SessionData` |
-| **chat_engine.py** | Conversational response generation | `ChatEngine` |
-| **semantic_cache.py** | Query result caching | `SemanticCache` |
+### vs. ChatGPT
+- **Real-Time Info** - Connected to the web, not using outdated training data
+- **Verified Sources** - Every fact links to where it came from
+- **Fresher Results** - Gets today's news, not last year's knowledge
+- **Faster** - Streamed results, not waiting for a complete response
 
-### Utility Modules
+---
 
-| File | Purpose |
-|------|---------|
-| **utility.py** | Web search, image search, URL cleaning |
-| **search.py** | Web scraping utilities |
-| **getYoutubeDetails.py** | YouTube metadata & transcription (IPC) |
-| **transcribe.py** | Standalone audio transcription client |
-| **getImagePrompt.py** | Vision-language model for image queries |
-| **getTimeZone.py** | Timezone/location utilities |
-| **tools.py** | Tool definitions for LLM |
-| **instruction.py** | System/user/synthesis prompts |
-| **config.py** | Configuration constants |
-| **requestID.py** | Request tracking middleware |
+## 🎓 Perfect For
+
+📚 **Students** - Research papers, homework, learning topics  
+💼 **Professionals** - Market research, industry updates, competitor analysis  
+🏠 **Home Improvement** - DIY guides, product reviews, how-to videos  
+✈️ **Travelers** - Travel planning, local info, reviews  
+🔬 **Researchers** - Deep dives with cited sources  
+📰 **News Junkies** - Latest updates with original sources  
+
+---
+
+## 💡 Try These Search Examples
+
+- "How do I fix a leaky kitchen faucet?"
+- "Best budget laptops for 2026"
+- "What's happening in quantum computing right now?"
+- "How do I learn graphic design?"
+- "Best neighborhoods in Seattle for families"
+
+Each will give you a complete, sourced answer.
+
+![Try It Yourself Placeholder](./assets/demo-screenshot.png)
+
+---
+
+## 🙋 FAQ
+
+**How is this different from Google?**
+Google gives you links. lixSearch gives you answers. We do the searching for you and synthesize a coherent response.
+
+**Is my search history private?**  
+Your privacy is important. [Link to privacy policy]
+
+**Can I use this offline?**
+lixSearch needs internet to search the web, but works faster when utilizing local cache.
+
+**Why are my results sometimes general?**
+Ask more specifically! "Vegan chocolate chip cookies" gives better results than "recipes."
+
+---
+
+## 🤝 Get Involved
+
+Found a bug? Have ideas for improvement? 
+[Contribute on GitHub](https://github.com/pollinations/lixSearch) | [Report Issues](https://github.com/pollinations/lixSearch/issues)
+
+---
+
+## 📞 Contact & Support
+
+Questions? Feedback? Suggestions?  
+✉️ hello@elixpo.com  
+🔗 [lixSearch source](https://github.com/pollinations/lixSearch)  
+
+---
+
+**Happy Searching! 🎉**
+
+*lixSearch - Search smarter, not harder.*
