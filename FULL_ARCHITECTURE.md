@@ -21,11 +21,11 @@
 - Advanced caching strategies
 
 ### Key Goals
-✅ Sub-second semantic matching through adaptive caching  
-✅ Parallel query execution across multiple evidence sources  
-✅ Cost optimization via token estimation and compression  
-✅ Context-aware response synthesis using session memory  
-✅ Graceful degradation when components fail  
+ Sub-second semantic matching through adaptive caching  
+ Parallel query execution across multiple evidence sources  
+ Cost optimization via token estimation and compression  
+ Context-aware response synthesis using session memory  
+ Graceful degradation when components fail  
 
 ---
 
@@ -160,35 +160,103 @@ graph TD
 **Key Modules:**
 
 #### lixsearch.py (Main Orchestrator)
-```
-run_elixposearch_pipeline(query, image, event_id, request_id)
-    ├─ _decompose_query()  → break into sub-queries
-    ├─ optimized_tool_execution() → parallel execution
-    ├─ _get_rag_context() → retrieve cached evidence
-    ├─ LLM synthesis → generate response
-    └─ SSE streaming → yield formatted events
+
+```mermaid
+graph TD
+    Start[\"run_elixposearch_pipeline<br/>query, image, event_id\"]
+    Decompose[\"_decompose_query<br/>Break into sub-queries\"]
+    ToolExec[\"optimized_tool_execution<br/>Parallel execution\"]
+    RAGContext[\"_get_rag_context<br/>Retrieve cached evidence\"]
+    Synthesis[\"LLM synthesis<br/>Generate response\"]
+    SSEStream[\"SSE streaming<br/>Yield formatted events\"]
+    End[\"Return AsyncGenerator<br/>Event chunks\"]
+    
+    Start --> Decompose
+    Decompose --> ToolExec
+    ToolExec --> RAGContext
+    RAGContext --> Synthesis
+    Synthesis --> SSEStream
+    SSEStream --> End
+    
+    style Start fill:#FFF3E0
+    style End fill:#FFF3E0
+    style SSEStream fill:#FFE0B2
 ```
 
 #### searchPipeline.py (Flow Controller)
-```
-run_elixposearch_pipeline()
-    ├─ Validate query
-    ├─ Create session
-    ├─ Execute tools in parallel
-    ├─ Aggregate results
-    ├─ Retrieve RAG context
-    ├─ Call LLM with context
-    └─ Stream response chunks
+
+```mermaid
+graph TD
+    Start[\"run_elixposearch_pipeline<br/>entry point\"]
+    Validate[\"1. Validate query<br/>& image_url\"]
+    CreateSess[\"2. Create session<br/>Track request_id\"]
+    ToolExec[\"3. Execute tools<br/>in parallel\"]
+    Aggregate[\"4. Aggregate results<br/>Deduplicate URLs\"]
+    RAGRetrieve[\"5. Retrieve RAG<br/>context\"]
+    LLMCall[\"6. Call LLM<br/>with context\"]
+    Stream[\"7. Stream response<br/>chunks as SSE\"]
+    End[\"Return event stream<br/>to gateway\"]
+    
+    Start --> Validate
+    Validate --> CreateSess
+    CreateSess --> ToolExec
+    ToolExec --> Aggregate
+    Aggregate --> RAGRetrieve
+    RAGRetrieve --> LLMCall
+    LLMCall --> Stream
+    Stream --> End
+    
+    style Start fill:#F3E5F5
+    style End fill:#F3E5F5
+    style ToolExec fill:#E1BEE7
+    style RAGRetrieve fill:#CE93D8
 ```
 
 #### optimized_tool_execution.py (Tool Runner)
-```
-optimized_tool_execution(search_tools)
-    ├─ Async web search (Playwright)
-    ├─ YouTube metadata fetch
-    ├─ Image analysis (if image provided)
-    ├─ Function calls (getTimeZone, generateImage, etc)
-    └─ Result aggregation
+
+```mermaid
+graph TD
+    Start[\"optimized_tool_execution<br/>search_tools list\"]
+    
+    WebSearch[\"Web Search<br/>Playwright\"]
+    YouTubeFetch[\"YouTube Metadata<br/>API Call\"]
+    ImageAnalysis[\"Image Analysis<br/>Vision Model\"]
+    Functions[\"Function Calls<br/>getTimeZone, generateImage\"]
+    
+    Async1[\"Async<br/>Task 1\"]
+    Async2[\"Async<br/>Task 2\"]
+    Async3[\"Async<br/>Task 3\"]
+    Async4[\"Async<br/>Task 4\"]
+    
+    Gather[\"Gather all results<br/>asyncio.gather\"]
+    Aggregate[\"Aggregate results<br/>De-duplicate\"]
+    Format[\"Format output<br/>Structured data\"]
+    End[\"Return aggregated<br/>results to pipeline\"]
+    
+    Start --> WebSearch
+    Start --> YouTubeFetch
+    Start --> ImageAnalysis
+    Start --> Functions
+    
+    WebSearch --> Async1
+    YouTubeFetch --> Async2
+    ImageAnalysis --> Async3
+    Functions --> Async4
+    
+    Async1 --> Gather
+    Async2 --> Gather
+    Async3 --> Gather
+    Async4 --> Gather
+    
+    Gather --> Aggregate
+    Aggregate --> Format
+    Format --> End
+    
+    style Gather fill:#B2DFDB
+    style Async1 fill:#4DB6AC
+    style Async2 fill:#4DB6AC
+    style Async3 fill:#4DB6AC
+    style Async4 fill:#4DB6AC
 ```
 
 ---
@@ -662,39 +730,43 @@ sequenceDiagram
 
 ### Example: Multi-turn Chat Session
 
-```
-1. POST /api/session/create
-   → session_manager.create_session(query)
-   ← session_id: "abc123"
-
-2. POST /api/session/abc123/chat
-   {message: "What's the latest AI news?"}
-   → session_manager.get_session("abc123")
-   → chatEngine.chat_with_search(...) or generate_contextual_response(...)
-      ├─ Tool execution (web search, fetch)
-      ├─ RAG context retrieval
-      ├─ LLM synthesis with conversation history
-      └─ Yield SSE chunks
-   → session_manager.add_message_to_history(...)
-   ← SSE response stream
-
-3. POST /api/session/abc123/chat
-   {message: "Can you summarize that?"}
-   → References previous conversation
-   → RAG includes prior context via sessionData
-   → SessionData.get_rag_context() combines:
-      - Recent conversation turns
-      - Retrieved URLs from previous turn
-      - Synthesized memory embeddings
-   → LLM response includes continuity
-   ← SSE response stream
-
-4. GET /api/session/abc123
-   → Returns session metadata, history, tool calls
-
-5. DELETE /api/session/abc123
-   → sessionManager.cleanup_session(id)
-   → Releases memory
+```mermaid
+graph TD
+    Step1["Step 1: Create Session<br/>POST /api/session/create"]
+    Step1Out["Response:<br/>session_id: 'abc123'"]
+    
+    Step2["Step 2: First Chat Turn<br/>POST /api/session/abc123/chat<br/>message: 'What are latest AI news?'"]
+    Step2Proc["Process:<br/>• Tool execution<br/>• RAG context retrieval<br/>• LLM synthesis<br/>• Stream response"]
+    Step2Out["Response:<br/>SSE event stream"]
+    Step2Update["Update:<br/>add_message_to_history"]
+    
+    Step3["Step 3: Follow-up Turn<br/>POST /api/session/abc123/chat<br/>message: 'Can you summarize that?'"]
+    Step3Proc["Process:<br/>• References previous conversation<br/>• RAG includes prior context<br/>• Continuity-aware LLM<br/>• Memory embeddings"]
+    Step3Out["Response:<br/>SSE event stream"]
+    
+    Step4["Step 4: Get Session Info<br/>GET /api/session/abc123"]
+    Step4Out["Response:<br/>metadata, history, tool calls"]
+    
+    Step5["Step 5: Clean Up<br/>DELETE /api/session/abc123"]
+    Step5Out["Release memory<br/>cleanup_session"]
+    
+    Step1 --> Step1Out
+    Step2 --> Step2Proc
+    Step2Proc --> Step2Out
+    Step2Out --> Step2Update
+    Step2Update --> Step3
+    Step3 --> Step3Proc
+    Step3Proc --> Step3Out
+    Step3Out --> Step4
+    Step4 --> Step4Out
+    Step4Out --> Step5
+    Step5 --> Step5Out
+    
+    style Step1 fill:#E3F2FD
+    style Step2 fill:#E8EAF6
+    style Step3 fill:#F3E5F5
+    style Step4Out fill:#E8F5E9
+    style Step5Out fill:#FFCCBC
 ```
 
 ---
@@ -855,27 +927,6 @@ graph TB
 
 ---
 
-## Configuration & Constants
-
-```python
-# Pipeline Configuration (pipeline/config.py)
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"  # 384-dim
-EMBEDDINGS_DIR = "./embeddings"  # ChromaDB persistence
-SEMANTIC_CACHE_DIR = "./cache"   # Pickle cache
-SEMANTIC_CACHE_TTL_SECONDS = 300  # 5 minutes
-SEMANTIC_CACHE_SIMILARITY_THRESHOLD = 0.90  # Adaptive
-CACHE_WINDOW_SIZE = 5000  # Markov history
-MAX_LINKS_TO_TAKE = 5     # Search result limit
-SEARCH_MAX_RESULTS = 10   # Web search results
-POLLINATIONS_ENDPOINT = "https://api.pollinations.ai/v1/chat/completions"
-
-# Session Configuration
-SESSION_TTL_MINUTES = 30
-MAX_SESSIONS = 1000
-EMBEDDING_DIMENSION = 384
-```
-
----
 
 ## Key Features & Guarantees
 
@@ -992,14 +1043,14 @@ graph TB
 
 **lixSearch** is a modern, production-ready search system with:
 
-✅ **Layered Architecture**: API → Pipeline → RAG → Search → Chat → Session
-✅ **Streaming Responses**: Real-time SSE for user feedback
-✅ **Semantic Caching**: 0.90+ similarity detection with adaptive thresholds
-✅ **Parallel Execution**: Tools run concurrently for speed
-✅ **Context Awareness**: Full conversation history + session memory
-✅ **Cost Optimization**: Token counting, context compression, cache savings
-✅ **Graceful Degradation**: Works even if components fail
-✅ **Scalable Design**: Session TTL prevents memory bloat
-✅ **Observable**: Request tracing via X-Request-ID throughout
+ **Layered Architecture**: API → Pipeline → RAG → Search → Chat → Session
+ **Streaming Responses**: Real-time SSE for user feedback
+ **Semantic Caching**: 0.90+ similarity detection with adaptive thresholds
+ **Parallel Execution**: Tools run concurrently for speed
+ **Context Awareness**: Full conversation history + session memory
+ **Cost Optimization**: Token counting, context compression, cache savings
+ **Graceful Degradation**: Works even if components fail
+ **Scalable Design**: Session TTL prevents memory bloat
+ **Observable**: Request tracing via X-Request-ID throughout
 
 The system achieves **sub-100ms cache hits**, **500-2000ms web search**, and **20-30% cost savings** through intelligent resource allocation.
