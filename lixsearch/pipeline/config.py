@@ -7,6 +7,7 @@ AUDIO_TRANSCRIBE_SIZE = "small"
 BASE_CACHE_DIR = "./data/audio_cache"
 isHeadless = True
 POLLINATIONS_ENDPOINT = "https://gen.pollinations.ai/v1/chat/completions"
+POLLINATIONS_ENDPOINT_IMAGE = "https://gen.pollinations.ai/image/"
 MAX_SESSIONS = 1000
 SESSION_TTL_MINUTES = 30
 RAG_CONTEXT_REFRESH = True
