@@ -1,4 +1,34 @@
 services:
+  # Chroma Vector Database Server
+  # Dedicated server for efficient vector operations
+  # Eliminates bottleneck of embedded Chroma by supporting concurrent access
+  chroma-server:
+    image: chromadb/chroma:latest
+    container_name: chroma-server
+    ports:
+      - "8100:8000"
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma_data
+      - ANONYMIZED_TELEMETRY=FALSE
+      - CHROMA_LOG_LEVEL=INFO
+    volumes:
+      - ../data/embeddings/chroma_data:/chroma_data
+    networks:
+      - elixpo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+  
   # Load Balancer - Single instance on port 8000
   # Routes requests to 10 worker instances (8001-8010) using round-robin
   elixpo-search-lb:
@@ -11,11 +41,16 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - APP_MODE=load_balancer
+      - CHROMA_API_IMPL=http
+      - CHROMA_SERVER_HOST=chroma-server
+      - CHROMA_SERVER_PORT=8000
     volumes:
       - ./logs:/app/logs
       - ../data/embeddings:/app/data/embeddings
       - ../data/cache:/app/data/cache
     depends_on:
+      chroma-server:
+        condition: service_healthy
       - elixpo-search-worker-1
       - elixpo-search-worker-2
       - elixpo-search-worker-3
@@ -47,6 +82,9 @@ services:
       - APP_MODE=worker
       - WORKER_ID=1
       - WORKER_PORT=8001
+      - CHROMA_API_IMPL=http
+      - CHROMA_SERVER_HOST=chroma-server
+      - CHROMA_SERVER_PORT=8000
     volumes:
       - ./logs:/app/logs
       - ../data/embeddings:/app/data/embeddings
@@ -56,6 +94,9 @@ services:
       - elixpo-network
     expose:
       - "8001"
+    depends_on:
+      chroma-server:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/api/health"]
       interval: 30s
@@ -74,6 +115,9 @@ services:
       - APP_MODE=worker
       - WORKER_ID=2
       - WORKER_PORT=8002
+      - CHROMA_API_IMPL=http
+      - CHROMA_SERVER_HOST=chroma-server
+      - CHROMA_SERVER_PORT=8000
     volumes:
       - ./logs:/app/logs
       - ../data/embeddings:/app/data/embeddings
@@ -83,6 +127,9 @@ services:
       - elixpo-network
     expose:
       - "8002"
+    depends_on:
+      chroma-server:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/api/health"]
       interval: 30s
@@ -101,6 +148,9 @@ services:
       - APP_MODE=worker
       - WORKER_ID=3
       - WORKER_PORT=8003
+      - CHROMA_API_IMPL=http
+      - CHROMA_SERVER_HOST=chroma-server
+      - CHROMA_SERVER_PORT=8000
     volumes:
       - ./logs:/app/logs
       - ../data/embeddings:/app/data/embeddings
@@ -110,6 +160,9 @@ services:
       - elixpo-network
     expose:
       - "8003"
+    depends_on:
+      chroma-server:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8003/api/health"]
       interval: 30s
@@ -128,6 +181,9 @@ services:
       - APP_MODE=worker
       - WORKER_ID=4
       - WORKER_PORT=8004
+      - CHROMA_API_IMPL=http
+      - CHROMA_SERVER_HOST=chroma-server
+      - CHROMA_SERVER_PORT=8000
     volumes:
       - ./logs:/app/logs
       - ../data/embeddings:/app/data/embeddings
@@ -137,6 +193,9 @@ services:
       - elixpo-network
     expose:
       - "8004"
+    depends_on:
+      chroma-server:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8004/api/health"]
       interval: 30s
@@ -155,6 +214,9 @@ services:
       - APP_MODE=worker
       - WORKER_ID=5
       - WORKER_PORT=8005
+      - CHROMA_API_IMPL=http
+      - CHROMA_SERVER_HOST=chroma-server
+      - CHROMA_SERVER_PORT=8000
     volumes:
       - ./logs:/app/logs
       - ../data/embeddings:/app/data/embeddings
@@ -164,6 +226,9 @@ services:
       - elixpo-network
     expose:
       - "8005"
+    depends_on:
+      chroma-server:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8005/api/health"]
       interval: 30s
@@ -182,6 +247,9 @@ services:
       - APP_MODE=worker
       - WORKER_ID=6
       - WORKER_PORT=8006
+      - CHROMA_API_IMPL=http
+      - CHROMA_SERVER_HOST=chroma-server
+      - CHROMA_SERVER_PORT=8000
     volumes:
       - ./logs:/app/logs
       - ../data/embeddings:/app/data/embeddings
@@ -191,6 +259,9 @@ services:
       - elixpo-network
     expose:
       - "8006"
+    depends_on:
+      chroma-server:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8006/api/health"]
       interval: 30s
@@ -209,6 +280,9 @@ services:
       - APP_MODE=worker
       - WORKER_ID=7
       - WORKER_PORT=8007
+      - CHROMA_API_IMPL=http
+      - CHROMA_SERVER_HOST=chroma-server
+      - CHROMA_SERVER_PORT=8000
     volumes:
       - ./logs:/app/logs
       - ../data/embeddings:/app/data/embeddings
@@ -218,6 +292,9 @@ services:
       - elixpo-network
     expose:
       - "8007"
+    depends_on:
+      chroma-server:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8007/api/health"]
       interval: 30s
@@ -236,6 +313,9 @@ services:
       - APP_MODE=worker
       - WORKER_ID=8
       - WORKER_PORT=8008
+      - CHROMA_API_IMPL=http
+      - CHROMA_SERVER_HOST=chroma-server
+      - CHROMA_SERVER_PORT=8000
     volumes:
       - ./logs:/app/logs
       - ../data/embeddings:/app/data/embeddings
@@ -245,6 +325,9 @@ services:
       - elixpo-network
     expose:
       - "8008"
+    depends_on:
+      chroma-server:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8008/api/health"]
       interval: 30s
@@ -263,6 +346,9 @@ services:
       - APP_MODE=worker
       - WORKER_ID=9
       - WORKER_PORT=8009
+      - CHROMA_API_IMPL=http
+      - CHROMA_SERVER_HOST=chroma-server
+      - CHROMA_SERVER_PORT=8000
     volumes:
       - ./logs:/app/logs
       - ../data/embeddings:/app/data/embeddings
@@ -272,6 +358,9 @@ services:
       - elixpo-network
     expose:
       - "8009"
+    depends_on:
+      chroma-server:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8009/api/health"]
       interval: 30s
@@ -290,6 +379,9 @@ services:
       - APP_MODE=worker
       - WORKER_ID=10
       - WORKER_PORT=8010
+      - CHROMA_API_IMPL=http
+      - CHROMA_SERVER_HOST=chroma-server
+      - CHROMA_SERVER_PORT=8000
     volumes:
       - ./logs:/app/logs
       - ../data/embeddings:/app/data/embeddings
@@ -299,6 +391,9 @@ services:
       - elixpo-network
     expose:
       - "8010"
+    depends_on:
+      chroma-server:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8010/api/health"]
       interval: 30s

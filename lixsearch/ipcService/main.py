@@ -12,6 +12,23 @@ from ipcService.searchPortManager import accessSearchAgents, _ensure_background_
 
 warnings.filterwarnings('ignore', message='Can\'t initialize NVML')
 os.environ['CHROMA_TELEMETRY_DISABLED'] = '1'
+
+# Configure Chroma client
+# Support both embedded and server modes via environment variables
+chroma_api_impl = os.getenv("CHROMA_API_IMPL", "embedded").lower()
+os.environ.setdefault("CHROMA_API_IMPL", chroma_api_impl)
+
+if chroma_api_impl == "http":
+    # Server mode configuration
+    chroma_host = os.getenv("CHROMA_SERVER_HOST", "localhost")
+    chroma_port = os.getenv("CHROMA_SERVER_PORT", "8000")
+    os.environ["CHROMA_SERVER_HOST"] = chroma_host
+    os.environ["CHROMA_SERVER_PORT"] = chroma_port
+    logger.info(f"[IPC] Chroma configured for server mode: {chroma_host}:{chroma_port}")
+else:
+    # Embedded mode
+    logger.info(f"[IPC] Chroma configured for embedded mode")
+
 logging.getLogger('chromadb').setLevel(logging.ERROR)
 
 if __name__ == "__main__":

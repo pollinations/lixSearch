@@ -1,16 +1,11 @@
-import os
-from app.main import create_app
 from app.utils import setup_logger
+from load_balancer import create_load_balancer
 
-logger = setup_logger("lixsearch-api")
+logger = setup_logger("lixsearch-lb")
 
 
 if __name__ == "__main__":
-    # Get port from environment variable or default to 8001
-    # This allows running multiple worker instances on different ports
-    port = int(os.getenv("WORKER_PORT", "8001"))
-    worker_id = int(os.getenv("WORKER_ID", "1"))
-    
-    logger.info(f"[MAIN] Initializing ElixpoSearch API Worker {worker_id} on port {port}...")
-    elixpo_app = create_app()
-    elixpo_app.run(host="0.0.0.0", port=port, workers=1)
+    logger.info("[LOAD_BALANCER] Initializing ElixpoSearch Load Balancer...")
+    lb = create_load_balancer(num_workers=10, start_port=8001)
+    logger.info("[LOAD_BALANCER] Starting load balancer on port 8000...")
+    lb.app.run(host="0.0.0.0", port=8000, workers=1)

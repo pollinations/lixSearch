@@ -1,11 +1,112 @@
-from pathlib import Path
+import hashlib
 import threading
 import time
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Tuple, Any
 from loguru import logger
 import numpy as np
+from pathlib import Path
+from datetime import datetime, timedelta
 import os
-import pickle 
+import pickle
+
+class SemanticQueryCache:
+    
+    def __init__(self, ttl_seconds: int = 3600, max_size: int = 1000, similarity_threshold: float = 0.98):
+        self.ttl_seconds = ttl_seconds
+        self.max_size = max_size
+        self.similarity_threshold = similarity_threshold
+        
+        self.query_cache: Dict[str, Tuple[Any, float, int]] = {}
+        self.access_order: List[str] = []
+        self.lock = threading.RLock()
+        
+        logger.info(f"[SemanticQueryCache] Initialized: ttl={ttl_seconds}s, max_size={max_size}, threshold={similarity_threshold}")
+    
+    def _make_key(self, embedding_hash: str, top_k: int) -> str:
+        return f"{embedding_hash}:{top_k}"
+    
+    def _hash_embedding(self, embedding: np.ndarray) -> str:
+        if isinstance(embedding, list):
+            embedding = np.array(embedding)
+        
+        rounded = np.round(embedding, decimals=5)
+        hash_input = hashlib.sha256(rounded.tobytes()).hexdigest()
+        return hash_input[:16]
+    
+    def get(self, embedding: np.ndarray, top_k: int = 5) -> Optional[List[Dict]]:
+        with self.lock:
+            embedding_hash = self._hash_embedding(embedding)
+            key = self._make_key(embedding_hash, top_k)
+            
+            if key not in self.query_cache:
+                return None
+            
+            results, timestamp, access_count = self.query_cache[key]
+            
+            if time.time() - timestamp > self.ttl_seconds:
+                del self.query_cache[key]
+                if key in self.access_order:
+                    self.access_order.remove(key)
+                logger.debug(f"[SemanticQueryCache] Expired: {key}")
+                return None
+            
+            self.query_cache[key] = (results, timestamp, access_count + 1)
+            if key in self.access_order:
+                self.access_order.remove(key)
+            self.access_order.append(key)
+            
+            logger.debug(f"[SemanticQueryCache] Hit: {key} (access #{access_count + 1})")
+            return results
+    
+    def set(self, embedding: np.ndarray, top_k: int, results: List[Dict]) -> None:
+        with self.lock:
+            embedding_hash = self._hash_embedding(embedding)
+            key = self._make_key(embedding_hash, top_k)
+            
+            if len(self.query_cache) >= self.max_size and key not in self.query_cache:
+                if self.access_order:
+                    oldest_key = self.access_order.pop(0)
+                    del self.query_cache[oldest_key]
+                    logger.debug(f"[SemanticQueryCache] Evicted: {oldest_key}")
+            
+            self.query_cache[key] = (results, time.time(), 0)
+            if key in self.access_order:
+                self.access_order.remove(key)
+            self.access_order.append(key)
+            
+            logger.debug(f"[SemanticQueryCache] Stored: {key}")
+    
+    def clear(self) -> None:
+        with self.lock:
+            self.query_cache.clear()
+            self.access_order.clear()
+            logger.info("[SemanticQueryCache] Cleared all entries")
+    
+    def cleanup_expired(self) -> None:
+        with self.lock:
+            current_time = time.time()
+            expired_keys = [
+                key for key, (_, timestamp, _) in self.query_cache.items()
+                if current_time - timestamp > self.ttl_seconds
+            ]
+            
+            for key in expired_keys:
+                del self.query_cache[key]
+                if key in self.access_order:
+                    self.access_order.remove(key)
+            
+            if expired_keys:
+                logger.debug(f"[SemanticQueryCache] Cleaned {len(expired_keys)} expired entries")
+    
+    def stats(self) -> Dict[str, Any]:
+        with self.lock:
+            return {
+                "cached_queries": len(self.query_cache),
+                "max_size": self.max_size,
+                "utilization": len(self.query_cache) / self.max_size if self.max_size > 0 else 0,
+                "ttl_seconds": self.ttl_seconds
+            }
+
 
 class SemanticCache:
     def __init__(self, ttl_seconds: int = 300, similarity_threshold: float = 0.90, cache_dir: str = "./cache"):

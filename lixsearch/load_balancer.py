@@ -143,13 +143,6 @@ class LoadBalancer:
             body, status, headers = await self.proxy_request(path, worker_port)
             return body, status, headers
         
-        @self.app.route('/api/session/<session_id>/query', methods=['POST'])
-        async def query_session_kg(session_id):
-            worker_port = self.get_next_worker()
-            path = f"/api/session/{session_id}/query"
-            body, status, headers = await self.proxy_request(path, worker_port)
-            return body, status, headers
-        
         @self.app.route('/api/session/<session_id>/entity/<entity>', methods=['GET'])
         async def get_entity_evidence(session_id, entity):
             worker_port = self.get_next_worker()
