@@ -10,25 +10,38 @@ logger = logging.getLogger("lixsearch-api")
 
 
 async def chat(pipeline_initialized: bool):
+    """
+    Chat endpoint - Creates or reuses session.
+    
+    POST: /api/chat with JSON body {session_id, message, search, image_url}
+    
+    If session_id is provided: uses existing session
+    If session_id is not provided: creates new session from first message
+    """
     if not pipeline_initialized:
         return jsonify({"error": "Server not initialized"}), 503
 
     try:
         data = await request.get_json()
         user_message = data.get("message", "").strip()
-        session_id = data.get("session_id")
+        session_id = data.get("session_id", "").strip() if data.get("session_id") else None
         use_search = data.get("search", True)
         image_url = data.get("image_url")
 
         if not user_message:
             return jsonify({"error": "Message is required"}), 400
 
+        # Create session if not provided (for backwards compatibility)
         if not session_id:
             session_manager = get_session_manager()
             session_id = session_manager.create_session(user_message)
+            logger.info(f"[chat] Created new session: {session_id}")
 
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
-        logger.info(f"[{request_id}] Chat: {user_message[:LOG_MESSAGE_QUERY_TRUNCATE]}... session: {session_id}")
+        logger.info(
+            f"[{request_id}] chat session={session_id} message={user_message[:LOG_MESSAGE_QUERY_TRUNCATE]}... "
+            f"search={use_search} image={bool(image_url)}"
+        )
 
         chat_engine = get_chat_engine()
 
@@ -53,11 +66,19 @@ async def chat(pipeline_initialized: bool):
 
     except Exception as e:
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
-        logger.error(f"[{request_id}] Chat error: {e}", exc_info=True)
+        logger.error(f"[{request_id}] chat error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
 async def session_chat(session_id: str, pipeline_initialized: bool):
+    """
+    Chat endpoint with session in route - REQUIRES existing session.
+    
+    POST: /api/session/{session_id}/chat with JSON body {message, search, image_url}
+    
+    Args:
+        session_id: REQUIRED - Unique session identifier (from route)
+    """
     if not pipeline_initialized:
         return jsonify({"error": "Server not initialized"}), 503
 
@@ -65,6 +86,7 @@ async def session_chat(session_id: str, pipeline_initialized: bool):
         session_manager = get_session_manager()
 
         if not session_manager.get_session(session_id):
+            logger.warning(f"[session_chat] Session not found: {session_id}")
             return jsonify({"error": "Session not found"}), 404
 
         data = await request.get_json()
@@ -76,7 +98,10 @@ async def session_chat(session_id: str, pipeline_initialized: bool):
             return jsonify({"error": "Message is required"}), 400
 
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
-        logger.info(f"[{request_id}] Session chat {session_id}: {user_message[:LOG_MESSAGE_QUERY_TRUNCATE]}...")
+        logger.info(
+            f"[{request_id}] session_chat session={session_id} message={user_message[:LOG_MESSAGE_QUERY_TRUNCATE]}... "
+            f"search={use_search}"
+        )
 
         chat_engine = get_chat_engine()
 
@@ -98,6 +123,10 @@ async def session_chat(session_id: str, pipeline_initialized: bool):
                 'Access-Control-Allow-Origin': '*'
             }
         )
+
+    except Exception as e:
+        logger.error(f"[session_chat] session={session_id} error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
     except Exception as e:
         logger.error(f"[API] Session chat error: {e}", exc_info=True)

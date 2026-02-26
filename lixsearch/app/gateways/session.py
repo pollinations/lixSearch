@@ -1,11 +1,9 @@
-"""Session management gateway."""
 import logging
 import uuid
 from datetime import datetime
 from quart import request, jsonify
 from sessions.main import get_session_manager
 from ragService.main import get_retrieval_system
-from app.utils import validate_query, validate_session_id
 from pipeline.config import X_REQ_ID_SLICE_SIZE
 
 logger = logging.getLogger("lixsearch-api")
@@ -36,16 +34,15 @@ async def create_session():
 
 
 async def get_session_info(session_id: str):
-    """Get session information."""
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
 
     try:
-        logger.info(f"[{request_id}] Getting session info: {session_id}")
+        logger.info(f"[{request_id}] get_session_info session={session_id}")
         session_manager = get_session_manager()
         session_data = session_manager.get_session(session_id)
 
         if not session_data:
-            logger.warning(f"[{request_id}] Session not found: {session_id}")
+            logger.warning(f"[{request_id}] session={session_id} not found")
             return jsonify({"error": "Session not found"}), 404
 
         retrieval_system = get_retrieval_system()
@@ -57,16 +54,16 @@ async def get_session_info(session_id: str):
             "query": session_data.query,
             "summary": session_manager.get_session_summary(session_id),
             "rag_stats": rag_stats,
-            "request_id": request_id
+            "request_id": request_id,
+            "timestamp": datetime.utcnow().isoformat()
         })
 
     except Exception as e:
-        logger.error(f"[{request_id}] Session info error: {e}", exc_info=True)
+        logger.error(f"[{request_id}] get_session_info session={session_id} error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
 async def get_session_kg(session_id: str):
-    """Get knowledge graph for session."""
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
 
     try:
@@ -90,7 +87,6 @@ async def get_session_kg(session_id: str):
 
 
 async def query_session_kg(session_id: str):
-    """Query knowledge graph for session."""
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
 
     try:
@@ -119,7 +115,6 @@ async def query_session_kg(session_id: str):
 
 
 async def get_entity_evidence(session_id: str, entity: str):
-    """Get entity evidence from session KG."""
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
 
     try:
@@ -144,7 +139,6 @@ async def get_entity_evidence(session_id: str, entity: str):
 
 
 async def get_session_summary(session_id: str):
-    """Get session summary."""
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
 
     try:
@@ -169,7 +163,6 @@ async def get_session_summary(session_id: str):
 
 
 async def delete_session(session_id: str):
-    """Delete a session."""
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
 
     try:
