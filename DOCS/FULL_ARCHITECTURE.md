@@ -4,11 +4,12 @@
 1. [System Overview](#system-overview)
 2. [Architecture Improvements](#architecture-improvements)
 3. [Load Balancer & Worker Pool](#load-balancer--worker-pool)
-4. [Vector Database Layer](#vector-database-layer)
-5. [Core Components](#core-components)
-6. [Complete Request Flow](#complete-request-flow)
-7. [Deployment Model](#deployment-model)
-8. [Performance Characteristics](#performance-characteristics)
+4. [Node.js API Services Layer](#nodejs-api-services-layer)
+5. [Vector Database Layer](#vector-database-layer)
+6. [Core Components](#core-components)
+7. [Complete Request Flow](#complete-request-flow)
+8. [Deployment Model](#deployment-model)
+9. [Performance Characteristics](#performance-characteristics)
 
 ---
 ## System Overview
@@ -17,6 +18,9 @@
 
 - **10-worker load-balanced architecture** for parallel request processing (ports 8001-8010)
 - **Dedicated Chroma vector database server** (port 8100) eliminating bottlenecks
+- **Node.js API backend services** (authWorker, redisWorker) for distributed caching and auth
+- **Redis integration** (redisService) for semantic cache distribution across workers
+- **Service orchestration** via run_backend.js with hot-reload and auto-restart
 - **Semantic query caching** with LRU eviction for 5-50ms response times
 - **Async connection pooling** for efficient concurrent resource management
 - **Round-robin health-aware routing** with automatic failover
@@ -34,8 +38,6 @@ graph TB
     subgraph Workers["10 WORKER POOL"]
         W1["W1:8001<br/>Quart"]
         W2["W2:8002<br/>Quart"]
-        W3["W3:8003<br/>Quart"]
-        WDots["..."]
         W10["W10:8010<br/>Quart"]
     end
     
@@ -43,30 +45,51 @@ graph TB
     
     ChromaServer["🗄️ CHROMA SERVER<br/>Port 8100<br/>Vector DB, HNSW Index<br/>Persistent Storage"]
     
+    subgraph NodeServices["NODE.JS BACKEND SERVICES"]
+        Redis["🔴 Redis Service<br/>Distributed Cache<br/>Session Storage"]
+        Auth["🔐 Auth Service<br/>Token Management<br/>API Security"]
+    end
+    
+    Orchestrator["🎯 Service Orchestrator<br/>run_backend.js<br/>Hot-reload + Auto-restart"]
+    
     Storage["💾 PERSISTENT STORAGE<br/>./data/embeddings/chroma_data"]
     
     Client --> LB
     LB --> W1
     LB --> W2
-    LB --> W3
-    LB --> WDots
     LB --> W10
     
     W1 --> IPC
     W2 --> IPC
-    W3 --> IPC
-    WDots --> IPC
     W10 --> IPC
+    
+    W1 --> Redis
+    W2 --> Redis
+    W10 --> Redis
+    
+    W1 --> Auth
+    W2 --> Auth
+    W10 --> Auth
     
     IPC --> ChromaServer
     ChromaServer --> Storage
     
-    style Client fill:#E8E8E8
-    style LB fill:#F0F0F0
-    style Workers fill:#E8E8E8
-    style IPC fill:#F0F0F0
-    style ChromaServer fill:#E8E8E8
-    style Storage fill:#FFFFFF
+    Orchestrator --> Redis
+    Orchestrator --> Auth
+    
+    style Client fill:#000;color:#fff
+    style LB fill:#000;color:#fff
+    style Workers fill:#000;color:#fff
+    style W1 fill:#000;color:#fff
+    style W2 fill:#000;color:#fff
+    style W10 fill:#000;color:#fff
+    style IPC fill:#000;color:#fff
+    style ChromaServer fill:#000;color:#fff
+    style NodeServices fill:#000;color:#fff
+    style Redis fill:#000;color:#fff
+    style Auth fill:#000;color:#fff
+    style Orchestrator fill:#000;color:#fff
+    style Storage fill:#000;color:#fff
 ```
 
 ## Architecture Improvements
@@ -195,6 +218,99 @@ services:
 5. Ready for traffic (~60-90 seconds total)
 ```
 
+## Node.js API Services Layer
+
+### Service Orchestration & Backend Services
+
+**Service Management via run_backend.js:**
+
+```mermaid
+graph LR
+    Orchestrator["🎯 run_backend.js<br/>Service Orchestrator"]
+    Watcher["👁️ File Watcher<br/>chokidar<br/>Auto-reload on changes"]
+    
+    subgraph Services["BACKEND SERVICES"]
+        Redis["🔴 redisService.js<br/>Port: Dynamic<br/>Redis client wrapper<br/>Distributed cache"]
+        Auth["🔐 authWorker.js<br/>Port: Dynamic<br/>Token validation<br/>API authentication"]
+    end
+    
+    Orchestrator -->|spawns| Services
+    Orchestrator -->|watches| Watcher
+    Watcher -->|restarts| Services
+    
+    Services -->|exports| Workers["🔄 Worker Pool<br/>8001-8010"]
+    
+    style Orchestrator fill:#000;color:#fff
+    style Watcher fill:#000;color:#fff
+    style Services fill:#000;color:#fff
+    style Redis fill:#000;color:#fff
+    style Auth fill:#000;color:#fff
+    style Workers fill:#000;color:#fff
+```
+
+**Service Features:**
+
+| Service | Purpose | Key Features |
+|---------|---------|--------------|
+| **redisService.js** | Distributed cache layer | TTL support, prefixed keys, get/set/del operations |
+| **authWorker.js** | API authentication | JWT validation, token management, security headers |
+| **run_backend.js** | Service orchestrator | Hot-reload, auto-restart on crash, SIGTERM handling |
+
+**Environment Configuration:**
+
+```javascript
+// Redis Configuration (redisService.js)
+const redis = createClient({
+  url: process.env.REDIS_URL
+});
+
+// Service Functions
+getRedisClient(prefix)  // Returns { set, get, del }
+  .set(key, val, ttl)   // Store with optional TTL
+  .get(key)             // Retrieve value
+  .del(key)             // Delete key
+```
+
+### Integration with Worker Pool
+
+**How Workers Use Backend Services:**
+
+1. **Redis Cache Layer**:
+   - Workers connect to getRedisClient() for distributed caching
+   - Semantic queries cached across all workers
+   - Session storage for multi-turn conversations
+   - TTL-based automatic expiration
+
+2. **Authentication Service**:
+   - JWT token validation on incoming requests
+   - API key management for external integrations
+   - Rate limiting and quota enforcement
+   - Security headers injection
+
+**Request Flow with Services:**
+
+```
+Client Request
+    ↓
+Load Balancer (8000)
+    ↓
+Worker Pool (8001-8010)
+    ├→ Auth Service: Validate token
+    │   └→ Return auth context
+    ├→ Redis Service: Check cache
+    │   └→ Return cached result OR proceed
+    └→ IPC Pipeline: Process query
+        ├→ Vector DB (8100)
+        ├→ RAG Engine
+        └→ LLM Synthesis
+            ↓
+        Redis Service: Store result + TTL
+            ↓
+        Response → Load Balancer → Client
+```
+
+---
+
 ## Vector Database Layer
 
 ### Chroma Server (Dedicated HTTP Instance)
@@ -313,11 +429,11 @@ graph TD
     Processing --> Logging
     Processing --> Error
     
-    style Gateway fill:#000
-    style RequestID fill:#000
-    style Processing fill:#000
-    style Error fill:#000
-    style Logging fill:#000
+    style Gateway fill:#000;color:#fff
+    style RequestID fill:#000;color:#fff
+    style Processing fill:#000;color:#fff
+    style Error fill:#000;color:#fff
+    style Logging fill:#000;color:#fff
 ```
 
 **Gateways:**
@@ -392,11 +508,11 @@ graph TD
     OptModules --> FormalOpt
     OptModules --> AdaptiveThresh
     
-    style LixSearch fill:#F0F0F0
-    style ToolExec fill:#E8E8E8
-    style RAGContext fill:#E8E8E8
-    style LLMSynthesize fill:#E8E8E8
-    style OptModules fill:#E8E8E8
+    style LixSearch fill:#000;color:#fff
+    style ToolExec fill:#000;color:#fff
+    style RAGContext fill:#000;color:#fff
+    style LLMSynthesize fill:#000;color:#fff
+    style OptModules fill:#000;color:#fff
 ```
 
 **Key Modules:**
@@ -420,9 +536,9 @@ graph TD
     Synthesis --> SSEStream
     SSEStream --> End
     
-    style Start fill:#F0F0F0
-    style End fill:#F0F0F0
-    style SSEStream fill:#F0F0F0
+    style Start fill:#000;color:#fff
+    style End fill:#000;color:#fff
+    style SSEStream fill:#000;color:#fff
 ```
 
 #### searchPipeline.py (Flow Controller)
@@ -448,10 +564,10 @@ graph TD
     LLMCall --> Stream
     Stream --> End
     
-    style Start fill:#E8E8E8
-    style End fill:#E8E8E8
-    style ToolExec fill:#E8E8E8
-    style RAGRetrieve fill:#D8D8D8
+    style Start fill:#000;color:#fff
+    style End fill:#000;color:#fff
+    style ToolExec fill:#000;color:#fff
+    style RAGRetrieve fill:#000;color:#fff
 ```
 
 #### optimized_tool_execution.py (Tool Runner)
@@ -494,11 +610,11 @@ graph TD
     Aggregate --> Format
     Format --> End
     
-    style Gather fill:#E8E8E8
-    style Async1 fill:#D0D0D0
-    style Async2 fill:#D0D0D0
-    style Async3 fill:#D0D0D0
-    style Async4 fill:#D0D0D0
+    style Gather fill:#000;color:#fff
+    style Async1 fill:#000;color:#fff
+    style Async2 fill:#000;color:#fff
+    style Async3 fill:#000;color:#fff
+    style Async4 fill:#000;color:#fff
 ```
 
 ---
@@ -593,12 +709,12 @@ graph TD
     RelevantChunks --> CombineSession
     CombineSession --> FormatPrompt
     
-    style RAGEngine fill:#E8E8E8
-    style SemanticCache fill:#E8E8E8
-    style EmbedService fill:#D8D8D8
-    style VectorStore fill:#D0D0D0
-    style RetPipeline fill:#C8C8C8
-    style ChromaDB fill:#A0A0A0
+    style RAGEngine fill:#000;color:#fff
+    style SemanticCache fill:#000;color:#fff
+    style EmbedService fill:#000;color:#fff
+    style VectorStore fill:#000;color:#fff
+    style RetPipeline fill:#000;color:#fff
+    style ChromaDB fill:#000;color:#fff
 ```
 
 **Retrieval Flow:**
@@ -629,10 +745,10 @@ graph TD
     ReturnResults --> SetCache
     SetCache --> FinalReturn
     
-    style CacheHit fill:#E8E8E8
-    style CacheMiss fill:#E8E8E8
-    style Query fill:#E8E8E8
-    style FinalReturn fill:#E8E8E8
+    style CacheHit fill:#000;color:#fff
+    style CacheMiss fill:#000;color:#fff
+    style Query fill:#000;color:#fff
+    style FinalReturn fill:#000;color:#fff
 ```
 
 ---
@@ -706,11 +822,11 @@ graph TD
     TimeZone --> Results
     GenerateImage --> Results
     
-    style SearchFacade fill:#E8E8E8
-    style WebSearch fill:#D0D0D0
-    style FetchText fill:#D0D0D0
-    style Tools fill:#A0A0A0
-    style Results fill:#A0A0A0
+    style SearchFacade fill:#000;color:#fff
+    style WebSearch fill:#000;color:#fff
+    style FetchText fill:#000;color:#fff
+    style Tools fill:#000;color:#fff
+    style Results fill:#000;color:#fff
 ```
 
 ---
@@ -797,10 +913,10 @@ graph TD
     SessionData --> GetTopContent
     SessionData --> Memory
     
-    style ChatEngine fill:#E8E8E8
-    style SessionMgr fill:#E8E8E8
-    style SessionData fill:#E8E8E8
-    style StreamAsync fill:#A0A0A0
+    style ChatEngine fill:#000;color:#fff
+    style SessionMgr fill:#000;color:#fff
+    style SessionData fill:#000;color:#fff
+    style StreamAsync fill:#000;color:#fff
 ```
 
 ---
@@ -861,10 +977,10 @@ graph LR
     LocalFallback --> LocalEmbed
     LocalFallback --> LocalVector
     
-    style Main fill:#E8E8E8
-    style CoreService fill:#E8E8E8
-    style IPCConnection fill:#F0F0F0
-    style LocalFallback fill:#E8E8E8
+    style Main fill:#000;color:#fff
+    style CoreService fill:#000;color:#fff
+    style IPCConnection fill:#000;color:#fff
+    style LocalFallback fill:#000;color:#fff
 ```
 
 ---
@@ -1350,11 +1466,11 @@ graph TD
     Step4Out --> Step5
     Step5 --> Step5Out
     
-    style Step1 fill:#E8E8E8
-    style Step2 fill:#E8E8E8
-    style Step3 fill:#E8E8E8
-    style Step4Out fill:#E8E8E8
-    style Step5Out fill:#F0F0F0
+    style Step1 fill:#000;color:#fff
+    style Step2 fill:#000;color:#fff
+    style Step3 fill:#000;color:#fff
+    style Step4Out fill:#000;color:#fff
+    style Step5Out fill:#000;color:#fff
 ```
 
 ---
@@ -1394,11 +1510,11 @@ graph TB
     ToolExec -->|IPC connection| IPC[CoreEmbeddingService<br/>IPC on :5010]
     IPC -->|fallback to local| RetrievalPipeline
     
-    style API fill:#E8E8E8
-    style Pipeline fill:#E8E8E8
-    style LixSearch fill:#F0F0F0
-    style RAGEngine fill:#E8E8E8
-    style ChatEngine fill:#E8E8E8
+    style API fill:#000;color:#fff
+    style Pipeline fill:#000;color:#fff
+    style LixSearch fill:#000;color:#fff
+    style RAGEngine fill:#000;color:#fff
+    style ChatEngine fill:#000;color:#fff
 ```
 
 ---
@@ -1461,11 +1577,11 @@ graph TB
     ToolExec -.-> YouTubeAPI
     ToolExec -.-> ImageAPIs
     
-    style Process fill:#E8E8E8
-    style QuartApp fill:#D8D8D8
-    style RAGServices fill:#E8E8E8
-    style SearchServices fill:#F0F0F0
-    style ExternalAPIs fill:#FFFFFF
+    style Process fill:#000;color:#fff
+    style QuartApp fill:#000;color:#fff
+    style RAGServices fill:#000;color:#fff
+    style SearchServices fill:#000;color:#fff
+    style ExternalAPIs fill:#000;color:#fff
 ```
 
 ### Distributed Deployment (Optional IPC)
@@ -1507,10 +1623,10 @@ graph TB
     
     EmbedProcess -.-> Benefits
     
-    style MainServer fill:#E8E8E8
-    style EmbedProcess fill:#E8E8E8
-    style IPCNetwork fill:#F0F0F0
-    style Benefits fill:#E8E8E8
+    style MainServer fill:#000;color:#fff
+    style EmbedProcess fill:#000;color:#fff
+    style IPCNetwork fill:#000;color:#fff
+    style Benefits fill:#000;color:#fff
 ```
 
 ---
@@ -1616,13 +1732,13 @@ graph TB
     ChatEngine -->|prompt + context| Pollinations
     Pollinations -->|response| ChatEngine
     
-    style User fill:#E8E8E8
-    style API fill:#E8E8E8
-    style Pipeline fill:#F0F0F0
-    style Search fill:#E8E8E8
-    style RAG fill:#E8E8E8
-    style Chat fill:#F0F0F0
-    style LLM fill:#F0F0F0
+    style User fill:#000;color:#fff
+    style API fill:#000;color:#fff
+    style Pipeline fill:#000;color:#fff
+    style Search fill:#000;color:#fff
+    style RAG fill:#000;color:#fff
+    style Chat fill:#000;color:#fff
+    style LLM fill:#000;color:#fff
 ```
 
 ---
