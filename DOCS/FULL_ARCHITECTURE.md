@@ -313,10 +313,11 @@ graph TD
     Processing --> Logging
     Processing --> Error
     
-    style Gateway fill:#E8E8E8
-    style RequestID fill:#D8D8D8
-    style Processing fill:#E8E8E8
-    style Error fill:#E8E8E8
+    style Gateway fill:#000
+    style RequestID fill:#000
+    style Processing fill:#000
+    style Error fill:#000
+    style Logging fill:#000
 ```
 
 **Gateways:**
