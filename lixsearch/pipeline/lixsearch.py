@@ -99,8 +99,26 @@ def _strip_internal_lines(content: str) -> str:
     return "\n".join(cleaned).strip()
 
 
-async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: str = None, request_id: str = None):
-    logger.info(f"Starting Optimized ElixpoSearch Pipeline for query: '{user_query}' with image: '{user_image[:LOG_MESSAGE_QUERY_TRUNCATE] + '...' if user_image else 'None'}' [RequestID: {request_id}]")
+async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: str = None, request_id: str = None, session_id: str = None):
+    """
+    Main search pipeline with full caching and RAG support.
+    
+    Args:
+        user_query: User search query
+        user_image: Optional image URL for image-based search
+        event_id: Optional event ID for SSE streaming
+        request_id: Optional request ID for logging (generated if not provided)
+        session_id: REQUIRED for cache isolation - unique session identifier
+        
+    Note:
+        session_id is used throughout for cache isolation and conversation context.
+        Each session maintains its own semantic cache and context window.
+    """
+    logger.info(
+        f"[pipeline] session={session_id} Starting ElixpoSearch: "
+        f"query='{user_query[:LOG_MESSAGE_QUERY_TRUNCATE]}...' image={bool(user_image)} "
+        f"request_id={request_id}"
+    )
     def emit_event(event_type, message):
         if event_id:
             return format_sse(event_type, message)
