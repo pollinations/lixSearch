@@ -26,7 +26,8 @@ FROM python:3.11-slim-bullseye
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/app/.venv/bin:$PATH \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    REDIS_PORT=6380
 
 WORKDIR /app
 
