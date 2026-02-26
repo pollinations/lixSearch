@@ -26,14 +26,10 @@ except ImportError:
 
 
 class URLEmbeddingCache:
-    """
-    Redis-based cache for URL embeddings. 
-    Stores a single embedding per URL for fast reuse across queries.
-    """
     
     def __init__(
         self,
-        ttl_seconds: int = 86400,  # 24 hours
+        ttl_seconds: int = 86400,
         redis_host: str = "localhost",
         redis_port: int = 6379,
         redis_db: int = 1
@@ -61,7 +57,6 @@ class URLEmbeddingCache:
             raise
     
     def get(self, url: str) -> Optional[np.ndarray]:
-        """Get cached embedding for URL."""
         with self.lock:
             try:
                 key = f"url_embedding:{url}"
@@ -76,7 +71,6 @@ class URLEmbeddingCache:
                 return None
     
     def set(self, url: str, embedding: np.ndarray) -> bool:
-        """Cache embedding for URL."""
         with self.lock:
             try:
                 key = f"url_embedding:{url}"
@@ -94,7 +88,6 @@ class URLEmbeddingCache:
                 return False
     
     def get_stats(self) -> Dict:
-        """Get cache statistics."""
         try:
             info = self.redis_client.info("memory")
             return {
@@ -108,15 +101,6 @@ class URLEmbeddingCache:
 
 
 class SessionContextWindow:
-    """
-    Redis-based session context window manager.
-    Maintains a sliding window of conversation messages with LRU eviction.
-    
-    Config:
-    - window_size: Max number of messages to keep in context (default: 20)
-    - ttl_seconds: Message expiration time (default: 3600 seconds / 1 hour)
-    - max_tokens: Optional max token limit for context (for future use)
-    """
     
     def __init__(
         self,
@@ -157,25 +141,19 @@ class SessionContextWindow:
             raise
     
     def _get_key(self) -> str:
-        """Get Redis key for this session's message window."""
         return f"session_context:{self.session_id}"
     
     def _get_order_key(self) -> str:
-        """Get Redis key for message insertion order (for LRU)."""
         return f"session_order:{self.session_id}"
     
     def add_message(self, role: str, content: str, metadata: Optional[Dict] = None) -> int:
-        """
-        Add a message to the context window.
-        Returns the current window size.
-        """
         with self.lock:
             try:
                 key = self._get_key()
                 order_key = self._get_order_key()
                 timestamp = time.time()
                 
-                msg_id = int(timestamp * 1000) % (2**31)  # Simple ID based on timestamp
+                msg_id = int(timestamp * 1000) % (2**31)
                 message = {
                     "role": role,
                     "content": content,
@@ -183,7 +161,6 @@ class SessionContextWindow:
                     "metadata": metadata or {}
                 }
                 
-                # Store message with TTL
                 msg_key = f"{key}:{msg_id}"
                 self.redis_client.setex(
                     msg_key,
@@ -191,14 +168,11 @@ class SessionContextWindow:
                     pickle.dumps(message)
                 )
                 
-                # Add to order tracking list (for LRU)
                 self.redis_client.lpush(order_key, msg_id)
                 self.redis_client.expire(order_key, self.ttl_seconds)
                 
-                # Enforce window size - LRU eviction
                 window_len = self.redis_client.llen(order_key)
                 if window_len > self.window_size:
-                    # Remove oldest messages (from right end of list)
                     excess = window_len - self.window_size
                     for _ in range(excess):
                         old_id = self.redis_client.rpop(order_key)
@@ -214,20 +188,15 @@ class SessionContextWindow:
                 return 0
     
     def get_context(self) -> List[Dict]:
-        """
-        Get all messages in the current context window.
-        Returns messages in chronological order (oldest first).
-        """
         with self.lock:
             try:
                 key = self._get_key()
                 order_key = self._get_order_key()
                 
-                # Get message IDs in reverse order (most recent first)
                 msg_ids = self.redis_client.lrange(order_key, 0, -1)
                 
                 messages = []
-                for msg_id in reversed(msg_ids):  # Reverse to get chronological order
+                for msg_id in reversed(msg_ids):
                     try:
                         msg_key = f"{key}:{msg_id}"
                         msg_data = self.redis_client.get(msg_key)
@@ -244,10 +213,6 @@ class SessionContextWindow:
                 return []
     
     def get_formatted_context(self, max_lines: int = 50) -> str:
-        """
-        Get formatted context string for prompt engineering.
-        Format: "User: <content>\nAssistant: <content>\n..."
-        """
         messages = self.get_context()
         lines = []
         
@@ -255,32 +220,26 @@ class SessionContextWindow:
             role = msg.get("role", "unknown").capitalize()
             content = msg.get("content", "")
             if content:
-                # Truncate long messages
                 if len(content) > 200:
                     content = content[:200] + "..."
                 lines.append(f"{role}: {content}")
         
-        # Limit total lines
         if len(lines) > max_lines:
             lines = lines[-max_lines:]
         
         return "\n".join(lines) if lines else ""
     
     def clear(self) -> bool:
-        """Clear all messages in this session's context window."""
         with self.lock:
             try:
                 key = self._get_key()
                 order_key = self._get_order_key()
                 
-                # Get all message IDs
                 msg_ids = self.redis_client.lrange(order_key, 0, -1)
                 
-                # Delete all messages
                 for msg_id in msg_ids:
                     self.redis_client.delete(f"{key}:{msg_id}")
                 
-                # Clear order tracking
                 self.redis_client.delete(order_key)
                 
                 logger.info(f"[SessionContextWindow] Cleared {len(msg_ids)} messages")
@@ -290,7 +249,6 @@ class SessionContextWindow:
                 return False
     
     def get_stats(self) -> Dict:
-        """Get window statistics."""
         try:
             order_key = self._get_order_key()
             window_len = self.redis_client.llen(order_key)
@@ -308,11 +266,6 @@ class SessionContextWindow:
 
 
 class SemanticCacheRedis:
-    """
-    Redis-only semantic cache (OPTIMIZED).
-    No file-based fallback - Redis is required.
-    Caches semantic query responses per URL with similarity matching.
-    """
     
     def __init__(
         self, 
@@ -347,11 +300,9 @@ class SemanticCacheRedis:
             raise
     
     def _get_redis_key(self, request_id: str, url: str) -> str:
-        """Generate a Redis key for caching."""
         return f"semantic_cache:{request_id}:{url}"
     
     def get(self, url: str, query_embedding: np.ndarray, request_id: str = "default") -> Optional[Dict]:
-        """Get cached response for URL and query embedding."""
         with self.lock:
             try:
                 redis_key = self._get_redis_key(request_id, url)
@@ -364,7 +315,6 @@ class SemanticCacheRedis:
                 best_match = None
                 best_similarity = 0.0
                 
-                # Find best matching embedding
                 query_emb = np.array(query_embedding, dtype=np.float32)
                 query_emb = query_emb / (np.linalg.norm(query_emb) + 1e-8)
                 
@@ -387,7 +337,6 @@ class SemanticCacheRedis:
                 return None
     
     def set(self, url: str, query_embedding: np.ndarray, response: Dict, request_id: str = "default") -> None:
-        """Cache response for URL and query embedding."""
         with self.lock:
             try:
                 redis_key = self._get_redis_key(request_id, url)
@@ -398,14 +347,12 @@ class SemanticCacheRedis:
                 else:
                     cache_entry = {"items": []}
                 
-                # Add new item
                 cache_entry["items"].append({
                     "embedding": query_embedding.tolist() if isinstance(query_embedding, np.ndarray) else query_embedding,
                     "response": response,
                     "timestamp": time.time()
                 })
                 
-                # Keep only last 50 items per URL
                 if len(cache_entry["items"]) > 50:
                     cache_entry["items"] = cache_entry["items"][-50:]
                 
@@ -419,7 +366,6 @@ class SemanticCacheRedis:
                 logger.warning(f"[SemanticCacheRedis] Set error: {e}")
     
     def get_stats(self) -> Dict:
-        """Get cache statistics."""
         try:
             info = self.redis_client.info("memory")
             return {
@@ -433,6 +379,4 @@ class SemanticCacheRedis:
             return {"backend": "redis", "status": "error"}
 
 
-# Backward compatibility alias
 SemanticCache = SemanticCacheRedis
-
