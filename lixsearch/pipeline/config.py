@@ -97,8 +97,8 @@ CONNECTION_POOL_ENABLE = True
 
 REDIS_ENABLED = True
 REDIS_HOST = "localhost"
-REDIS_PORT = 6379
-REDIS_URL = "redis://localhost:6379/0"
+REDIS_PORT = 6380  # Non-standard port to avoid conflicts with other Redis servers
+REDIS_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
 REDIS_SOCKET_CONNECT_TIMEOUT = 5
 REDIS_SOCKET_KEEPALIVE = True
 REDIS_KEY_PREFIX = "elixpo"
