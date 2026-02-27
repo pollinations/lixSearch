@@ -250,9 +250,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 logger.warning(f"[Pipeline] Failed to parse REDIS_URL, using defaults: {e}")
         
         semantic_cache = SemanticCache(
+            session_id=request_id or "pipeline",
             ttl_seconds=SEMANTIC_CACHE_TTL_SECONDS, 
             similarity_threshold=SEMANTIC_CACHE_SIMILARITY_THRESHOLD,
-            cache_dir=SEMANTIC_CACHE_DIR,
             redis_host=redis_host,
             redis_port=redis_port,
             redis_db=redis_db
