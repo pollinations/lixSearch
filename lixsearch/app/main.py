@@ -1,6 +1,10 @@
 import logging
 import asyncio
 import signal
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from quart import Quart, request, jsonify
 from quart_cors import cors

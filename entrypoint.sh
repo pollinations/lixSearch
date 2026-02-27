@@ -21,7 +21,7 @@ elif [ "$APP_MODE" = "worker" ]; then
     cd /app
     # Dynamically set WORKER_PORT environment variable
     export WORKER_PORT=$WORKER_PORT
-    python -m lixsearch.app.main
+    python -m lixsearch.app
 else
     echo "Unknown APP_MODE: $APP_MODE"
     exit 1
