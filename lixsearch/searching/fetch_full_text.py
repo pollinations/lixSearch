@@ -62,6 +62,7 @@ def fetch_full_text(
             text_content = ' '.join(text_content.split()[:total_word_count_limit]) + '...'
 
         cleaned_text = text_content.strip()
+        logger.info(f"[FETCH] Successfully extracted {len(cleaned_text)} chars from {url}")
         return cleaned_text
 
     except requests.exceptions.Timeout:

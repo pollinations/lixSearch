@@ -1,6 +1,6 @@
 import re
 from loguru import logger
-from .main import _init_ipc_manager, search_service as get_search_service
+from .main import _init_ipc_manager
 import asyncio
 from searching.fetch_full_text import fetch_full_text
 from pipeline.config import LOG_MESSAGE_QUERY_TRUNCATE, ERROR_MESSAGE_TRUNCATE, ERROR_CONTEXT_TRUNCATE
@@ -13,21 +13,20 @@ def webSearch(query: str):
         logger.warning("[Utility] IPC initialization failed - web search unavailable")
         return []
     
-    # Import here to get the updated search_service from commons.main
-    from .main import search_service
-    
-    if search_service is None:
-        logger.error("[Utility] Search service is None despite IPC init success - this indicates a registration issue")
-        return []
-    
+    # Get search agents from IPC
     try:
-        logger.debug(f"[Utility] Calling web_search on service {type(search_service).__name__}")
-        urls = search_service.web_search(query)
-        logger.debug(f"[Utility] Web search returned {len(urls)} results for: {query[:LOG_MESSAGE_QUERY_TRUNCATE]}")
+        from ipcService.coreServiceManager import CoreServiceManager
+        manager = CoreServiceManager.get_instance()
+        search_agents = manager.get_search_agents()
+        
+        if search_agents is None:
+            logger.error("[Utility] Search agents is None - IPC connection issue")
+            return []
+        
+        logger.debug(f"[Utility] Calling web_search via IPC on {type(search_agents).__name__}")
+        urls = search_agents.web_search(query)
+        logger.debug(f"[Utility] Web search returned {len(urls) if urls else 0} results for: {query[:LOG_MESSAGE_QUERY_TRUNCATE]}")
         return urls if urls else []
-    except AttributeError as e:
-        logger.error(f"[Utility] Search service missing web_search method: {e}")
-        return []
     except Exception as e:
         logger.error(f"[Utility] Web search failed: {type(e).__name__}: {str(e)[:ERROR_CONTEXT_TRUNCATE]}")
         return []
@@ -40,25 +39,24 @@ async def imageSearch(query: str, max_images: int = 10) -> list:
         logger.warning("[Utility] IPC initialization failed - image search unavailable")
         return []
     
-    # Import here to get the updated search_service from commons.main
-    from .main import search_service
-    
-    if search_service is None:
-        logger.error("[Utility] Search service is None despite IPC init success - this indicates a registration issue")
-        return []
-    
+    # Get search agents from IPC
     try:
-        logger.debug(f"[Utility] Calling image_search on service {type(search_service).__name__}")
+        from ipcService.coreServiceManager import CoreServiceManager
+        manager = CoreServiceManager.get_instance()
+        search_agents = manager.get_search_agents()
+        
+        if search_agents is None:
+            logger.error("[Utility] Search agents is None - IPC connection issue")
+            return []
+        
+        logger.debug(f"[Utility] Calling image_search via IPC")
         loop = asyncio.get_event_loop()
         urls = await loop.run_in_executor(
             None,
-            lambda: search_service.image_search(query, max_images=max_images)
+            lambda: search_agents.image_search(query, max_images=max_images)
         )
         logger.debug(f"[Utility] Image search returned {len(urls) if urls else 0} results for: {query[:LOG_MESSAGE_QUERY_TRUNCATE]}")
         return urls if urls else []
-    except AttributeError as e:
-        logger.error(f"[Utility] Search service missing image_search method: {e}")
-        return []
     except Exception as e:
         logger.error(f"[Utility] Image search failed: {type(e).__name__}: {str(e)[:ERROR_CONTEXT_TRUNCATE]}")
         return []

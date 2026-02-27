@@ -10,12 +10,14 @@ class ModelServerClient(BaseManager):
 
 
 ModelServerClient.register('CoreEmbeddingService')
+ModelServerClient.register('accessSearchAgents')
 
 
 class CoreServiceManager:
     _instance = None
     _lock = threading.Lock()
     _core_service = None
+    _search_agents = None
     _manager = None
     _connection_ready = False
 
@@ -37,7 +39,7 @@ class CoreServiceManager:
 
         try:
             logger.info(
-                f"[CoreServiceManager] Connecting to IPC CoreEmbeddingService "
+                f"[CoreServiceManager] Connecting to IPC services "
                 f"at {IPC_HOST}:{IPC_PORT} (timeout: {IPC_TIMEOUT}s)"
             )
 
@@ -47,11 +49,12 @@ class CoreServiceManager:
             )
             self._manager.connect()
             self._core_service = self._manager.CoreEmbeddingService()
+            self._search_agents = self._manager.accessSearchAgents()
             self._connection_ready = True
             self._initialized = True
 
             logger.info(
-                f"[CoreServiceManager] ✅ Connected to CoreEmbeddingService. "
+                f"[CoreServiceManager] ✅ Connected to IPC services. "
                 f"Vector store: {self._core_service.get_vector_store_stats()}"
             )
         except Exception as e:
@@ -66,6 +69,11 @@ class CoreServiceManager:
         if not self._connection_ready or self._core_service is None:
             self._attempt_connection()
         return self._core_service
+    
+    def get_search_agents(self):
+        if not self._connection_ready or self._search_agents is None:
+            self._attempt_connection()
+        return self._search_agents
 
     def is_ready(self) -> bool:
         return self._connection_ready
