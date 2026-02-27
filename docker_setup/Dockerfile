@@ -1,5 +1,6 @@
 FROM python:3.11-slim-bullseye AS builder
 
+ARG BUILDKIT_INLINE_CACHE=1
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -20,6 +21,9 @@ RUN pip install --upgrade pip setuptools wheel && \
 RUN pip install playwright && \
     playwright install chromium && \
     playwright install-deps
+
+# Clean up to reduce layer size
+RUN find /usr/local/lib/python3.11/site-packages -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
 FROM python:3.11-slim-bullseye
 
