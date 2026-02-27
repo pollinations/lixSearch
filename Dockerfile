@@ -31,7 +31,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/app/.venv/bin:$PATH \
     PYTHONPATH=/app \
-    REDIS_PORT=6380
+    REDIS_PORT=9530
 
 WORKDIR /app
 
@@ -62,8 +62,8 @@ RUN useradd -m -u 1000 elixpo && \
 USER elixpo
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
-    CMD curl -f http://localhost:${WORKER_PORT:-8001}/api/health || exit 1
+    CMD curl -f http://localhost:${WORKER_PORT:-9002}/api/health || exit 1
 
-EXPOSE 8000 8001 8002 8003 8004 8005 8006 8007 8008 8009 8010
+EXPOSE 9000 9001 9002 9003 9004 9005 9006 9007 9008 9009 9010 9011 9510 9530
 
 ENTRYPOINT ["/app/entrypoint.sh"]

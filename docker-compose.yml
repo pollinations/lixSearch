@@ -5,7 +5,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: lixsearch-redis
-    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
+    command: redis-server --port 9530 --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
     environment:
       - REDIS_REPL_DISKLESS_SYNC=yes
     volumes:
@@ -13,7 +13,7 @@ services:
     networks:
       - elixpo-network
     expose:
-      - "6379"
+      - "9530"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -42,10 +42,10 @@ services:
     networks:
       - elixpo-network
     expose:
-      - "8000"
+      - "9001"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      test: ["CMD", "curl", "-f", "http://localhost:9001/api/v1/heartbeat"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -100,15 +100,15 @@ services:
       - APP_MODE=worker
       - LOG_LEVEL=INFO
       - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - REDIS_PORT=9530
       - SEMANTIC_CACHE_REDIS_HOST=redis
-      - SEMANTIC_CACHE_REDIS_PORT=6379
+      - SEMANTIC_CACHE_REDIS_PORT=9530
       - SEMANTIC_CACHE_REDIS_DB=0
       - CHROMA_API_IMPL=http
       - CHROMA_SERVER_HOST=chroma-server
-      - CHROMA_SERVER_PORT=8000
+      - CHROMA_SERVER_PORT=9001
       - WORKER_TIMEOUT=120
-      - WORKER_PORT=8001
+      - WORKER_PORT=9002
     volumes:
       - embedding-models:/app/models:ro
       - embeddings-data:/app/data/embeddings
@@ -118,7 +118,7 @@ services:
     networks:
       - elixpo-network
     expose:
-      - "8001"
+      - "9002"
     restart: unless-stopped
     depends_on:
       redis:
@@ -126,7 +126,7 @@ services:
       chroma-server:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9002/api/health"]
       interval: 30s
       timeout: 15s
       retries: 3
