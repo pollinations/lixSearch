@@ -211,3 +211,26 @@ class LoadBalancer:
 
 def create_load_balancer(num_workers: int = 10, start_port: int = 8001):
     return LoadBalancer(num_workers, start_port)
+
+
+if __name__ == "__main__":
+    import os
+    import logging
+    
+    # Configure logging
+    logging.basicConfig(
+        level=os.getenv('LOG_LEVEL', 'INFO'),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Get configuration from environment or defaults
+    num_workers = int(os.getenv('WORKER_COUNT', '3'))
+    start_port = int(os.getenv('WORKER_START_PORT', '8001'))
+    lb_port = int(os.getenv('LB_PORT', '8000'))
+    lb_host = os.getenv('LB_HOST', '0.0.0.0')
+    
+    logger.info(f"[MAIN] Starting Load Balancer on {lb_host}:{lb_port}")
+    logger.info(f"[MAIN] Configured for {num_workers} workers on ports {start_port}-{start_port + num_workers - 1}")
+    
+    lb = create_load_balancer(num_workers=num_workers, start_port=start_port)
+    lb.app.run(host=lb_host, port=lb_port, workers=1)

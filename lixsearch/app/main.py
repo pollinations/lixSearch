@@ -123,3 +123,25 @@ class lixSearch:
 
 def create_app() -> lixSearch:
     return lixSearch()
+
+
+if __name__ == "__main__":
+    import os
+    import logging
+    
+    # Configure logging
+    logging.basicConfig(
+        level=os.getenv('LOG_LEVEL', 'INFO'),
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Get configuration
+    host = os.getenv('HOST', '0.0.0.0')
+    port = int(os.getenv('WORKER_PORT', '8001'))
+    workers = int(os.getenv('WORKERS', '1'))
+    
+    logger.info(f"[APP] Initializing with WORKER_PORT={port}, WORKERS={workers}")
+    
+    # Create and run app
+    app_instance = create_app()
+    app_instance.run(host=host, port=port, workers=workers)

@@ -12,16 +12,15 @@ LOG_LEVEL=${LOG_LEVEL:-INFO}
 echo "Starting LixSearch in $APP_MODE mode..."
 echo "Log level: $LOG_LEVEL"
 
+cd /app
+
 if [ "$APP_MODE" = "load_balancer" ]; then
     echo "Starting Load Balancer on port 8000..."
-    cd /app
-    python -m lixsearch.load_balancer
+    python lixsearch/load_balancer.py
 elif [ "$APP_MODE" = "worker" ]; then
     echo "Starting Worker $WORKER_ID on port $WORKER_PORT..."
-    cd /app
-    # Dynamically set WORKER_PORT environment variable
     export WORKER_PORT=$WORKER_PORT
-    python -m lixsearch.app
+    python lixsearch/app/main.py
 else
     echo "Unknown APP_MODE: $APP_MODE"
     exit 1
