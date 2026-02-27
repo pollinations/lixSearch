@@ -1,27 +1,20 @@
-from multiprocessing.managers import BaseManager   
 from functools import lru_cache
 from loguru import logger
 
 
-
-class ModelServerClient(BaseManager):
-    pass
-ModelServerClient.register('CoreEmbeddingService')
-ModelServerClient.register('accessSearchAgents')
-
-_model_server = None
-
 def get_model_server():
-    global _model_server
-    if _model_server is None:
-        try:
-            _model_server = ModelServerClient(address=("localhost", 5010), authkey=b"ipcService")
-            _model_server.connect()
-            logger.info("[SearchPipeline] Connected to model_server via IPC")
-        except Exception as e:
-            logger.error(f"[SearchPipeline] Failed to connect to model_server: {e}")
-            raise
-    return _model_server
+    """Get model server reference via centralized CoreServiceManager."""
+    try:
+        from ipcService.coreServiceManager import CoreServiceManager
+        manager = CoreServiceManager.get_instance()
+        if manager.is_ready():
+            return manager  # Return manager object that has get_core_service() method
+        else:
+            logger.error("[SearchPipeline] CoreServiceManager not ready")
+            raise RuntimeError("CoreServiceManager not ready")
+    except Exception as e:
+        logger.error(f"[SearchPipeline] Failed to get model server: {e}")
+        raise
 
 
 @lru_cache(maxsize=100)

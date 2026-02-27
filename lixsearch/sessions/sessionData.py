@@ -1,10 +1,6 @@
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 import threading
-import torch
-import chromadb
-import torch
-from pathlib import Path
 import numpy as np
 import os 
 from loguru import logger
@@ -35,29 +31,9 @@ class SessionData:
         self.conversation_history: List[Dict] = []
         self.search_context: str = ""
         
-        # Initialize ChromaDB collection for session content
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        try:
-            session_dir = os.path.join("./session_embeddings", session_id)
-            Path(session_dir).mkdir(parents=True, exist_ok=True)
-            
-            chroma_settings = chromadb.config.Settings(
-                anonymized_telemetry=False,
-                chroma_telemetry_impl="ragService.vectorStore.NoOpProductTelemetry",
-                chroma_product_telemetry_impl="ragService.vectorStore.NoOpProductTelemetry",
-            )
-            self.chroma_client = chromadb.PersistentClient(
-                path=session_dir,
-                settings=chroma_settings
-            )
-            self.chroma_collection = self.chroma_client.get_or_create_collection(
-                name=f"session_{session_id}",
-                metadata={"hnsw:space": "cosine"}
-            )
-            logger.info(f"[SessionData] {session_id}: ChromaDB collection created successfully")
-        except Exception as e:
-            logger.warning(f"[SessionData] {session_id}: Failed to create ChromaDB collection: {e}")
-            self.chroma_collection = None
+        # NOTE: Chroma vector storage is now global and shared via HTTP client (vectorStore.py)
+        # DO NOT create per-session Chroma clients - this was causing 500MB+ memory leak
+        # Each session still maintains conversation history and metadata locally
         
         self.content_order: List[str] = []
         self.lock = threading.RLock()
@@ -66,26 +42,12 @@ class SessionData:
         with self.lock:
             self.fetched_urls.append(url)
             self.processed_content[url] = content
-            if embedding is not None and self.chroma_collection:
-                try:
-                    if isinstance(embedding, np.ndarray):
-                        emb_list = embedding.tolist() if embedding.ndim == 1 else embedding[0].tolist()
-                    else:
-                        emb_list = embedding
-                    
-                    self.content_embeddings[url] = embedding
-                    self.chroma_collection.add(
-                        ids=[url],
-                        embeddings=[emb_list],
-                        documents=[content],
-                        metadatas=[{"url": url}]
-                    )
-                    self.content_order.append(url)
-                except Exception as e:
-                    logger.warning(f"[SessionData] Failed to add {url} to ChromaDB: {e}")
-            elif embedding is None or not self.chroma_collection:
-                # Still add to content_order for fallback access
-                self.content_order.append(url)
+            # Note: Embeddings are now stored globally in the shared Chroma HTTP server
+            # via VectorStore.add_chunks(). Session only maintains local content reference.
+            if embedding is not None:
+                self.content_embeddings[url] = embedding
+            # Still add to content_order for fallback access
+            self.content_order.append(url)
             self.last_activity = datetime.now()
             self.rag_context_cache = None
 
