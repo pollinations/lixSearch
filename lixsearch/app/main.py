@@ -137,7 +137,7 @@ if __name__ == "__main__":
     
     # Get configuration
     host = os.getenv('HOST', '0.0.0.0')
-    port = int(os.getenv('WORKER_PORT', '8001'))
+    port = int(os.getenv('WORKER_PORT', '9002'))
     workers = int(os.getenv('WORKERS', '1'))
     
     logger.info(f"[APP] Initializing with WORKER_PORT={port}, WORKERS={workers}")

@@ -225,8 +225,8 @@ if __name__ == "__main__":
     
     # Get configuration from environment or defaults
     num_workers = int(os.getenv('WORKER_COUNT', '3'))
-    start_port = int(os.getenv('WORKER_START_PORT', '8001'))
-    lb_port = int(os.getenv('LB_PORT', '8000'))
+    start_port = int(os.getenv('WORKER_START_PORT', '9002'))
+    lb_port = int(os.getenv('LB_PORT', '9000'))
     lb_host = os.getenv('LB_HOST', '0.0.0.0')
     
     logger.info(f"[MAIN] Starting Load Balancer on {lb_host}:{lb_port}")
