@@ -1,19 +1,19 @@
 
+
 from loguru import logger
 import time
 from pipeline.config import ERROR_MESSAGE_TRUNCATE
 
-search_service = None
 _ipc_ready = False
 _ipc_initialized = False
 
 def _init_ipc_manager(max_retries: int = 3, retry_delay: float = 1.0):
     """Lazily initialize IPC connection using centralized manager."""
-    global search_service, _ipc_ready, _ipc_initialized
+    global _ipc_ready, _ipc_initialized
     
     # Avoid re-attempting if already tried
     if _ipc_initialized:
-        logger.debug(f"[Utility] IPC already initialized. Status: ready={_ipc_ready}, service={'set' if search_service else 'None'}")
+        logger.debug(f"[Utility] IPC already initialized. Status: ready={_ipc_ready}")
         return _ipc_ready
     
     _ipc_initialized = True
