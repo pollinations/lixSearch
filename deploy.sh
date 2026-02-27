@@ -70,8 +70,8 @@ start_services() {
         docker-compose -f "$COMPOSE_FILE" up -d --scale lixsearch-app="$count"
     fi
 
-    info "Waiting for services to be healthy (30 seconds)..."
-    sleep 30
+    info "Waiting for services to be healthy (90 seconds)..."
+    sleep 90
 
     success "Services started"
     show_status
