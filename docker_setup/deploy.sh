@@ -75,6 +75,22 @@ start_services() {
     show_status
 }
 
+build_image() {
+    local no_cache=${1:-false}
+    check_docker
+
+    info "Building lixSearch image..."
+    
+    if [ "$no_cache" = "true" ]; then
+        info "Building with --no-cache flag (smallest image)..."
+        docker-compose -f "$COMPOSE_FILE" build --no-cache
+    else
+        docker-compose -f "$COMPOSE_FILE" build
+    fi
+
+    success "Image built successfully"
+}
+
 scale_containers() {
     local count=$1
     check_docker
@@ -224,6 +240,7 @@ ${YELLOW}Usage:${NC}
   ./deploy.sh COMMAND [ARGS]
 
 ${YELLOW}Commands:${NC}
+  build [no-cache]  Build image (add 'no-cache' for --no-cache flag)
   start [N]         Start services (N containers, default 1)
   scale N           Scale to N containers
   stop              Stop all services
@@ -236,12 +253,14 @@ ${YELLOW}Commands:${NC}
   help              Show this help message
 
 ${YELLOW}Examples:${NC}
-  ./deploy.sh start                    # Start single container
-  ./deploy.sh start 3                  # Start with 3 containers
-  ./deploy.sh scale 5                  # Scale to 5 containers
-  ./deploy.sh logs app                 # View app logs
-  ./deploy.sh health                   # Check all services
-  ./deploy.sh backup                   # Backup Redis
+  ./deploy.sh build                       # Build with cache
+  ./deploy.sh build no-cache              # Build smallest image (no-cache)
+  ./deploy.sh start                       # Start single container
+  ./deploy.sh start 3                     # Start with 3 containers
+  ./deploy.sh scale 5                     # Scale to 5 containers
+  ./deploy.sh logs app                    # View app logs
+  ./deploy.sh health                      # Check all services
+  ./deploy.sh backup                      # Backup Redis
 
 ${YELLOW}Environment:${NC}
   Copy .env.prod to .env and customize before running:
@@ -251,13 +270,17 @@ ${YELLOW}Environment:${NC}
 ${YELLOW}Quick Start:${NC}
   1. cp .env.prod .env
   2. nano .env
-  3. ./deploy.sh start
-  4. curl http://localhost/api/health
+  3. ./deploy.sh build no-cache
+  4. ./deploy.sh start 3
+  5. ./deploy.sh health
 
 EOF
 }
 
 case "${1:-help}" in
+    build)
+        build_image "$2"
+        ;;
     start)
         start_services "$CONTAINER_COUNT"
         ;;
