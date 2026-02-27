@@ -2,7 +2,6 @@ import os
 from pipeline.config import BASE_CACHE_DIR, AUDIO_TRANSCRIBE_SIZE, ERROR_MESSAGE_TRUNCATE
 from pytubefix import AsyncYouTube
 from pydub import AudioSegment
-from multiprocessing.managers import BaseManager
 from loguru import logger
 import torch
 import asyncio
@@ -12,48 +11,34 @@ from urllib.parse import urlparse, parse_qs
 from typing import Optional
 from faster_whisper import WhisperModel
 
-class ModelManager(BaseManager): 
-    pass
-
-ModelManager.register("CoreEmbeddingService", callable=object)
-
-core_service = None
-_ipc_ready = False
-_ipc_initialized = False
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 logger.info(f"[YoutubeDetails] Loading faster-whisper model {AUDIO_TRANSCRIBE_SIZE} on {device}")
 whisper_model = WhisperModel(AUDIO_TRANSCRIBE_SIZE, device=device, compute_type="auto")
 
-def _init_ipc_manager(max_retries: int = 3, retry_delay: float = 1.0):
-    global core_service, _ipc_ready, _ipc_initialized
-    if _ipc_initialized:
-        return _ipc_ready
-    _ipc_initialized = True
-    for attempt in range(max_retries):
-        try:
-            manager = ModelManager(address=("localhost", 5010), authkey=b"ipcService")
-            manager.connect()
-            core_service = manager.CoreEmbeddingService()
-            _ipc_ready = True
+def _init_ipc_manager(max_retries: int = 3, retry_delay: float = 1.0) -> bool:
+    """Initialize IPC connection using centralized manager."""
+    try:
+        from ipcService.coreServiceManager import CoreServiceManager
+        manager = CoreServiceManager.get_instance()
+        is_ready = manager.is_ready()
+        if is_ready:
             logger.info("[YoutubeDetails] IPC connection established with CoreEmbeddingService")
-            return True
-        except Exception as e:
-            if attempt < max_retries - 1:
-                logger.warning(f"[YoutubeDetails] IPC connection failed (attempt {attempt + 1}/{max_retries}): {e}")
-                time.sleep(retry_delay)
-            else:
-                logger.debug(f"[YoutubeDetails] IPC server not available - running in standalone mode")
-                _ipc_ready = False
-                return False
-    _ipc_ready = False
-    return False
+        else:
+            logger.warning("[YoutubeDetails] IPC service not yet ready")
+        return is_ready
+    except Exception as e:
+        logger.warning(f"[YoutubeDetails] Could not initialize IPC connection: {e}")
+        return False
 
 async def youtubeMetadata(url: str):
-    if not _init_ipc_manager() or core_service is None:
+    """Get YouTube metadata via IPC service."""
+    if not _init_ipc_manager():
         logger.warning("[YoutubeDetails] IPC service not available for YouTube metadata")
         return None
     try:
+        from ipcService.coreServiceManager import get_core_embedding_service
+        core_service = get_core_embedding_service()
         metadata = await asyncio.to_thread(core_service.get_youtube_metadata, url)
         return metadata
     except Exception as e:

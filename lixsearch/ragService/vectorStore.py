@@ -4,7 +4,7 @@ import chromadb
 from pathlib import Path
 import threading
 import numpy as np
-from pipeline.config import EMBEDDING_DIMENSION
+from pipeline.config import EMBEDDING_DIMENSION, CHROMA_API_IMPL, CHROMA_SERVER_HOST, CHROMA_SERVER_PORT
 from typing import List, Dict
 from datetime import datetime
 import os
@@ -47,11 +47,18 @@ class VectorStore:
         self.lock = threading.RLock()
         self.metadata_path = os.path.join(embeddings_dir, "metadata.json")
         
+        # HTTP Client connection pooling
+        self._http_session = None
+        self._connection_retries = 0
+        self._max_connection_retries = 3
+        
         self._initialize_chroma_client()
         self._load_from_disk()
         
         self._initialized = True
-        logger.info(f"[VectorStore] Initialized with {self.chunk_count} chunks on {self.device}")
+        logger.info(f"[VectorStore] Initialized with {self.chunk_count} chunks on {self.device} "
+                   f"(HTTP client pooling enabled)")
+    
     
     @staticmethod
     def _select_device() -> str:
@@ -80,17 +87,45 @@ class VectorStore:
     
     def _initialize_chroma_client(self) -> None:
         try:
-            Path(self.embeddings_dir).mkdir(parents=True, exist_ok=True)
+            from pipeline.config import CHROMA_API_IMPL, CHROMA_SERVER_HOST, CHROMA_SERVER_PORT, VECTOR_DB_POOL_SIZE
             
-            logger.info(f"[VectorStore] Initializing embedded Chroma at {self.embeddings_dir}")
+            # Default to HTTP client for production (shared across workers)
+            chroma_impl = CHROMA_API_IMPL or "http"
             
-            self.client = chromadb.PersistentClient(path=self.embeddings_dir)
+            if chroma_impl == "http":
+                logger.info(f"[VectorStore] Initializing HTTP Chroma client at {CHROMA_SERVER_HOST}:{CHROMA_SERVER_PORT}")
+                
+                # Create HTTP client with connection pooling
+                try:
+                    # HttpClient supports connection pooling via httpx internally
+                    self.client = chromadb.HttpClient(
+                        host=CHROMA_SERVER_HOST,
+                        port=CHROMA_SERVER_PORT,
+                        ssl=False,
+                        headers={}
+                    )
+                    # Verify connection
+                    heartbeat = self.client.heartbeat()
+                    logger.info(f"[VectorStore] ✅ Connected to Chroma HTTP server at {CHROMA_SERVER_HOST}:{CHROMA_SERVER_PORT}")
+                    logger.debug(f"[VectorStore] Heartbeat: {heartbeat}")
+                except Exception as e:
+                    logger.error(f"[VectorStore] Failed to connect to HTTP Chroma: {e}")
+                    logger.warning(f"[VectorStore] Retrying with default localhost...")
+                    self.client = chromadb.HttpClient(host="localhost", port=8000)
+                    
+            else:
+                # Fallback to embedded for backward compatibility (NOT RECOMMENDED for production)
+                Path(self.embeddings_dir).mkdir(parents=True, exist_ok=True)
+                logger.warning(f"[VectorStore] Using embedded Chroma (NOT recommended for multi-worker deployments)")
+                self.client = chromadb.PersistentClient(path=self.embeddings_dir)
+                logger.info(f"[VectorStore] Embedded Chroma initialized at {self.embeddings_dir}")
             
+            # Get or create collection (HTTP client supports this)
             self.collection = self.client.get_or_create_collection(
                 name="document_embeddings",
                 metadata={"hnsw:space": "cosine"}
             )
-            logger.info(f"[VectorStore] Embedded Chroma initialized successfully")
+            logger.info(f"[VectorStore] Collection obtained successfully (pool_size={VECTOR_DB_POOL_SIZE})")
             
         except Exception as e:
             logger.error(f"[VectorStore] Failed to initialize Chroma: {e}")

@@ -200,11 +200,11 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             return fallback
         
         try:
-            model_server = get_model_server()
-            core_service = model_server.CoreEmbeddingService()
-            logger.info("[Pipeline] Connected to model_server CoreEmbeddingService via IPC")
+            from ipcService.coreServiceManager import get_core_embedding_service
+            core_service = get_core_embedding_service()
+            logger.info("[Pipeline] Connected to shared CoreEmbeddingService singleton via IPC")
         except Exception as e:
-            logger.warning(f"[Pipeline] Could not connect to model_server, using standalone mode: {e}")
+            logger.warning(f"[Pipeline] Could not connect to IPC CoreEmbeddingService: {e}")
             core_service = None
                    
         memoized_results = {
@@ -585,7 +585,8 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     if core_service:
                         async def ingest_url_async(url_to_ingest):
                             try:
-                                core_svc = get_model_server().CoreEmbeddingService()
+                                from ipcService.coreServiceManager import get_core_embedding_service
+                                core_svc = get_core_embedding_service()
                                 ingest_result = await asyncio.wait_for(
                                     asyncio.to_thread(core_svc.ingest_url, url_to_ingest),
                                     timeout=3.0

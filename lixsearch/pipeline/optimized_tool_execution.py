@@ -212,8 +212,8 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
                 )
                 
                 try:
-                    model_server = get_model_server()
-                    core_service = model_server.CoreEmbeddingService()
+                    from ipcService.coreServiceManager import get_core_embedding_service
+                    core_service = get_core_embedding_service()
                     ingest_result = await asyncio.to_thread(core_service.ingest_url, url)
                     chunks_count = ingest_result.get('chunks_ingested', 0)
                     logger.info(f"[Pipeline] Ingested {chunks_count} chunks from {url} into vector store")
