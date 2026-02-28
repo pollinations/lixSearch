@@ -64,7 +64,6 @@ class CoreEmbeddingService:
     
     @staticmethod
     def _select_device() -> str:
-        """Select the best available device with fallback to CPU."""
         try:
             if torch.cuda.is_available():
                 device_count = torch.cuda.device_count()
@@ -84,7 +83,6 @@ class CoreEmbeddingService:
         logger.info("[CORE] Using CPU for core services")
         return "cpu"
       
-      
     def _warmup_embedding_model(self) -> None:
         try:
             dummy_texts = [
@@ -96,7 +94,6 @@ class CoreEmbeddingService:
             logger.info(f"[CORE {CoreEmbeddingService._instance_id}] Embedding model warmed up with shape {embeddings.shape}")
         except Exception as e:
             logger.warning(f"[CORE {CoreEmbeddingService._instance_id}] Embedding model warm-up failed: {e}")
-    
     
     def ingest_url(self, url: str) -> Dict:
         try:
@@ -166,26 +163,18 @@ class CoreEmbeddingService:
         return self.semantic_cache.get_stats()
     
     def embed_batch(self, texts: List[str], batch_size: int = 32) -> List[List[float]]:
-        """
-        Embed a batch of texts. Returns embeddings as lists for IPC serialization.
-        """
         try:
             with self._gpu_lock:
                 embeddings = self.embedding_service.embed(texts, batch_size=batch_size)
-                # Convert numpy array to list for pickle serialization over IPC
                 return embeddings.tolist()
         except Exception as e:
             logger.error(f"[CORE] Batch embedding failed: {e}")
             raise
     
     def embed_single_text(self, text: str) -> List[float]:
-        """
-        Embed a single text. Returns embedding as list for IPC serialization.
-        """
         try:
             with self._gpu_lock:
                 embedding = self.embedding_service.embed_single(text)
-                # Convert numpy array to list for pickle serialization over IPC
                 return embedding.tolist()
         except Exception as e:
             logger.error(f"[CORE] Single embedding failed: {e}")
@@ -198,4 +187,3 @@ class CoreEmbeddingService:
                 self.vector_store.persist_to_disk()
             except Exception as e:
                 logger.error(f"[CORE] Persist worker error: {e}")
-
