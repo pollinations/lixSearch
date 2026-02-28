@@ -579,14 +579,18 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         "result": tool_result
                     }
                 
-                fetch_results = await asyncio.wait_for(
-                    asyncio.gather(
-                        *[execute_fetch(idx, tc) for idx, tc in enumerate(fetch_calls)],
-                        return_exceptions=True
-                    ),
-                    timeout=8.0
-                )
-                
+                try:
+                    fetch_results = await asyncio.wait_for(
+                        asyncio.gather(
+                            *[execute_fetch(idx, tc) for idx, tc in enumerate(fetch_calls)],
+                            return_exceptions=True
+                        ),
+                        timeout=8.0
+                    )
+                except (asyncio.TimeoutError, TimeoutError):
+                    logger.warning(f"[PARALLEL FETCH] Timeout after 8s – continuing with results collected so far")
+                    fetch_results = []
+
                 ingest_tasks = []
                 for fetch_result in fetch_results:
                     if isinstance(fetch_result, Exception):

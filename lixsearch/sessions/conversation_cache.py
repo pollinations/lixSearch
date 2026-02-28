@@ -39,20 +39,29 @@ class ConversationCacheManager:
         self.cache_dir = cache_dir
         
         os.makedirs(self.cache_dir, exist_ok=True)
-        
-        self.embedding_model = None
-        if EMBEDDING_AVAILABLE:
-            try:
-                self.embedding_model = SentenceTransformer(embedding_model)
-                logger.info(f"[ConversationCache] Loaded embedding model: {embedding_model}")
-            except Exception as e:
-                logger.warning(f"[ConversationCache] Failed to load embedding model: {e}")
+
+        self._embedding_model_name = embedding_model
+        self.embedding_model = None  # loaded lazily on first use
         
         self.cache_window: deque = deque(maxlen=window_size)
         self.full_cache: Dict[str, dict] = {}
         self.embeddings_cache: Dict[str, np.ndarray] = {}
         self.latest_response: Optional[str] = None
-        
+
+    def _load_embedding_model(self) -> bool:
+        """Load embedding model lazily on first use. Returns True if available."""
+        if self.embedding_model is not None:
+            return True
+        if not EMBEDDING_AVAILABLE:
+            return False
+        try:
+            self.embedding_model = SentenceTransformer(self._embedding_model_name)
+            logger.info(f"[ConversationCache] Loaded embedding model: {self._embedding_model_name}")
+            return True
+        except Exception as e:
+            logger.warning(f"[ConversationCache] Failed to load embedding model: {e}")
+            return False
+
     def add_to_cache(self, query: str, response: str, metadata: Optional[Dict] = None) -> None:
         if len(query) < 10:
             return
@@ -70,7 +79,7 @@ class ConversationCacheManager:
         }
         
         embedding = None
-        if self.embedding_model:
+        if self._load_embedding_model():
             try:
                 embedding = self.embedding_model.encode(query, convert_to_numpy=True)
                 self.embeddings_cache[entry_id] = embedding
@@ -103,7 +112,7 @@ class ConversationCacheManager:
         if len(query) < 10:
             return None, 0.0
         
-        if not self.embedding_model:
+        if not self._load_embedding_model():
             logger.warning("[ConversationCache] No embedding model available for cache query")
             return None, 0.0
         
@@ -252,7 +261,7 @@ class ConversationCacheManager:
             loaded_entries = serializable_cache.get("cache_entries", [])
             
             # Reload embeddings for cached entries
-            if self.embedding_model:
+            if self._load_embedding_model():
                 for entry in loaded_entries:
                     if not self._is_expired(entry):
                         try:
