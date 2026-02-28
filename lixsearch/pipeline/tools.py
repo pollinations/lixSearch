@@ -37,13 +37,13 @@ tools = [
         "type": "function",
         "function": {
             "name": "fetch_full_text",
-            "description": "Fetch full text content from a URL with intelligent caching. SMART CACHING: URLs for stable content (articles, documentation) are cached with 24h TTL to avoid re-fetching. Short-lived queries (weather, prices, news) skip caching for freshness. When web_search is executed, you MUST call this for 3-6 of the returned URLs. Minimum 3 URLs must be fetched - this is mandatory, not optional. Fetch diverse URLs from search results to ensure comprehensive information.",
+            "description": "Fetch full text content from a URL with AI-driven intelligent caching. SMART CACHING: System detects whether content is ephemeral (weather, prices, news - always fetch fresh) or stable (articles, docs - cache 24h for performance). Detection is AI-based aspect analysis, not heuristic. Stable content hit returns instantly from cache; ephemeral always bypasses cache for freshness. When web_search is executed, you MUST call this for 3-6 of the returned URLs. Minimum 3 URLs must be fetched.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "url": {
                         "type": "string",
-                        "description": "The URL to fetch. Select from web_search results. For weather queries, fetch from weather sites, news sites, and data aggregators - minimum 3 URLs."
+                        "description": "The URL to fetch. Select from web_search results. System automatically determines if content should be cached or fetched fresh."
                     }
                 },
                 "required": ["url"]

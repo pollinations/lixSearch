@@ -36,7 +36,7 @@ def format_openai_response(content: str, request_id: str = None) -> str:
         "id": request_id or f"chatcmpl-{uuid.uuid4().hex[:REQUEST_ID_HEX_SLICE_SIZE]}",
         "object": "chat.completion",
         "created": int(datetime.now(timezone.utc).timestamp()),
-        "model": model,
+        "model": "lixsearch",
         "choices": [
             {
                 "index": 0,
