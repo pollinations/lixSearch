@@ -8,7 +8,7 @@ from playwright.async_api import async_playwright
 from urllib.parse import quote
 import atexit
 import time
-from pipeline.config import MAX_LINKS_TO_TAKE, isHeadless, MAX_IMAGES_TO_INCLUDE, LOG_MESSAGE_QUERY_TRUNCATE
+from pipeline.config import MAX_LINKS_TO_TAKE, isHeadless, MAX_IMAGES_TO_INCLUDE, LOG_MESSAGE_QUERY_TRUNCATE, SEARCH_AGENT_POOL_SIZE, SEARCH_AGENT_MAX_TABS
 import shutil
 import os
 import json
@@ -90,7 +90,7 @@ class searchPortManager:
 
 
 class SearchAgentPool:
-    def __init__(self, pool_size=1, max_tabs_per_agent=20):
+    def __init__(self, pool_size=SEARCH_AGENT_POOL_SIZE, max_tabs_per_agent=SEARCH_AGENT_MAX_TABS):
         self.pool_size = pool_size
         self.max_tabs_per_agent = max_tabs_per_agent
         self.text_agents = []
@@ -710,5 +710,5 @@ atexit.register(shutdown_graceful)
 
 
 port_manager = searchPortManager(start_port=10000, end_port=19999)
-agent_pool = SearchAgentPool(pool_size=1, max_tabs_per_agent=20)
+agent_pool = SearchAgentPool(pool_size=SEARCH_AGENT_POOL_SIZE, max_tabs_per_agent=SEARCH_AGENT_MAX_TABS)
 
