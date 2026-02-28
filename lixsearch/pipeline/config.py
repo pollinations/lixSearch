@@ -130,6 +130,13 @@ SEMANTIC_CACHE_REDIS_CLEANUP_INTERVAL = 300
 SEMANTIC_CACHE_REDIS_STATS_INTERVAL = 60
 SEMANTIC_CACHE_REDIS_ENABLE_MONITORING = True
 
+# ── Hybrid Conversation Cache (Redis hot + disk cold) ──────────────────────
+CONVERSATION_ARCHIVE_DIR = "./data/conversations"
+SESSION_DISK_TTL_DAYS = 30                  # delete cold archives after 30 days
+SESSION_LRU_EVICT_AFTER_MINUTES = 30        # migrate Redis → disk after T min of inactivity
+HYBRID_HOT_WINDOW_SIZE = 20                 # messages kept in Redis hot window
+HYBRID_STARTUP_CLEANUP = True               # run TTL cleanup on process startup
+
 IPC_HOST = os.getenv("IPC_HOST", "localhost")
 IPC_PORT = int(os.getenv("IPC_PORT", "9510"))
 _IPC_AUTHKEY = os.getenv("IPC_AUTHKEY", "ipcService")
