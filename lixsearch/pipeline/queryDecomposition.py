@@ -93,6 +93,19 @@ class QueryAnalyzer:
                 "keywords": ["risk", "danger", "negative", "problem",
                            "issue", "limitation"],
                 "indicators": ["problem", "issue"]
+            },
+            "ephemeral": {
+                "keywords": ["weather", "temperature", "price", "cost", "live",
+                           "current", "today", "tonight", "now", "tomorrow",
+                           "score", "game", "match", "news", "breaking", "stock",
+                           "rate", "exchange", "update", "latest", "recent"],
+                "indicators": ["weather", "live", "current", "news", "price", "score"]
+            },
+            "stable": {
+                "keywords": ["explain", "describe", "article", "research", "study",
+                           "documentation", "tutorial", "guide", "background",
+                           "theory", "concept", "principle", "definition"],
+                "indicators": ["research", "article", "documentation"]
             }
         }
 

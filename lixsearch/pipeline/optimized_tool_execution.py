@@ -79,7 +79,6 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
                     conversation_history = session_context.get_context()
                     
                     if conversation_history:
-                        # Format conversation for display
                         formatted_history = "## Conversation History\n\n"
                         for i, msg in enumerate(conversation_history, 1):
                             role = msg.get("role", "unknown").upper()
@@ -240,21 +239,27 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
                 yield web_event
             url = function_args.get("url")
             
-            # Check if this URL was already cached (skip if still valid)
             from ragService.cacheCoordinator import CacheCoordinator
+            from pipeline.queryDecomposition import QueryAnalyzer
+            
             cache_coordinator = CacheCoordinator()
             cached_embedding = cache_coordinator.get_url_embedding(url)
             
-            # Determine query type to decide if caching is appropriate
             search_query = memoized_results.get("search_query", "").lower()
-            is_ephemeral_query = any(keyword in search_query for keyword in [
-                "weather", "time", "price", "live", "current", "today", 
-                "now", "tomorrow", "score", "news", "breaking", "stock"
-            ])
+            analyzer = QueryAnalyzer()
+            detected_aspects = analyzer._detect_aspects(search_query)
             
-            if cached_embedding is not None and not is_ephemeral_query:
-                logger.info(f"[Pipeline] URL embedding cache HIT for {url} (skipping re-fetch)")
-                yield f"[CACHED] Retrieved previously fetched content from {url}"
+            is_ephemeral_query = "ephemeral" in detected_aspects
+            is_stable_content = "stable" in detected_aspects
+            
+            should_use_cache = cached_embedding is not None and is_stable_content and not is_ephemeral_query
+            
+            cache_decision = "SKIP (ephemeral)" if is_ephemeral_query else ("USE (stable)" if is_stable_content else "SKIP (conservative)")
+            logger.info(f"[Pipeline] Content freshness: {cache_decision} | Aspects: {detected_aspects}")
+            
+            if should_use_cache:
+                logger.info(f"[Pipeline] URL embedding cache HIT for {url} (stable content, using 24h cache)")
+                yield f"[CACHED] Retrieved previously fetched content from {url} (24h cached)"
                 return
             
             try:
@@ -273,20 +278,18 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
                     chunks_count = ingest_result.get('chunks_ingested', 0)
                     logger.info(f"[Pipeline] Ingested {chunks_count} chunks from {url} into vector store")
                     
-                    # Cache URL embedding if it's not ephemeral content
-                    if chunks_count > 0 and not is_ephemeral_query:
+                    if chunks_count > 0 and is_stable_content and not is_ephemeral_query:
                         try:
-                            from ipcService.coreServiceManager import get_core_embedding_service
-                            core_service = get_core_embedding_service()
-                            # Get embedding of first chunk as representative URL embedding
                             url_embedding = await asyncio.to_thread(
                                 core_service.embed_single, 
-                                parallel_results[:200] if parallel_results else url  # Use content preview
+                                parallel_results[:200] if parallel_results else url
                             )
                             cache_coordinator.set_url_embedding(url, url_embedding)
-                            logger.info(f"[Pipeline] Cached embedding for {url} (24h TTL)")
+                            logger.info(f"[Pipeline] Cached stable content from {url} (24h TTL)")
                         except Exception as e:
                             logger.debug(f"[Pipeline] Failed to cache URL embedding: {e}")
+                    elif is_ephemeral_query:
+                        logger.info(f"[Pipeline] Skipping cache for ephemeral content (freshness priority)")
                 except Exception as e:
                     logger.warning(f"[Pipeline] Failed to ingest content to vector store: {e}")
                 
@@ -331,7 +334,6 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
             try:
                 optimizer = ConstrainedOptimizer()
                 
-                # Evaluate each quality dimension
                 completeness = optimizer.aspect_evaluator.compute_coverage_ratio(query, response, sources)
                 factuality = optimizer.factuality_evaluator.evaluate_citations(response, sources)
                 freshness = optimizer.freshness_evaluator.compute_freshness([])
@@ -392,7 +394,5 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
                 yield f"[ERROR] Failed to sanitize output: {str(e)[:ERROR_MESSAGE_TRUNCATE]}"
     
     except asyncio.TimeoutError:
-            logger.warning(f"Tool {function_name} timed out")
-            yield f"[TIMEOUT] Tool {function_name} took too long to execute"
-        
-
+        logger.warning(f"Tool {function_name} timed out")
+        yield f"[TIMEOUT] Tool {function_name} took too long to execute"
