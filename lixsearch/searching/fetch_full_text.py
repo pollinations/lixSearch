@@ -48,7 +48,7 @@ def fetch_full_text(
         return ""
     
     # Try with multiple user agents and retry logic
-    max_retries = 3
+    max_retries = 2
     for attempt in range(max_retries):
         try:
             headers = get_realistic_headers(url, attempt)
@@ -56,8 +56,7 @@ def fetch_full_text(
             if response.status_code != 200:
                 logger.warning(f"[FETCH] Attempt {attempt + 1}/{max_retries} failed with status {response.status_code} for {url}")
                 if attempt < max_retries - 1:
-                    time.sleep(1)  # Wait before retry
-                    continue
+                    continue  # 4xx/5xx is definitive – no sleep, just rotate user-agent
                 logger.error(f"[FETCH] All retries failed for {url}: Status {response.status_code}")
                 return ""
             response.raise_for_status()
