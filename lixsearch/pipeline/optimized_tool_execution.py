@@ -239,6 +239,24 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
             if web_event:
                 yield web_event
             url = function_args.get("url")
+            
+            # Check if this URL was already cached (skip if still valid)
+            from ragService.cacheCoordinator import CacheCoordinator
+            cache_coordinator = CacheCoordinator()
+            cached_embedding = cache_coordinator.get_url_embedding(url)
+            
+            # Determine query type to decide if caching is appropriate
+            search_query = memoized_results.get("search_query", "").lower()
+            is_ephemeral_query = any(keyword in search_query for keyword in [
+                "weather", "time", "price", "live", "current", "today", 
+                "now", "tomorrow", "score", "news", "breaking", "stock"
+            ])
+            
+            if cached_embedding is not None and not is_ephemeral_query:
+                logger.info(f"[Pipeline] URL embedding cache HIT for {url} (skipping re-fetch)")
+                yield f"[CACHED] Retrieved previously fetched content from {url}"
+                return
+            
             try:
                 queries = memoized_results.get("search_query", "")
                 if isinstance(queries, str):
@@ -254,6 +272,21 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
                     ingest_result = await asyncio.to_thread(core_service.ingest_url, url)
                     chunks_count = ingest_result.get('chunks_ingested', 0)
                     logger.info(f"[Pipeline] Ingested {chunks_count} chunks from {url} into vector store")
+                    
+                    # Cache URL embedding if it's not ephemeral content
+                    if chunks_count > 0 and not is_ephemeral_query:
+                        try:
+                            from ipcService.coreServiceManager import get_core_embedding_service
+                            core_service = get_core_embedding_service()
+                            # Get embedding of first chunk as representative URL embedding
+                            url_embedding = await asyncio.to_thread(
+                                core_service.embed_single, 
+                                parallel_results[:200] if parallel_results else url  # Use content preview
+                            )
+                            cache_coordinator.set_url_embedding(url, url_embedding)
+                            logger.info(f"[Pipeline] Cached embedding for {url} (24h TTL)")
+                        except Exception as e:
+                            logger.debug(f"[Pipeline] Failed to cache URL embedding: {e}")
                 except Exception as e:
                     logger.warning(f"[Pipeline] Failed to ingest content to vector store: {e}")
                 
