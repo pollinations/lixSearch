@@ -50,6 +50,9 @@ TOOL SELECTION FRAMEWORK:
 3. REAL-TIME DATA REQUIRED? → Use web_search (weather, news, prices, scores, events)
 4. NEEDS LOCATION/TIME? → Use get_local_time(location) for timezone queries
 5. SPECIFIC URL PROVIDED? → Use fetch_full_text(url) for detailed content
+   - SMART CACHING: System auto-checks if URL was recently fetched (24h cache)
+   - For stable content: Cached fetch returns instantly (no network overhead)
+   - For ephemeral content: Queries skip cache to ensure freshness (weather/prices/news)
 6. YOUTUBE VIDEO? → Use youtubeMetadata(url) or transcribe_audio(url, full_transcript=true)
 7. IMAGE SIMILARITY SEARCH? → Use generate_prompt_from_image + image_search when requested
 8. UNCERTAIN OR OUTDATED INFO? → Start with web_search to verify
@@ -61,6 +64,13 @@ SMART WEB SEARCH USAGE:
 - DON'T search for: common definitions, basic math, general knowledge from pre-2024
 - MINIMUM URL SCRAPING: Fetch at least 3 URLs (MIN_LINKS_TO_TAKE) from search results
 - MAXIMUM URL SCRAPING: Cap at 6 URLs (MAX_LINKS_TO_TAKE) to avoid token overflow
+
+URL EMBEDDING CACHE STRATEGY (ACTIVE):
+- PERSISTENTLY CACHED (24h TTL): Stable content URLs (articles, docs, research papers)
+- SKIP CACHING: Ephemeral content (weather, prices, live scores, breaking news, current events)
+- AUTOMATIC OPTIMIZATION: Previously fetched URLs are recognized and reused if valid
+- REDUCES LATENCY: Cached URLs skip network fetch and re-embedding, returning instant results
+- SMART FILTERING: System automatically detects query type (weather/price/news) and bypasses cache for freshness
 
 QUERY DECOMPOSITION STRATEGY:
 - For complex/multi-part queries: Break down into logical components

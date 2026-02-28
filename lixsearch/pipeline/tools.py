@@ -37,7 +37,7 @@ tools = [
         "type": "function",
         "function": {
             "name": "fetch_full_text",
-            "description": "Fetch full text content from a URL. IMPORTANT: When web_search is executed, you MUST call this for 3-6 of the returned URLs. Minimum 3 URLs must be fetched - this is mandatory, not optional. Fetch diverse URLs from search results to ensure comprehensive information.",
+            "description": "Fetch full text content from a URL with intelligent caching. SMART CACHING: URLs for stable content (articles, documentation) are cached with 24h TTL to avoid re-fetching. Short-lived queries (weather, prices, news) skip caching for freshness. When web_search is executed, you MUST call this for 3-6 of the returned URLs. Minimum 3 URLs must be fetched - this is mandatory, not optional. Fetch diverse URLs from search results to ensure comprehensive information.",
             "parameters": {
                 "type": "object",
                 "properties": {
