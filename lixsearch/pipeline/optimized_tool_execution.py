@@ -72,27 +72,43 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
             logger.info("[Pipeline] Get session conversation history tool called")
             session_id = function_args.get("session_id")
             include_metadata = function_args.get("include_metadata", True)
-            
+            use_full_history = function_args.get("use_full_history", False)
+            query_for_search = function_args.get("query", "")
+
             try:
                 if "session_context" in memoized_results and memoized_results["session_context"]:
                     session_context = memoized_results["session_context"]
-                    conversation_history = session_context.get_context()
-                    
+
+                    if use_full_history and hasattr(session_context, "get_full_history"):
+                        conversation_history = session_context.get_full_history()
+                        source_label = "Full History (hot + disk)"
+                    elif query_for_search and hasattr(session_context, "smart_context"):
+                        ctx = session_context.smart_context(query_for_search)
+                        recent = ctx.get("recent", [])
+                        relevant = ctx.get("relevant", [])
+                        conversation_history = recent
+                        source_label = f"Smart Context (recent={len(recent)}, relevant={len(relevant)})"
+                        if relevant:
+                            conversation_history = relevant + recent
+                    else:
+                        conversation_history = session_context.get_context()
+                        source_label = "Hot Window"
+
                     if conversation_history:
-                        formatted_history = "## Conversation History\n\n"
+                        formatted_history = f"## Conversation History [{source_label}]\n\n"
                         for i, msg in enumerate(conversation_history, 1):
                             role = msg.get("role", "unknown").upper()
                             content = msg.get("content", "")
                             timestamp = msg.get("timestamp", "")
-                            
+
                             if include_metadata and timestamp:
                                 from datetime import datetime
                                 ts_str = datetime.fromtimestamp(timestamp).strftime("%H:%M:%S")
                                 formatted_history += f"**{i}. {role}** ({ts_str}):\n{content}\n\n"
                             else:
                                 formatted_history += f"**{i}. {role}**:\n{content}\n\n"
-                        
-                        logger.info(f"[Pipeline] Retrieved {len(conversation_history)} messages for session {session_id}")
+
+                        logger.info(f"[Pipeline] Retrieved {len(conversation_history)} messages for session {session_id} [{source_label}]")
                         yield formatted_history
                     else:
                         logger.info(f"[Pipeline] No conversation history found for session {session_id}")
@@ -241,8 +257,9 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
             
             from ragService.cacheCoordinator import CacheCoordinator
             from pipeline.queryDecomposition import QueryAnalyzer
-            
-            cache_coordinator = CacheCoordinator()
+
+            _session_id_for_cache = memoized_results.get("session_id", "pipeline")
+            cache_coordinator = CacheCoordinator(session_id=_session_id_for_cache)
             cached_embedding = cache_coordinator.get_url_embedding(url)
             
             search_query = memoized_results.get("search_query", "").lower()
