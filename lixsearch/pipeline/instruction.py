@@ -63,15 +63,19 @@ TOOL SELECTION FRAMEWORK:
 8. IMAGE GENERATION? → Generate an image from a descriptive prompt
 9. UNCERTAIN OR OUTDATED INFO? → Search the web first
 
-SMART WEB SEARCH:
+SMART WEB SEARCH (ADAPTIVE DEPTH):
 - Use only when RAG context is insufficient or potentially outdated
-- Keep searches focused: 3-4 maximum per response (more in detailed mode)
-- For time-sensitive topics → ALWAYS search web + fetch fresh
+- Set search_depth based on query complexity:
+  • "quick" (1-2 URLs): weather, time, quick facts, simple lookups, single-answer questions
+  • "standard" (2-5 URLs): how-to, explanations, moderate queries, multi-faceted topics
+  • "thorough" (4-10 URLs): research, comparisons, in-depth analysis, complex topics
+- For time-sensitive topics → ALWAYS search web + fetch fresh (use "quick" depth)
 - For historical/general knowledge → Try RAG first
+- Do NOT over-fetch: a weather query needs 1-2 sources, not 5
 
 AVAILABLE TOOLS (11 total):
 1. cleanQuery(query) → Extract URLs from query
-2. web_search(query) → Web search
+2. web_search(query, search_depth) → Web search (depth: quick/standard/thorough)
 3. fetch_full_text(url) → Full content from URL
 4. transcribe_audio(url, full_transcript, query) → YouTube audio to text
 5. get_local_time(location_name) → Current time + timezone

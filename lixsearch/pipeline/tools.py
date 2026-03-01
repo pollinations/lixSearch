@@ -20,13 +20,18 @@ tools = [
         "type": "function",
         "function": {
             "name": "web_search",
-            "description": "Search the web for current/real-time information. MANDATORY for weather, time-sensitive data, news, prices, events, and scores. When called, you MUST fetch 3-6 URLs from results using fetch_full_text. This is not optional - all web_search calls require comprehensive URL extraction.",
+            "description": "Search the web for current/real-time information. MANDATORY for weather, time-sensitive data, news, prices, events, and scores. After calling, fetch URLs from results using fetch_full_text — the number of URLs to fetch depends on your chosen search_depth.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
                         "description": "The search query. For weather: include location and 'weather' or 'temperature'. For time: include location and 'time'. For news: be specific about topic/date."
+                    },
+                    "search_depth": {
+                        "type": "string",
+                        "enum": ["quick", "standard", "thorough"],
+                        "description": "Controls how many URLs to fetch after search. 'quick' (1-2 URLs): weather, time, simple facts. 'standard' (2-5 URLs): explanations, how-to, moderate queries. 'thorough' (4-10 URLs): research, comparisons, in-depth analysis. Default: standard."
                     }
                 },
                 "required": ["query"]
@@ -37,7 +42,7 @@ tools = [
         "type": "function",
         "function": {
             "name": "fetch_full_text",
-            "description": "Fetch full text content from a URL with AI-driven intelligent caching. SMART CACHING: System detects whether content is ephemeral (weather, prices, news - always fetch fresh) or stable (articles, docs - cache 24h for performance). Detection is AI-based aspect analysis, not heuristic. Stable content hit returns instantly from cache; ephemeral always bypasses cache for freshness. When web_search is executed, you MUST call this for 3-6 of the returned URLs. Minimum 3 URLs must be fetched.",
+            "description": "Fetch full text content from a URL with AI-driven intelligent caching. SMART CACHING: System detects whether content is ephemeral (weather, prices, news - always fetch fresh) or stable (articles, docs - cache 24h for performance). Detection is AI-based aspect analysis, not heuristic. Stable content hit returns instantly from cache; ephemeral always bypasses cache for freshness. Fetch URLs from web_search results — the number depends on the search_depth you chose (quick: 1-2, standard: 2-5, thorough: 4-10).",
             "parameters": {
                 "type": "object",
                 "properties": {
