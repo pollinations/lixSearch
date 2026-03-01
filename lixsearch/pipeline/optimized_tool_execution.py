@@ -299,6 +299,9 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
         elif function_name == "fetch_full_text":
             url = function_args.get("url")
             logger.info(f"Fetching webpage content: {url[:60]}")
+            web_event = emit_event_func("INFO", f"<TASK>Reading {_display_url(url)}</TASK>")
+            if web_event:
+                yield web_event
 
             from ragService.cacheCoordinator import CacheCoordinator
             from pipeline.queryDecomposition import QueryAnalyzer
