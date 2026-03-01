@@ -15,16 +15,18 @@ echo "Log level: $LOG_LEVEL"
 
 cd /app
 
+# Ensure data directories exist
+mkdir -p /app/data/cache/conversation /app/data/conversations /app/data/embeddings /app/tmp/cache /app/logs
+
 if [ "$APP_MODE" = "load_balancer" ]; then
     echo "Starting Load Balancer on port 9000..."
-    python lixsearch/load_balancer.py
+    exec python lixsearch/load_balancer.py
 elif [ "$APP_MODE" = "ipc" ]; then
     echo "Starting IPC Service on port $IPC_PORT..."
-    python lixsearch/ipcService/main.py
+    exec python lixsearch/ipcService/main.py
 elif [ "$APP_MODE" = "worker" ]; then
     echo "Starting Worker $WORKER_ID on port $WORKER_PORT..."
-    export WORKER_PORT=$WORKER_PORT
-    python lixsearch/app/main.py
+    exec python lixsearch/app/main.py
 else
     echo "Unknown APP_MODE: $APP_MODE"
     exit 1
