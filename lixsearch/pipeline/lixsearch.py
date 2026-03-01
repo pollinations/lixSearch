@@ -18,7 +18,10 @@ from pipeline.config import (POLLINATIONS_ENDPOINT, LLM_MODEL,
                              SEMANTIC_CACHE_DIR, CONVERSATION_CACHE_DIR, SEMANTIC_CACHE_TTL_SECONDS,
                              SEMANTIC_CACHE_SIMILARITY_THRESHOLD,
                              SEMANTIC_CACHE_REDIS_HOST, SEMANTIC_CACHE_REDIS_PORT, SEMANTIC_CACHE_REDIS_DB,
-                             MIN_LINKS_TO_TAKE, MAX_LINKS_TO_TAKE, SEARCH_MAX_RESULTS, RETRIEVAL_TOP_K)
+                             MIN_LINKS_TO_TAKE, MAX_LINKS_TO_TAKE,
+                             MIN_LINKS_TO_TAKE_DETAILED, MAX_LINKS_TO_TAKE_DETAILED,
+                             LLM_MAX_TOKENS, LLM_MAX_TOKENS_DETAILED,
+                             SEARCH_MAX_RESULTS, SEARCH_MAX_RESULTS_DETAILED, RETRIEVAL_TOP_K)
 from pipeline.instruction import system_instruction, user_instruction, synthesis_instruction
 from pipeline.optimized_tool_execution import optimized_tool_execution
 from pipeline.utils import format_sse, get_model_server
@@ -39,20 +42,79 @@ INTERNAL_LEAK_PATTERNS = [
     r"\btool(?:s)?\b.*\b(use|call|execute)\b",
 ]
 
+# Function/tool names that must never appear in user-facing output
+_LEAKED_TOOL_RE = re.compile(
+    r"(?:Functions?\.)?"
+    r"(?:web_search|fetch_full_text|query_conversation_cache|get_session_conversation_history|"
+    r"cleanQuery|transcribe_audio|generate_prompt_from_image|replyFromImage|image_search|"
+    r"youtubeMetadata|get_local_time|create_image|optimized_tool_execution|"
+    r"memoized_results|semantic_cache|cache_hit|cache_miss)"
+    r"(?::\d+)?",
+    re.IGNORECASE,
+)
+
+def _scrub_tool_names(text: str) -> str:
+    """Remove any leaked internal tool/function names from final output."""
+    if not text:
+        return text
+    return _LEAKED_TOOL_RE.sub("", text).strip()
+
 USER_FRIENDLY_MESSAGES = {
-    "processing": "<TASK>Processing your request</TASK>",
-    "analyzing": "<TASK>Analyzing your input</TASK>",
-    "searching": "<TASK>Searching for information</TASK>",
-    "fetching": "<TASK>Gathering relevant data</TASK>",
-    "synthesizing": "<TASK>Preparing your answer</TASK>",
-    "image_analysis": "<TASK>Analyzing provided content</TASK>",
-    "generating": "<TASK>Generating results</TASK>",
-    "finalizing": "<TASK>Finalizing response</TASK>",
-    "complete": "<TASK>Done</TASK>",
+    "processing": [
+        "<TASK>Processing your request</TASK>",
+        "<TASK>Working on it</TASK>",
+        "<TASK>Getting started</TASK>",
+        "<TASK>On it</TASK>",
+    ],
+    "analyzing": [
+        "<TASK>Analyzing your input</TASK>",
+        "<TASK>Understanding your query</TASK>",
+        "<TASK>Breaking down your question</TASK>",
+    ],
+    "searching": [
+        "<TASK>Searching for information</TASK>",
+        "<TASK>Looking things up</TASK>",
+        "<TASK>Searching the web</TASK>",
+        "<TASK>Finding relevant results</TASK>",
+    ],
+    "fetching": [
+        "<TASK>Gathering relevant data</TASK>",
+        "<TASK>Reading sources</TASK>",
+        "<TASK>Pulling in content</TASK>",
+        "<TASK>Collecting information</TASK>",
+    ],
+    "synthesizing": [
+        "<TASK>Preparing your answer</TASK>",
+        "<TASK>Putting it all together</TASK>",
+        "<TASK>Synthesizing findings</TASK>",
+    ],
+    "image_analysis": [
+        "<TASK>Analyzing provided content</TASK>",
+        "<TASK>Examining the image</TASK>",
+        "<TASK>Processing visual input</TASK>",
+    ],
+    "generating": [
+        "<TASK>Generating results</TASK>",
+        "<TASK>Creating your response</TASK>",
+        "<TASK>Building the answer</TASK>",
+    ],
+    "finalizing": [
+        "<TASK>Finalizing response</TASK>",
+        "<TASK>Wrapping up</TASK>",
+        "<TASK>Almost there</TASK>",
+    ],
+    "complete": [
+        "<TASK>Done</TASK>",
+        "<TASK>All done</TASK>",
+        "<TASK>Complete</TASK>",
+    ],
 }
 
 def get_user_message(operation: str) -> str:
-    return USER_FRIENDLY_MESSAGES.get(operation, "<TASK>Processing</TASK>")
+    variants = USER_FRIENDLY_MESSAGES.get(operation)
+    if not variants:
+        return "<TASK>Processing</TASK>"
+    return random.choice(variants)
 
 
 def _decompose_query(query: str) -> list[str]:
@@ -127,6 +189,18 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
     original_user_query = user_query or ""
     image_only_mode = bool(user_image and not original_user_query.strip())
+
+    # Detect if user wants a detailed/comprehensive response
+    _detail_keywords = re.compile(
+        r"\b(detail(?:ed|s)?|comprehensive|in[- ]?depth|thorough|extensive|elaborate|full|complete|everything about|deep dive|lengthy|long)\b",
+        re.IGNORECASE,
+    )
+    is_detailed_mode = bool(_detail_keywords.search(original_user_query))
+    active_min_links = MIN_LINKS_TO_TAKE_DETAILED if is_detailed_mode else MIN_LINKS_TO_TAKE
+    active_max_links = MAX_LINKS_TO_TAKE_DETAILED if is_detailed_mode else MAX_LINKS_TO_TAKE
+    active_max_tokens = LLM_MAX_TOKENS_DETAILED if is_detailed_mode else LLM_MAX_TOKENS
+    if is_detailed_mode:
+        logger.info(f"[Pipeline] Detailed mode ON: links={active_min_links}-{active_max_links}, max_tokens={active_max_tokens}")
 
     initial_event = emit_event("INFO", get_user_message("processing"))
     if initial_event:
@@ -327,11 +401,11 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             {
                 "role": "system",
                 "name": "elixposearch-agent-system",
-                "content": system_instruction(rag_context, current_utc_time)
+                "content": system_instruction(rag_context, current_utc_time, is_detailed=is_detailed_mode)
             },
             {
                 "role": "user",
-                "content": user_instruction(user_query, user_image)
+                "content": user_instruction(user_query, user_image, is_detailed=is_detailed_mode)
             }
         ]
 
@@ -360,7 +434,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 "tools": tools,
                 "tool_choice": "auto",
                 "seed": random.randint(1000, 9999),
-                "max_tokens": 2000,
+                "max_tokens": active_max_tokens,
             }
 
             try:
@@ -448,17 +522,17 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 else:
                     other_calls.append(tool_call)
             
-            if web_search_calls and len(fetch_calls) < MIN_LINKS_TO_TAKE:
-                urls_needed = MIN_LINKS_TO_TAKE - len(fetch_calls)
-                logger.info(f"[URL-LIMITS] Web search detected but only {len(fetch_calls)} URLs to fetch. Need {urls_needed} more to meet minimum of {MIN_LINKS_TO_TAKE}")
+            if web_search_calls and len(fetch_calls) < active_min_links:
+                urls_needed = active_min_links - len(fetch_calls)
+                logger.info(f"[URL-LIMITS] Web search detected but only {len(fetch_calls)} URLs to fetch. Need {urls_needed} more to meet minimum of {active_min_links}")
                 if event_id:
                     yield format_sse("INFO", get_user_message("fetching"))
-            
-            if len(fetch_calls) > MAX_LINKS_TO_TAKE:
-                logger.info(f"[URL-LIMITS] Capping fetch_calls from {len(fetch_calls)} to {MAX_LINKS_TO_TAKE} (MAX_LINKS_TO_TAKE)")
-                fetch_calls = fetch_calls[:MAX_LINKS_TO_TAKE]
-            
-            logger.info(f"[URL-LIMITS] Final URL fetch plan: {len(fetch_calls)} URLs (min={MIN_LINKS_TO_TAKE}, max={MAX_LINKS_TO_TAKE})")
+
+            if len(fetch_calls) > active_max_links:
+                logger.info(f"[URL-LIMITS] Capping fetch_calls from {len(fetch_calls)} to {active_max_links}")
+                fetch_calls = fetch_calls[:active_max_links]
+
+            logger.info(f"[URL-LIMITS] Final URL fetch plan: {len(fetch_calls)} URLs (min={active_min_links}, max={active_max_links})")
             
             async def execute_tool_async(idx, tool_call, is_web_search=False):
                 function_name = tool_call["function"]["name"]
@@ -666,7 +740,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             logger.info("[SYNTHESIS] Starting synthesis of gathered information")
             synthesis_prompt = {
                 "role": "user",
-                "content": synthesis_instruction(user_query, image_context=image_context_provided)
+                "content": synthesis_instruction(user_query, image_context=image_context_provided, is_detailed=is_detailed_mode)
             }
             
             original_msg_count = len(messages)
@@ -681,7 +755,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 "model": MODEL,
                 "messages": messages,
                 "seed": random.randint(1000, 9999),
-                "max_tokens": 2500,
+                "max_tokens": active_max_tokens,
                 "stream": False,
             }
 
@@ -756,6 +830,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
         if final_message_content:
             final_message_content = await sanitize_final_response(final_message_content, user_query, collected_sources)
+            final_message_content = _scrub_tool_names(final_message_content)
             logger.info(f"Preparing optimized final response")
             logger.info(f"[FINAL] final_message_content starts with: {final_message_content[:LOG_MESSAGE_PREVIEW_TRUNCATE] if final_message_content else 'None'}")
             logger.info(f"[FINAL] final_message_content starts with: {final_message_content[:LOG_MESSAGE_PREVIEW_TRUNCATE] if final_message_content else 'None'}")
