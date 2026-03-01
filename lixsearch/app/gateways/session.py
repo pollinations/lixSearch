@@ -9,8 +9,6 @@ from app.utils import validate_session_id
 
 logger = logging.getLogger("lixsearch-api")
 
-_INVALID_SID = (jsonify({"error": "Invalid session_id"}), 400)
-
 
 async def create_session():
     try:
