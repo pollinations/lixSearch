@@ -16,7 +16,8 @@ from pipeline.config import (POLLINATIONS_ENDPOINT, LLM_MODEL,
                              CACHE_SIMILARITY_THRESHOLD, CACHE_COMPRESSION_METHOD,
                              CACHE_EMBEDDING_MODEL,
                              SEMANTIC_CACHE_DIR, CONVERSATION_CACHE_DIR, SEMANTIC_CACHE_TTL_SECONDS,
-                             SEMANTIC_CACHE_SIMILARITY_THRESHOLD, REDIS_URL,
+                             SEMANTIC_CACHE_SIMILARITY_THRESHOLD,
+                             SEMANTIC_CACHE_REDIS_HOST, SEMANTIC_CACHE_REDIS_PORT, SEMANTIC_CACHE_REDIS_DB,
                              MIN_LINKS_TO_TAKE, MAX_LINKS_TO_TAKE, SEARCH_MAX_RESULTS, RETRIEVAL_TOP_K)
 from pipeline.instruction import system_instruction, user_instruction, synthesis_instruction
 from pipeline.optimized_tool_execution import optimized_tool_execution
@@ -130,6 +131,8 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
     initial_event = emit_event("INFO", get_user_message("processing"))
     if initial_event:
         yield initial_event
+    semantic_cache = None
+    memoized_results = {}
     try:
         current_utc_time = datetime.now(timezone.utc)
         headers = {"Content-Type": "application/json",
@@ -254,26 +257,13 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 logger.info(f"[Pipeline] Loaded conversation cache from disk (session: {request_id})")
         
 
-        redis_host = "localhost"
-        redis_port = 6379
-        redis_db = 0
-        if REDIS_URL:
-            try:
-                url_parts = REDIS_URL.replace("redis://", "").split("/")
-                host_port = url_parts[0].split(":")
-                redis_host = host_port[0]
-                redis_port = int(host_port[1]) if len(host_port) > 1 else 6379
-                redis_db = int(url_parts[1]) if len(url_parts) > 1 else 0
-            except Exception as e:
-                logger.warning(f"[Pipeline] Failed to parse REDIS_URL, using defaults: {e}")
-        
         semantic_cache = SemanticCache(
             session_id=request_id or "pipeline",
-            ttl_seconds=SEMANTIC_CACHE_TTL_SECONDS, 
+            ttl_seconds=SEMANTIC_CACHE_TTL_SECONDS,
             similarity_threshold=SEMANTIC_CACHE_SIMILARITY_THRESHOLD,
-            redis_host=redis_host,
-            redis_port=redis_port,
-            redis_db=redis_db
+            redis_host=SEMANTIC_CACHE_REDIS_HOST,
+            redis_port=SEMANTIC_CACHE_REDIS_PORT,
+            redis_db=SEMANTIC_CACHE_REDIS_DB
         )
         if request_id:
             semantic_cache.load_for_request(request_id)
@@ -950,7 +940,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             except Exception as e:
                 logger.warning(f"[Pipeline] Failed to save response to SessionContextWindow: {e}")
         
-        if request_id:
+        if request_id and semantic_cache is not None:
             semantic_cache.save_for_request(request_id)
             logger.info(f"[Pipeline] Saved persistent cache for request {request_id}")
             
