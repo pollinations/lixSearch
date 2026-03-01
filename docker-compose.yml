@@ -27,14 +27,11 @@ services:
 
   # Chroma Vector Database Server
   chroma-server:
-    image: chromadb/chroma:0.6.3
+    image: chromadb/chroma:1.5.2
     container_name: lixsearch-chroma
-    command: ["--host", "0.0.0.0", "--port", "9001"]
+    command: ["run", "--host", "0.0.0.0", "--port", "9001", "--path", "/chroma_data"]
     environment:
-      - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/chroma_data
       - ANONYMIZED_TELEMETRY=FALSE
-      - CHROMA_LOG_LEVEL=INFO
     volumes:
       - embeddings-data:/chroma_data
     networks:
@@ -43,10 +40,10 @@ services:
       - "9001"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9001/api/v1/heartbeat"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/9001'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
       start_period: 30s
     logging:
       driver: "json-file"

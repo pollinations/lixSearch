@@ -46,18 +46,23 @@ class VectorStore:
         self.chunk_count = 0
         self.lock = threading.RLock()
         self.metadata_path = os.path.join(embeddings_dir, "metadata.json")
-        
+
         # HTTP Client connection pooling
         self._http_session = None
         self._connection_retries = 0
         self._max_connection_retries = 3
-        
-        self._initialize_chroma_client()
-        self._load_from_disk()
-        
+        self._chroma_ready = False
+
+        try:
+            self._initialize_chroma_client()
+            self._load_from_disk()
+            self._chroma_ready = True
+        except Exception as e:
+            logger.warning(f"[VectorStore] Chroma unavailable at startup, will retry lazily: {e}")
+
         self._initialized = True
         logger.info(f"[VectorStore] Initialized with {self.chunk_count} chunks on {self.device} "
-                   f"(HTTP client pooling enabled)")
+                   f"(chroma_ready={self._chroma_ready})")
     
     
     @staticmethod
@@ -136,7 +141,24 @@ class VectorStore:
             logger.error(f"[VectorStore] Failed to initialize Chroma: {e}")
             raise
     
+    def _ensure_chroma(self) -> bool:
+        """Lazily connect to Chroma if not yet ready. Returns True if ready."""
+        if self._chroma_ready:
+            return True
+        try:
+            self._initialize_chroma_client()
+            self._load_from_disk()
+            self._chroma_ready = True
+            logger.info("[VectorStore] Chroma connected on lazy retry")
+            return True
+        except Exception as e:
+            logger.debug(f"[VectorStore] Chroma still unavailable: {e}")
+            return False
+
     def add_chunks(self, chunks: List[Dict]) -> None:
+        if not self._ensure_chroma():
+            logger.warning("[VectorStore] Skipping add_chunks — Chroma not available")
+            return
         with self.lock:
             ids = []
             embeddings = []
@@ -183,6 +205,9 @@ class VectorStore:
                         raise
     
     def search(self, query_embedding: np.ndarray, top_k: int = 5) -> List[Dict]:
+        if not self._ensure_chroma():
+            logger.warning("[VectorStore] Skipping search — Chroma not available")
+            return []
         with self.lock:
             if isinstance(query_embedding, torch.Tensor):
                 query_embedding = query_embedding.cpu().numpy().astype(np.float32)
@@ -276,6 +301,9 @@ class VectorStore:
             return stats
     
     def search_with_cache_check(self, query_embedding: np.ndarray, top_k: int = 5, cache_similarity_threshold: float = 0.85) -> Dict:
+        if not self._ensure_chroma():
+            logger.warning("[VectorStore] Skipping search_with_cache_check — Chroma not available")
+            return {'results': [], 'cache_hit': False, 'avg_similarity': 0.0, 'best_match_similarity': 0.0}
         with self.lock:
             if isinstance(query_embedding, torch.Tensor):
                 query_embedding = query_embedding.cpu().numpy().astype(np.float32)

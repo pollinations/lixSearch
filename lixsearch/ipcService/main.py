@@ -27,7 +27,22 @@ if __name__ == "__main__":
 
     ModelManager.register("CoreEmbeddingService", CoreEmbeddingService)
     ModelManager.register("accessSearchAgents", accessSearchAgents)
-    core_service = CoreEmbeddingService()
+
+    max_init_retries = 5
+    core_service = None
+    for attempt in range(1, max_init_retries + 1):
+        try:
+            core_service = CoreEmbeddingService()
+            break
+        except Exception as e:
+            logger.error(f"[MAIN] CoreEmbeddingService init attempt {attempt}/{max_init_retries} failed: {e}")
+            if attempt < max_init_retries:
+                import time as _time
+                _time.sleep(5)
+            else:
+                logger.critical("[MAIN] All init attempts failed — starting without core service is not possible")
+                raise
+
     search_agents = accessSearchAgents()
     manager = ModelManager(address=(IPC_HOST, IPC_PORT), authkey=IPC_AUTHKEY)
     server = manager.get_server()
