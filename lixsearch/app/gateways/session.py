@@ -5,8 +5,11 @@ from quart import request, jsonify
 from sessions.main import get_session_manager
 from ragService.main import get_retrieval_system
 from pipeline.config import X_REQ_ID_SLICE_SIZE
+from app.utils import validate_session_id
 
 logger = logging.getLogger("lixsearch-api")
+
+_INVALID_SID = (jsonify({"error": "Invalid session_id"}), 400)
 
 
 async def create_session():
@@ -30,10 +33,13 @@ async def create_session():
 
     except Exception as e:
         logger.error(f"[API] Session creation error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error"}), 500
 
 
 async def get_session_info(session_id: str):
+    if not validate_session_id(session_id):
+        return jsonify({"error": "Invalid session_id"}), 400
+
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
 
     try:
@@ -60,10 +66,13 @@ async def get_session_info(session_id: str):
 
     except Exception as e:
         logger.error(f"[{request_id}] get_session_info session={session_id} error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error"}), 500
 
 
 async def get_session_kg(session_id: str):
+    if not validate_session_id(session_id):
+        return jsonify({"error": "Invalid session_id"}), 400
+
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
 
     try:
@@ -83,10 +92,13 @@ async def get_session_kg(session_id: str):
 
     except Exception as e:
         logger.error(f"[{request_id}] KG fetch error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error"}), 500
 
 
 async def query_session_kg(session_id: str):
+    if not validate_session_id(session_id):
+        return jsonify({"error": "Invalid session_id"}), 400
+
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
 
     try:
@@ -111,10 +123,13 @@ async def query_session_kg(session_id: str):
 
     except Exception as e:
         logger.error(f"[{request_id}] KG query error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error"}), 500
 
 
 async def get_entity_evidence(session_id: str, entity: str):
+    if not validate_session_id(session_id):
+        return jsonify({"error": "Invalid session_id"}), 400
+
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
 
     try:
@@ -135,10 +150,13 @@ async def get_entity_evidence(session_id: str, entity: str):
 
     except Exception as e:
         logger.error(f"[{request_id}] Entity evidence error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error"}), 500
 
 
 async def get_session_summary(session_id: str):
+    if not validate_session_id(session_id):
+        return jsonify({"error": "Invalid session_id"}), 400
+
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
 
     try:
@@ -159,10 +177,13 @@ async def get_session_summary(session_id: str):
 
     except Exception as e:
         logger.error(f"[{request_id}] Summary error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error"}), 500
 
 
 async def delete_session(session_id: str):
+    if not validate_session_id(session_id):
+        return jsonify({"error": "Invalid session_id"}), 400
+
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
 
     try:
@@ -180,4 +201,4 @@ async def delete_session(session_id: str):
 
     except Exception as e:
         logger.error(f"[{request_id}] Session deletion error: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Internal server error"}), 500

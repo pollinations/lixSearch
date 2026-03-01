@@ -112,7 +112,6 @@ async def search(pipeline_initialized: bool):
                     'Cache-Control': 'no-cache',
                     'Connection': 'keep-alive',
                     'Content-Type': 'text/event-stream',
-                    'Access-Control-Allow-Origin': '*'
                 }
             )
         else:
@@ -138,7 +137,6 @@ async def search(pipeline_initialized: bool):
                 headers={
                     'Cache-Control': 'no-cache',
                     'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
                 }
             )
 
@@ -152,6 +150,7 @@ async def search(pipeline_initialized: bool):
                 session_id = data.get("session_id", "")
         except:
             pass
-        
+
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
         logger.error(f"[{request_id}] session={session_id} Search error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500

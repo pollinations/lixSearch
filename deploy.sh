@@ -22,6 +22,12 @@ NC='\033[0m'
 COMPOSE_FILE="docker-compose.yml"
 CONTAINER_COUNT=${2:-1}
 
+# Validate numeric args to prevent injection
+if ! [[ "$CONTAINER_COUNT" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}✗${NC} Container count must be a number"
+    exit 1
+fi
+
 info() {
     echo -e "${BLUE}ℹ${NC} $1"
 }
@@ -95,6 +101,10 @@ build_image() {
 
 scale_containers() {
     local count=$1
+    if ! [[ "$count" =~ ^[0-9]+$ ]]; then
+        error "Scale count must be a number"
+        exit 1
+    fi
     check_docker
 
     info "Scaling to $count container(s)..."
