@@ -39,6 +39,7 @@ from pipeline.config import (
     SESSION_DISK_TTL_DAYS,
     SESSION_LRU_EVICT_AFTER_MINUTES,
     HYBRID_HOT_WINDOW_SIZE,
+    REDIS_PASSWORD,
 )
 
 try:
@@ -199,6 +200,7 @@ class HybridConversationCache:
                     host=redis_host,
                     port=redis_port,
                     db=redis_db,
+                    password=REDIS_PASSWORD,
                     decode_responses=False,
                     socket_connect_timeout=REDIS_SOCKET_CONNECT_TIMEOUT,
                     socket_keepalive=REDIS_SOCKET_KEEPALIVE,

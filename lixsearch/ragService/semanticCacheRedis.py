@@ -26,6 +26,7 @@ from pipeline.config import (
     REDIS_SOCKET_CONNECT_TIMEOUT,
     REDIS_SOCKET_KEEPALIVE,
     REDIS_KEY_PREFIX,
+    REDIS_PASSWORD,
 )
 
 try:
@@ -66,6 +67,7 @@ class URLEmbeddingCache:
                 host=redis_host,
                 port=redis_port,
                 db=redis_db,
+                password=REDIS_PASSWORD,
                 decode_responses=False,
                 socket_connect_timeout=REDIS_SOCKET_CONNECT_TIMEOUT,
                 socket_keepalive=REDIS_SOCKET_KEEPALIVE
@@ -255,6 +257,7 @@ class SemanticCacheRedis:
                 host=redis_host,
                 port=redis_port,
                 db=redis_db,
+                password=REDIS_PASSWORD,
                 decode_responses=False,
                 socket_connect_timeout=REDIS_SOCKET_CONNECT_TIMEOUT,
                 socket_keepalive=REDIS_SOCKET_KEEPALIVE
@@ -286,7 +289,7 @@ class SemanticCacheRedis:
                     logger.debug(f"[semanticCacheRedis.SemanticCacheRedis] session={self.session_id} MISS: {url}")
                     return None
                 
-                cache_entry = pickle.loads(cached_data)
+                cache_entry = json.loads(cached_data)
                 best_match = None
                 best_similarity = 0.0
                 
@@ -323,7 +326,7 @@ class SemanticCacheRedis:
                 
                 cached_data = self.redis_client.get(redis_key)
                 if cached_data:
-                    cache_entry = pickle.loads(cached_data)
+                    cache_entry = json.loads(cached_data)
                 else:
                     cache_entry = {"items": []}
                 
@@ -339,7 +342,7 @@ class SemanticCacheRedis:
                 self.redis_client.setex(
                     redis_key,
                     self.ttl_seconds,
-                    pickle.dumps(cache_entry)
+                    json.dumps(cache_entry).encode("utf-8")
                 )
                 logger.debug(f"[semanticCacheRedis.SemanticCacheRedis] session={self.session_id} STORED: {url} ({len(cache_entry['items'])}/{self.max_items_per_url})")
             except Exception as e:
