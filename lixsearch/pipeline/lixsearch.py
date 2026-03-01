@@ -37,6 +37,7 @@ from pipeline.config import (
     TOPIC_DECOMPOSITION_MAX_PARTS,
     TOPIC_DECOMPOSITION_TIMEOUT,
     FETCH_MIN_USEFUL_CHARS,
+    LOG_MESSAGE_QUERY_TRUNCATE,
 )
 
 from pipeline.instruction import system_instruction
