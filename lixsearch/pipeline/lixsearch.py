@@ -573,6 +573,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                             else:
                                 m["content"] = "Processing your request..."
 
+            iteration_event = emit_event("INFO", get_user_message("searching"))
+            if iteration_event:
+                yield iteration_event
             if len(messages) > 8:
                 trimmed = messages[:2] + messages[-6:]
                 logger.info(f"[OPTIMIZATION] Trimmed messages from {len(messages)} to {len(trimmed)}")
@@ -712,6 +715,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 }
             
             if web_search_calls:
+                emit_sse = emit_event("INFO", get_user_message("fetching"))
+                if emit_sse:
+                    yield emit_sse
                 web_search_results = await asyncio.gather(
                     *[execute_tool_async(idx, tc, True) for idx, tc in enumerate(web_search_calls)],
                     return_exceptions=True
@@ -928,6 +934,8 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
         if not final_message_content and current_iteration >= max_iterations:
             logger.info(f"[SYNTHESIS CONDITION MET] final_message_content={bool(final_message_content)}, current_iteration={current_iteration}, max_iterations={max_iterations}")
+            if event_id:
+                yield format_sse("INFO", get_user_message("synthesizing"))
             logger.info("[SYNTHESIS] Re-retrieving context from vector store after ingestion...")
             try:
                 from searching.main import retrieve_from_vector_store
