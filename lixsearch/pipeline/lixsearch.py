@@ -39,6 +39,7 @@ from pipeline.config import (
     FETCH_MIN_USEFUL_CHARS,
     LOG_MESSAGE_QUERY_TRUNCATE,
     LOG_MESSAGE_PREVIEW_TRUNCATE,
+    SEARCH_DEPTH_BOUNDS,
 )
 
 from pipeline.instruction import system_instruction
@@ -572,9 +573,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                             else:
                                 m["content"] = "Processing your request..."
 
-            iteration_event = emit_event("INFO", get_user_message("searching"))
-            if iteration_event:
-                yield iteration_event
             if len(messages) > 8:
                 trimmed = messages[:2] + messages[-6:]
                 logger.info(f"[OPTIMIZATION] Trimmed messages from {len(messages)} to {len(trimmed)}")
@@ -604,8 +602,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 response_data = response.json()
             except asyncio.TimeoutError:
                 logger.error(f"API timeout at iteration {current_iteration}")
-                if event_id:
-                    yield format_sse("INFO", get_user_message("processing"))
                 break
             except requests.exceptions.HTTPError as http_err:
                 print(f"\n{'='*80}")
@@ -616,8 +612,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 print(f"{'='*80}\n")
                 logger.error(f"Pollinations API HTTP error at iteration {current_iteration}: {http_err}")
                 logger.error(f"Response content: {http_err.response.text}")
-                if event_id:
-                    yield format_sse("INFO", get_user_message("processing"))
                 break
             except requests.exceptions.RequestException as e:
                 print(f"\n{'='*80}")
@@ -628,8 +622,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     print(f"[REQUEST ERROR] Response: {e.response.text}")
                 print(f"{'='*80}\n")
                 logger.error(f"Pollinations API request failed at iteration {current_iteration}: {e}")
-                if event_id:
-                    yield format_sse("INFO", get_user_message("processing"))
                 break
             except Exception as e:
                 print(f"\n{'='*80}")
@@ -637,8 +629,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 print(f"[UNEXPECTED ERROR] Message: {str(e)}")
                 print(f"{'='*80}\n")
                 logger.error(f"Unexpected API error at iteration {current_iteration}: {e}", exc_info=True)
-                if event_id:
-                    yield format_sse("INFO", get_user_message("processing"))
                 break
             assistant_message = response_data["choices"][0]["message"]
             
@@ -671,14 +661,23 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     fetch_calls.append(tool_call)
                 elif fn_name == "web_search":
                     web_search_calls.append(tool_call)
+                    try:
+                        _ws_args = json.loads(tool_call["function"]["arguments"])
+                        _depth = _ws_args.get("search_depth")
+                        if _depth and not is_detailed_mode:
+                            _bounds = SEARCH_DEPTH_BOUNDS.get(_depth)
+                            if _bounds:
+                                active_min_links = _bounds["min"]
+                                active_max_links = _bounds["max"]
+                                logger.info(f"[URL-LIMITS] search_depth='{_depth}' -> links={active_min_links}-{active_max_links}")
+                    except (json.JSONDecodeError, KeyError):
+                        pass
                 else:
                     other_calls.append(tool_call)
             
             if web_search_calls and len(fetch_calls) < active_min_links:
                 urls_needed = active_min_links - len(fetch_calls)
                 logger.info(f"[URL-LIMITS] Web search detected but only {len(fetch_calls)} URLs to fetch. Need {urls_needed} more to meet minimum of {active_min_links}")
-                if event_id:
-                    yield format_sse("INFO", get_user_message("fetching"))
 
             if len(fetch_calls) > active_max_links:
                 logger.info(f"[URL-LIMITS] Capping fetch_calls from {len(fetch_calls)} to {active_max_links}")
@@ -713,9 +712,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 }
             
             if web_search_calls:
-                emit_sse = emit_event("INFO", get_user_message("fetching"))
-                if emit_sse:
-                    yield emit_sse
                 web_search_results = await asyncio.gather(
                     *[execute_tool_async(idx, tc, True) for idx, tc in enumerate(web_search_calls)],
                     return_exceptions=True
@@ -735,9 +731,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 function_name = tool_call["function"]["name"]
                 function_args = json.loads(tool_call["function"]["arguments"])
                 logger.info(f"[Sequential Tool #{idx+1}] {function_name}")
-                if event_id:
-                    yield format_sse("INFO", get_user_message("processing"))
-                
+
                 tool_result_gen = optimized_tool_execution(function_name, function_args, memoized_results, emit_event)
                 if hasattr(tool_result_gen, '__aiter__'):
                     tool_result = None
@@ -768,10 +762,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 })
             
             tool_call_count += len(tool_calls)
-            
-            if event_id:
-                yield format_sse("INFO", get_user_message("processing"))
-            
+
             if fetch_calls:
                 logger.info(f"Executing {len(fetch_calls)} fetch_full_text calls in PARALLEL")
                 if event_id:
@@ -934,16 +925,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
             messages.extend(tool_outputs)
             logger.info(f"Completed iteration {current_iteration}. Messages: {len(messages)}, Total tools: {tool_call_count}")
-            if event_id:
-                yield format_sse("INFO", get_user_message("processing"))
-            
 
         if not final_message_content and current_iteration >= max_iterations:
             logger.info(f"[SYNTHESIS CONDITION MET] final_message_content={bool(final_message_content)}, current_iteration={current_iteration}, max_iterations={max_iterations}")
-            if event_id:
-                yield format_sse("INFO", get_user_message("synthesizing"))
-            
-            # RE-RETRIEVE from vector store AFTER ingesting all URLs
             logger.info("[SYNTHESIS] Re-retrieving context from vector store after ingestion...")
             try:
                 from searching.main import retrieve_from_vector_store

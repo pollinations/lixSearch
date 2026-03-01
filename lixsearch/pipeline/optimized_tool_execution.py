@@ -159,7 +159,10 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
         elif function_name == "web_search":
             start_time = time.time()
             search_query = function_args.get("query")
+            search_depth = function_args.get("search_depth", "standard")
             memoized_results["search_query"] = search_query
+            memoized_results["search_depth"] = search_depth
+            logger.info(f"[web_search] search_depth='{search_depth}' query='{search_query}'")
             web_event = emit_event_func("INFO", f"<TASK>Searching for '{search_query}'</TASK>")
             if web_event:
                 yield web_event
@@ -296,10 +299,7 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
         elif function_name == "fetch_full_text":
             url = function_args.get("url")
             logger.info(f"Fetching webpage content: {url[:60]}")
-            web_event = emit_event_func("INFO", f"<TASK>Reading {_display_url(url)}</TASK>")
-            if web_event:
-                yield web_event
-            
+
             from ragService.cacheCoordinator import CacheCoordinator
             from pipeline.queryDecomposition import QueryAnalyzer
 
