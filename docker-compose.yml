@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Redis - Caching & semantic cache layer
   redis:
@@ -165,6 +163,8 @@ services:
       - WORKER_TIMEOUT=120
       - WORKER_PORT=9002
       - WORKERS=10
+      - IPC_HOST=ipc-service
+      - IPC_PORT=9510
       - IPC_AUTHKEY=${IPC_AUTHKEY:-changeme_ipc_secret}
     volumes:
       - embedding-models:/app/models:ro
@@ -192,7 +192,7 @@ services:
       retries: 3
       start_period: 60s
     deploy:
-      replicas: 2
+      replicas: 3
       update_config:
         parallelism: 1
         delay: 30s
