@@ -35,7 +35,6 @@ services:
       - PERSIST_DIRECTORY=/chroma_data
       - ANONYMIZED_TELEMETRY=FALSE
       - CHROMA_LOG_LEVEL=INFO
-      - CHROMA_DB_IMPL=duckdb
     volumes:
       - embeddings-data:/chroma_data
     networks:
