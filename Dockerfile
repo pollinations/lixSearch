@@ -52,14 +52,12 @@ COPY tester /app/tester
 COPY entrypoint.sh /app/entrypoint.sh
 COPY version.cfg requirements.txt /app/
 
-RUN chmod +x /app/entrypoint.sh && \
-    mkdir -p /app/logs /app/cache && \
-    chown -R nobody:nogroup /app
-
 RUN useradd -m -u 1000 elixpo && \
+    chmod +x /app/entrypoint.sh && \
+    mkdir -p /app/logs /app/cache /app/data/cache/conversation /app/data/conversations /app/data/embeddings /app/tmp/cache && \
     chown -R elixpo:elixpo /app
 
-USER elixpo
+# entrypoint runs as root to fix volume permissions, then drops to elixpo
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=60s \
     CMD curl -f http://localhost:${WORKER_PORT:-9002}/api/health || exit 1
