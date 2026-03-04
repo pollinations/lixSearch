@@ -41,3 +41,18 @@ model Bookmark {
 
   @@index([clientId])
 }
+
+model DiscoverArticle {
+  id          String   @id @default(cuid())
+  category    String
+  title       String
+  excerpt     String   @db.Text
+  sourceUrl   String?
+  sourceTitle String?
+  imageUrl    String?
+  generatedAt DateTime @default(now())
+  dayKey      String
+
+  @@index([category, dayKey])
+  @@index([dayKey])
+}
