@@ -12,7 +12,7 @@ from sessions.main import get_session_manager
 from ragService.main import get_retrieval_system
 from chatEngine.main import initialize_chat_engine
 from commons.requestID import RequestIDMiddleware
-from app.gateways import health, search, session, chat, stats, websocket
+from app.gateways import health, search, session, chat, stats, websocket, surf, discover
 logger = logging.getLogger("lixsearch-api")
 
 
@@ -100,6 +100,15 @@ class lixSearch:
         self.app.route('/api/session/<session_id>/history', methods=['GET'])(chat.get_chat_history)
         self.app.route('/api/stats', methods=['GET'])(stats.get_stats)
         self.app.websocket('/ws/search')(websocket.websocket_search)
+
+        async def surf_wrapper():
+            return await surf.surf(self.pipeline_initialized)
+
+        async def discover_generate_wrapper():
+            return await discover.generate_discover(self.pipeline_initialized)
+
+        self.app.route('/api/surf', methods=['POST', 'GET'])(surf_wrapper)
+        self.app.route('/api/discover/generate', methods=['POST'])(discover_generate_wrapper)
     
     def _register_error_handlers(self):
         @self.app.errorhandler(404)
