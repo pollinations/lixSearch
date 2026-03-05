@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 
 function generateSessionId(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -11,18 +12,20 @@ function generateSessionId(): string {
   return result;
 }
 
-export function useSession() {
-  const [sessionId, setSessionId] = useState<string>('');
+export function useSession(initialSessionId?: string) {
+  const router = useRouter();
+  const [sessionId, setSessionId] = useState<string>(initialSessionId || '');
   const [clientId, setClientId] = useState<string>('');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    let stored = window.localStorage.getItem('elixpo_session_id');
-    if (!stored) {
-      stored = generateSessionId();
-      window.localStorage.setItem('elixpo_session_id', stored);
+
+    // Use URL-provided session ID or generate a new one
+    if (!sessionId) {
+      const id = generateSessionId();
+      setSessionId(id);
+      router.replace(`/c/${id}`);
     }
-    setSessionId(stored);
 
     let client = window.localStorage.getItem('elixpo_client_id');
     if (!client) {
@@ -33,12 +36,11 @@ export function useSession() {
   }, []);
 
   const newSession = useCallback(() => {
-    if (typeof window === 'undefined') return '';
     const id = generateSessionId();
-    window.localStorage.setItem('elixpo_session_id', id);
     setSessionId(id);
+    router.push(`/c/${id}`);
     return id;
-  }, []);
+  }, [router]);
 
   return { sessionId, clientId, newSession };
 }
