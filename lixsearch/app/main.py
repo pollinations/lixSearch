@@ -137,6 +137,14 @@ class lixSearch:
                     retrieval_system = get_retrieval_system()
                     initialize_chat_engine(session_manager, retrieval_system)
 
+                    # Pre-connect to IPC so first request doesn't pay the cost
+                    try:
+                        from ipcService.coreServiceManager import CoreServiceManager
+                        CoreServiceManager.get_instance()
+                        logger.info("[APP] IPC CoreServiceManager pre-connected")
+                    except Exception as e:
+                        logger.warning(f"[APP] IPC pre-connect failed (will retry on first request): {e}")
+
                     self.pipeline_initialized = True
                     logger.info("[APP] lixSearch initialized and ready")
                 except Exception as e:

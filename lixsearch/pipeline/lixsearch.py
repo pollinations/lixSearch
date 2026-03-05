@@ -536,6 +536,7 @@ async def _run_deep_search_pipeline(
         "generated_images": [],
     }
 
+    _embed_fn = core_service.embed_single_text if core_service else None
     conversation_cache = ConversationCacheManager(
         window_size=CACHE_WINDOW_SIZE,
         max_entries=CACHE_MAX_ENTRIES,
@@ -544,6 +545,7 @@ async def _run_deep_search_pipeline(
         embedding_model=CACHE_EMBEDDING_MODEL,
         similarity_threshold=CACHE_SIMILARITY_THRESHOLD,
         cache_dir=CONVERSATION_CACHE_DIR,
+        embed_fn=_embed_fn,
     )
     memoized_results["conversation_cache"] = conversation_cache
     if session_id:
@@ -1047,6 +1049,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 logger.warning(f"[Pipeline] Failed to initialize SessionContextWindow: {e}")
                 session_context = None
         
+        _embed_fn = core_service.embed_single_text if core_service else None
         conversation_cache = ConversationCacheManager(
             window_size=CACHE_WINDOW_SIZE,
             max_entries=CACHE_MAX_ENTRIES,
@@ -1054,10 +1057,11 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             compression_method=CACHE_COMPRESSION_METHOD,
             embedding_model=CACHE_EMBEDDING_MODEL,
             similarity_threshold=CACHE_SIMILARITY_THRESHOLD,
-            cache_dir=CONVERSATION_CACHE_DIR
+            cache_dir=CONVERSATION_CACHE_DIR,
+            embed_fn=_embed_fn,
         )
         memoized_results["conversation_cache"] = conversation_cache
-        logger.info(f"[Pipeline] Initialized Conversation Cache Manager (window_size={CACHE_WINDOW_SIZE}, max_entries={CACHE_MAX_ENTRIES})")
+        logger.info(f"[Pipeline] Initialized Conversation Cache Manager (window_size={CACHE_WINDOW_SIZE}, max_entries={CACHE_MAX_ENTRIES}, embed={'ipc' if _embed_fn else 'local'})")
         
         if session_id:
             if conversation_cache.load_from_disk(session_id=session_id):
