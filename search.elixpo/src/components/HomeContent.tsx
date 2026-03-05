@@ -8,8 +8,12 @@ import SearchResults from '@/components/search/SearchResults';
 import { useSSESearch } from '@/hooks/useSSESearch';
 import { useSession } from '@/hooks/useSession';
 
-export default function HomeContent() {
-  const { sessionId, newSession } = useSession();
+interface HomeContentProps {
+  initialSessionId?: string;
+}
+
+export default function HomeContent({ initialSessionId }: HomeContentProps) {
+  const { sessionId, newSession } = useSession(initialSessionId);
   const { messages, isSearching, statusText, sendQuery, clearMessages } = useSSESearch();
 
   const handleSend = useCallback(
