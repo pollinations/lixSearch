@@ -1167,7 +1167,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                             else:
                                 m["content"] = "Processing your request..."
 
-            iteration_event = emit_event("INFO", get_user_message("searching"))
+            iteration_event = emit_event("INFO", get_user_message("analyzing"))
             if iteration_event:
                 yield iteration_event
             if len(messages) > 8:
@@ -1243,6 +1243,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             tool_calls = assistant_message.get("tool_calls")
             logger.info(f"Tool calls suggested by model: {len(tool_calls) if tool_calls else 0} tools")
             if not tool_calls:
+                direct_event = emit_event("INFO", get_user_message("generating"))
+                if direct_event:
+                    yield direct_event
                 raw_content = assistant_message.get("content", "")
                 is_reasoning_leak = _looks_like_internal_reasoning(raw_content)
                 is_placeholder = raw_content.strip() in (
