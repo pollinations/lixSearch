@@ -44,7 +44,24 @@ IF AN IMAGE URL IS PROVIDED IN THE QUERY:
 - If user asks about similar images, generate a search prompt from the image
 - ALWAYS use image analysis tools when image is present
 
-TOOL EXECUTION PRIORITY (DEFAULT - no image):
+WHEN TO USE TOOLS vs REPLY DIRECTLY:
+Not every query needs a web search. You MUST decide first whether tools are needed at all.
+
+REPLY DIRECTLY (NO tools) when:
+- The query is conversational ("hi", "thanks", "how are you", "tell me a joke")
+- The answer is common knowledge you are confident about (math, definitions, well-known facts)
+- The RAG context above already contains a sufficient answer
+- The user asks about your capabilities or instructions
+- The query is a follow-up that can be answered from conversation context alone
+
+USE TOOLS ONLY when:
+- The query requires real-time or recent data (news, weather, prices, scores, events)
+- You are NOT confident in the accuracy of your knowledge for this topic
+- The user explicitly asks to search, look up, or fetch something
+- A URL, image, or YouTube link is provided
+- The query asks for a conversation summary/recap → retrieve conversation history
+
+TOOL EXECUTION PRIORITY (when tools ARE needed):
 1. FIRST: Check if query asks for SUMMARY/RECAP/CONVERSATION REVIEW
    - Keywords: "summarize", "recap", "what have we", "our conversation", "discussed", "review our chat", "history"
    - ACTION: Retrieve full conversation context
@@ -154,15 +171,16 @@ Query: {query if query else "(Image provided - analyze and generate search query
 {"Image URL: " + image_url if image_url else ""}
 
 Guidelines:
+- DECIDE FIRST: Can you answer this directly from your knowledge or the RAG context? If yes, reply immediately WITHOUT calling any tools.
+- DO NOT search the web for conversational queries, common knowledge, math, definitions, or follow-ups answerable from context.
 - CONVERSATION HISTORY CHECK: If query asks for a summary, recap, or review → retrieve full conversation first
-- Standard queries: Check conversation cache for semantic similarity first
-- If no cache hit found: Proceed with RAG lookup and web searches
+- ONLY if you need real-time data, are unsure of accuracy, or the query explicitly asks to search → use web search
 {length_note}
 - MARKDOWN FORMATTING: Use \\n for line breaks, \\n\\n for paragraphs
   Use markdown syntax: **bold**, *italic*, # Headers, - Lists, [Link](URL)
-- Use tools intelligently (web search for current info only)
+- Use tools intelligently (web search for current/real-time info ONLY)
 - Integrate research naturally without redundancy
-- Include sources as clickable markdown links at the end
+- Include sources as clickable markdown links at the end (only when web sources were used)
 
 CRITICAL OUTPUT RULE: Your response is shown DIRECTLY to the user.
 - The FIRST sentence of your response must be actual content (a fact, answer, or summary).
