@@ -22,41 +22,51 @@ except ImportError:
 
 
 class ConversationCacheManager:
-    def __init__(self, 
+    def __init__(self,
                  window_size: int = CACHE_WINDOW_SIZE,
                  max_entries: int = CACHE_MAX_ENTRIES,
                  ttl_seconds: int = CACHE_TTL_SECONDS,
                  compression_method: str = CACHE_COMPRESSION_METHOD,
                  embedding_model: str = CACHE_EMBEDDING_MODEL,
                  similarity_threshold: float = CACHE_SIMILARITY_THRESHOLD,
-                 cache_dir: str = CONVERSATION_CACHE_DIR):
-        
+                 cache_dir: str = CONVERSATION_CACHE_DIR,
+                 embed_fn=None):
+
         self.window_size = window_size
         self.max_entries = max_entries
         self.ttl_seconds = ttl_seconds
         self.compression_method = compression_method
         self.similarity_threshold = similarity_threshold
         self.cache_dir = cache_dir
-        
+        self._embed_fn = embed_fn
+
         os.makedirs(self.cache_dir, exist_ok=True)
 
         self._embedding_model_name = embedding_model
-        self.embedding_model = None  # loaded lazily on first use
-        
+        self.embedding_model = None  # loaded lazily only if no embed_fn
+
         self.cache_window: deque = deque(maxlen=window_size)
         self.full_cache: Dict[str, dict] = {}
         self.embeddings_cache: Dict[str, np.ndarray] = {}
         self.latest_response: Optional[str] = None
 
+    def _embed_text(self, text: str):
+        """Embed text using external IPC function or local fallback."""
+        if self._embed_fn is not None:
+            return np.array(self._embed_fn(text), dtype=np.float32)
+        if self._load_embedding_model():
+            return self.embedding_model.encode(text, convert_to_numpy=True)
+        return None
+
     def _load_embedding_model(self) -> bool:
-        """Load embedding model lazily on first use. Returns True if available."""
+        """Load local embedding model as fallback (only if no embed_fn)."""
         if self.embedding_model is not None:
             return True
         if not EMBEDDING_AVAILABLE:
             return False
         try:
             self.embedding_model = SentenceTransformer(self._embedding_model_name)
-            logger.info(f"[ConversationCache] Loaded embedding model: {self._embedding_model_name}")
+            logger.info(f"[ConversationCache] Loaded local embedding model: {self._embedding_model_name}")
             return True
         except Exception as e:
             logger.warning(f"[ConversationCache] Failed to load embedding model: {e}")
@@ -80,9 +90,11 @@ class ConversationCacheManager:
         
         if query_embedding is not None:
             self.embeddings_cache[entry_id] = np.array(query_embedding, dtype=np.float32)
-        elif self._load_embedding_model():
+        else:
             try:
-                self.embeddings_cache[entry_id] = self.embedding_model.encode(query, convert_to_numpy=True)
+                emb = self._embed_text(query)
+                if emb is not None:
+                    self.embeddings_cache[entry_id] = emb
             except Exception as e:
                 logger.warning(f"[ConversationCache] Failed to generate embedding: {e}")
         
@@ -122,11 +134,11 @@ class ConversationCacheManager:
         try:
             if query_embedding is not None:
                 query_embedding = np.array(query_embedding, dtype=np.float32)
-            elif self._load_embedding_model():
-                query_embedding = self.embedding_model.encode(query, convert_to_numpy=True)
             else:
-                logger.warning("[ConversationCache] No embedding model available for cache query")
-                return None, 0.0
+                query_embedding = self._embed_text(query)
+                if query_embedding is None:
+                    logger.warning("[ConversationCache] No embedding available for cache query")
+                    return None, 0.0
             
             best_match = None
             best_score = 0.0
@@ -264,16 +276,16 @@ class ConversationCacheManager:
             loaded_entries = serializable_cache.get("cache_entries", [])
             
             # Reload embeddings for cached entries
-            if self._load_embedding_model():
-                for entry in loaded_entries:
-                    if not self._is_expired(entry):
-                        try:
-                            query = entry.get("query", "")
-                            embedding = self.embedding_model.encode(query, convert_to_numpy=True)
+            for entry in loaded_entries:
+                if not self._is_expired(entry):
+                    try:
+                        query = entry.get("query", "")
+                        embedding = self._embed_text(query)
+                        if embedding is not None:
                             self.embeddings_cache[entry.get("id")] = embedding
-                            self.cache_window.append(entry)
-                        except Exception as e:
-                            logger.warning(f"[ConversationCache] Failed to reload embedding: {e}")
+                        self.cache_window.append(entry)
+                    except Exception as e:
+                        logger.warning(f"[ConversationCache] Failed to reload embedding: {e}")
             
             logger.info(f"[ConversationCache] Loaded {len(self.cache_window)} entries from disk (session: {session_id})")
             return True
