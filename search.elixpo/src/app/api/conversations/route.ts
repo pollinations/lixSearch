@@ -1,8 +1,14 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateXID } from '@/lib/api';
 
 export async function POST(req: NextRequest) {
   try {
+    const xid = req.headers.get('x-xid');
+    if (!validateXID(xid)) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await req.json();
     const { sessionId, query, content, sources, images } = body;
 
@@ -55,6 +61,11 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    const xid = req.headers.get('x-xid');
+    if (!validateXID(xid)) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const clientId = req.nextUrl.searchParams.get('clientId') || 'anonymous';
     const limit = parseInt(req.nextUrl.searchParams.get('limit') || '20');
 
