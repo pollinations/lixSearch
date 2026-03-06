@@ -50,14 +50,18 @@ All internal services communicate over a private Docker network (`elixpo-network
 ```
 Internet → Cloudflare → search.elixpo.com
                               │
-                              ▼
-                     ┌─── nginx ───────────────────────────────┐
-                     │  :80    internal/dev (no API key)       │
-                     │  :10001 production  (API key required)  │
-                     │  :443   reserved (unused currently)     │
-                     └────────────┬────────────────────────────┘
-                                  │ proxy_pass (Docker internal)
-                                  ▼
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+     Next.js frontend (/)            nginx (:10001, API key)
+     search.elixpo/                  ┌────────────────────────┐
+     ├── /c/[session]               │  :80   internal/dev    │
+     ├── /discover                  │  :10001 production     │
+     ├── /library                   │  :443   reserved       │
+     └── /api/* (proxy)             └──────────┬─────────────┘
+              │                                │
+              │  BACKEND_URL + X-Internal-Key   │ proxy_pass
+              └───────────┬────────────────────┘
+                          ▼
                lixsearch-app (:9002, N replicas, 10 Hypercorn workers each)
                  ├── Gateways (app/gateways/*.py)
                  ├── Pipeline (pipeline/lixsearch.py) — main async generator
@@ -147,7 +151,71 @@ User → Cloudflare → nginx:10001 (API key check) → app:9002 → gateway (se
 | redis | 1 | 9530 | No (internal) | yes (redis-data) |
 | postgres | 1 | 5432 | Yes (dev access) | yes (postgres-data) |
 
-## Environment Variables (.env)
+## Frontend (`search.elixpo/`)
 
+Next.js app at `search.elixpo.com`. Serves as the public-facing UI for lixSearch.
+
+### Routes
+
+| Route | Purpose | Auth required? |
+|-------|---------|---------------|
+| `/` | Home — search input | No |
+| `/c/[sessionId]` | Conversation view | No (guest or logged-in) |
+| `/discover` | Discover feed (public) | No |
+| `/discover/[category]` | Category feed (finance, academic, sports, patent, etc.) | No |
+| `/library` | Saved conversations | Yes (logged-in users only) |
+
+### Guest access
+- Guests (no login) get **15 free requests per IP**
+- Guest conversations navigate to `/c/[sessionId]` but are **not saved to library**
+- `clientId` is generated per browser (stored in `localStorage` as `elixpo_client_id`)
+- `sessionId` is generated per conversation (`sess_` + 16 random chars)
+
+### Frontend → Backend flow
+```
+Browser → Next.js API routes (search.elixpo/src/app/api/)
+           → validates XID header (anti-abuse token)
+           → proxies to backend via BACKEND_URL (default: http://localhost:9002)
+           → uses X-Internal-Key header for app-level auth
+```
+
+### Frontend API routes
+
+| Route | Purpose |
+|-------|---------|
+| `api/search` | Proxies search queries to backend `/api/search` (SSE streaming) |
+| `api/session` | Creates/manages sessions |
+| `api/conversations` | Lists conversations for a clientId (Prisma → PostgreSQL) |
+| `api/conversations/[sessionId]` | Loads a specific conversation (Prisma → PostgreSQL) |
+| `api/discover` | Fetches discover articles |
+| `api/discover/generate` | Generates new discover articles |
+| `api/surf` | Surf/browse endpoint |
+
+### Frontend data layer
+- **Prisma ORM** → PostgreSQL (`elixpo_search` database)
+- Models: `Session`, `Message`, `Bookmark`, `DiscoverArticle`
+- `DATABASE_URL` in `search.elixpo/.env.local`
+
+### Frontend env vars (`search.elixpo/.env.local`)
+- `DATABASE_URL` — PostgreSQL connection string
+- `BACKEND_URL` — backend API base URL (default `http://localhost:9002`)
+- `INTERNAL_API_KEY` — passed as `X-Internal-Key` header to backend
+- `NEXT_PUBLIC_XID` / `XID` — anti-abuse token validated on API routes
+
+### Key frontend files
+
+| File | Role |
+|------|------|
+| `src/lib/api.ts` | Backend URL, headers, XID validation |
+| `src/hooks/useSession.ts` | Session/clientId management |
+| `src/app/api/search/route.ts` | Search proxy (SSE passthrough) |
+| `prisma/schema.prisma` | Database schema |
+
+## Environment Variables
+
+### Backend (.env)
 Required: `TOKEN`, `MODEL`, `IMAGE_MODEL`, `HF_TOKEN`
 Optional overrides: `REDIS_HOST`, `REDIS_PORT`, `CHROMA_SERVER_HOST`, `CHROMA_SERVER_PORT`, `IPC_HOST`, `IPC_PORT`, `WORKERS` (Hypercorn workers per container, default 10), `WORKER_PORT` (default 9002), `LOG_LEVEL`
+
+### Frontend (search.elixpo/.env.local)
+Required: `DATABASE_URL`, `BACKEND_URL`, `INTERNAL_API_KEY`, `XID`, `NEXT_PUBLIC_XID`
