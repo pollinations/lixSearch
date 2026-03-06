@@ -57,9 +57,12 @@ class lixSearch:
 
         internal_key = os.getenv('INTERNAL_API_KEY', '')
 
+        auth_exempt_paths = {'/api/health', '/docs', '/api/docs'}
+        auth_exempt_prefixes = ('/openapi.',)
+
         @self.app.before_request
         async def verify_internal_key():
-            if request.path == '/api/health':
+            if request.path in auth_exempt_paths or request.path.startswith(auth_exempt_prefixes):
                 return
             if not internal_key:
                 return
@@ -91,7 +94,6 @@ class lixSearch:
                 <title>lixSearch API Documentation</title>
                 <meta charset="utf-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
-                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@scalar/themes@latest/style.css" />
                 <style>
                     * {
                         margin: 0;
@@ -109,7 +111,7 @@ class lixSearch:
             </head>
             <body>
                 <script id="api-reference" data-url="/openapi.json"></script>
-                <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@latest/latest.js"></script>
+                <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
             </body>
             </html>
             '''
