@@ -84,7 +84,6 @@ class lixSearch:
             return await chat.chat_completions(session_id, self.pipeline_initialized)
         
         async def scalar_ui():
-            """Serve Scalar API documentation UI"""
             html = '''
             <!DOCTYPE html>
             <html>
