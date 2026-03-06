@@ -1069,7 +1069,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 logger.warning(f"[Pipeline] Failed to analyze image: {e}")
                 image_context_provided = False
         
-        max_iterations = 2
+        max_iterations = 3
         current_iteration = 0
         fetch_retry_done = False
         collected_sources = []
