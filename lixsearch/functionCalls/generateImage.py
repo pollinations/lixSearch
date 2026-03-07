@@ -13,17 +13,16 @@ load_dotenv()
 
 
 async def create_image_from_prompt(prompt: str) -> str:
-    """Generate an image via Pollinations and return the direct URL."""
+    """Generate an image via Pollinations, wait for it, and return the direct URL with seed."""
     seed = random.randint(0, 10000)
     image_url = f"{POLLINATIONS_ENDPOINT_IMAGE}{quote(prompt)}?model=flux&height=512&width=512&seed={seed}&quality=high&enhance=true"
 
     headers = {
-        "Content-Type": "application/json",
         "Authorization": f"Bearer {os.getenv('TOKEN')}"
     }
 
     response = await asyncio.to_thread(
-        requests.head, image_url, headers=headers, timeout=15
+        requests.get, image_url, headers=headers, timeout=60
     )
     response.raise_for_status()
 
