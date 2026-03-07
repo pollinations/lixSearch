@@ -69,7 +69,6 @@ Internet → Cloudflare → search.elixpo.com
                  │     ├── RAG (ragService/)
                  │     └── LLM inference → Pollinations API (external)
                  ├── Session/cache (sessions/, ragService/cacheCoordinator.py)
-                 ├── PostgreSQL (:5432) — persistent session/conversation storage
                  └── IPC client → ipc-service (:9510, singleton)
                                     ├── CoreEmbeddingService (sentence-transformers)
                                     ├── SearchAgentPool (Playwright text + image agents)
@@ -89,7 +88,6 @@ Redis (:9530) shared across all containers:
 | ipc-service | 9510 | No (`expose` only) | Embedding model + Playwright pool |
 | chroma-server | 9001 | No (`expose` only) | Vector DB |
 | redis | 9530 | No (`expose` only) | Cache (3 DBs) |
-| postgres | 5432 | Yes — 5432:5432 (dev admin access) | Persistent storage |
 
 ### Authentication
 
@@ -149,11 +147,10 @@ User → Cloudflare → nginx:10001 (API key check) → app:9002 → gateway (se
 | ipc-service | 1 | 9510 | No (internal) | no |
 | chroma-server | 1 | 9001 | No (internal) | yes (embeddings-data) |
 | redis | 1 | 9530 | No (internal) | yes (redis-data) |
-| postgres | 1 | 5432 | Yes (dev access) | yes (postgres-data) |
 
 ## Frontend (`search.elixpo/`)
 
-Next.js app at `search.elixpo.com`. Serves as the public-facing UI for lixSearch.
+Next.js app deployed on **Cloudflare Pages** at `search.elixpo.com`. Uses `@cloudflare/next-on-pages` for edge runtime.
 
 ### Routes
 
@@ -166,50 +163,72 @@ Next.js app at `search.elixpo.com`. Serves as the public-facing UI for lixSearch
 | `/library` | Saved conversations | Yes (logged-in users only) |
 
 ### Guest access
-- Guests (no login) get **15 free requests per IP**
+- Guests (no login) get **15 free requests per IP** (tracked in `RATE_LIMIT_KV`, 24h TTL)
 - Guest conversations navigate to `/c/[sessionId]` but are **not saved to library**
 - `clientId` is generated per browser (stored in `localStorage` as `elixpo_client_id`)
 - `sessionId` is generated per conversation (`sess_` + 16 random chars)
+- Rate limit returns `429` with `X-RateLimit-Remaining` header
 
 ### Frontend → Backend flow
 ```
-Browser → Next.js API routes (search.elixpo/src/app/api/)
+Browser → Cloudflare Pages (edge, Next.js API routes)
            → validates XID header (anti-abuse token)
-           → proxies to backend via BACKEND_URL (default: http://localhost:9002)
-           → uses X-Internal-Key header for app-level auth
+           → checks guest rate limit (RATE_LIMIT_KV)
+           → reads/writes D1 for conversations, discover articles
+           → proxies search/session/surf to backend via BACKEND_URL
+           → uses X-Internal-Key header for backend auth
 ```
+
+### Frontend data layer
+- **Cloudflare D1** (SQLite) — persistent storage for sessions, messages, bookmarks, discover articles
+- **Cloudflare KV** (`SESSIONS_KV`) — read cache for session data (10min TTL, invalidated on write)
+- **Cloudflare KV** (`RATE_LIMIT_KV`) — guest IP rate limiting (24h TTL)
+- Schema: `migrations/0001_init/schema.sql`
+- Models: `Session`, `Message`, `Bookmark`, `DiscoverArticle`
 
 ### Frontend API routes
 
 | Route | Purpose |
 |-------|---------|
-| `api/search` | Proxies search queries to backend `/api/search` (SSE streaming) |
-| `api/session` | Creates/manages sessions |
-| `api/conversations` | Lists conversations for a clientId (Prisma → PostgreSQL) |
-| `api/conversations/[sessionId]` | Loads a specific conversation (Prisma → PostgreSQL) |
-| `api/discover` | Fetches discover articles |
-| `api/discover/generate` | Generates new discover articles |
-| `api/surf` | Surf/browse endpoint |
-
-### Frontend data layer
-- **Prisma ORM** → PostgreSQL (`elixpo_search` database)
-- Models: `Session`, `Message`, `Bookmark`, `DiscoverArticle`
-- `DATABASE_URL` in `search.elixpo/.env.local`
-
-### Frontend env vars (`search.elixpo/.env.local`)
-- `DATABASE_URL` — PostgreSQL connection string
-- `BACKEND_URL` — backend API base URL (default `http://localhost:9002`)
-- `INTERNAL_API_KEY` — passed as `X-Internal-Key` header to backend
-- `NEXT_PUBLIC_XID` / `XID` — anti-abuse token validated on API routes
+| `api/search` | Proxies search queries to backend `/api/search` (SSE streaming, rate-limited) |
+| `api/session` | Proxies session create/get to backend |
+| `api/conversations` | Lists/saves conversations (D1 direct) |
+| `api/conversations/[sessionId]` | Loads conversation messages (D1 + KV cache) |
+| `api/discover` | Fetches discover articles (D1 direct) |
+| `api/discover/generate` | Generates articles via backend, saves to D1 |
+| `api/surf` | Proxies surf queries to backend |
 
 ### Key frontend files
 
 | File | Role |
 |------|------|
 | `src/lib/api.ts` | Backend URL, headers, XID validation |
+| `src/lib/db.ts` | D1 queries + KV cache + rate limiting |
 | `src/hooks/useSession.ts` | Session/clientId management |
-| `src/app/api/search/route.ts` | Search proxy (SSE passthrough) |
-| `prisma/schema.prisma` | Database schema |
+| `src/app/api/search/route.ts` | Search proxy (SSE passthrough, rate-limited) |
+| `wrangler.toml` | Cloudflare Pages config (D1 + KV bindings) |
+| `migrations/0001_init/schema.sql` | D1 database schema |
+| `env.d.ts` | Cloudflare env type declarations |
+
+### Deploy frontend
+```bash
+cd search.elixpo/
+npm run pages:build            # build with @cloudflare/next-on-pages
+npm run pages:deploy           # deploy to Cloudflare Pages
+npm run db:migrate             # apply D1 migrations (production)
+npm run db:migrate:local       # apply D1 migrations (local dev)
+```
+
+### Cloudflare setup (one-time)
+```bash
+wrangler d1 create elixpo-search-db          # create D1 database
+wrangler kv namespace create SESSIONS_KV     # create KV for session cache
+wrangler kv namespace create RATE_LIMIT_KV   # create KV for rate limiting
+# paste the IDs into wrangler.toml
+wrangler secret put INTERNAL_API_KEY         # backend auth key
+wrangler secret put XID                      # anti-abuse token
+wrangler secret put API_KEY                  # nginx API key
+```
 
 ## Environment Variables
 
@@ -217,5 +236,6 @@ Browser → Next.js API routes (search.elixpo/src/app/api/)
 Required: `TOKEN`, `MODEL`, `IMAGE_MODEL`, `HF_TOKEN`
 Optional overrides: `REDIS_HOST`, `REDIS_PORT`, `CHROMA_SERVER_HOST`, `CHROMA_SERVER_PORT`, `IPC_HOST`, `IPC_PORT`, `WORKERS` (Hypercorn workers per container, default 10), `WORKER_PORT` (default 9002), `LOG_LEVEL`
 
-### Frontend (search.elixpo/.env.local)
-Required: `DATABASE_URL`, `BACKEND_URL`, `INTERNAL_API_KEY`, `XID`, `NEXT_PUBLIC_XID`
+### Frontend (wrangler.toml vars + secrets)
+Vars: `BACKEND_URL`, `GUEST_REQUEST_LIMIT`
+Secrets (via `wrangler secret put`): `INTERNAL_API_KEY`, `XID`, `API_KEY`

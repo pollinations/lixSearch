@@ -1,11 +1,24 @@
 import { NextRequest } from 'next/server';
 import { backendUrl, backendHeaders, validateXID } from '@/lib/api';
+import { checkGuestRateLimit } from '@/lib/db';
+
+export const runtime = 'edge';
 
 export async function POST(req: NextRequest) {
   try {
     const xid = req.headers.get('x-xid');
     if (!validateXID(xid)) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Guest rate limiting by IP
+    const ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || 'unknown';
+    const { allowed, remaining } = await checkGuestRateLimit(ip);
+    if (!allowed) {
+      return Response.json(
+        { error: 'Guest request limit reached. Sign in for unlimited access.' },
+        { status: 429, headers: { 'X-RateLimit-Remaining': '0' } }
+      );
     }
 
     const body = await req.json();
@@ -35,14 +48,17 @@ export async function POST(req: NextRequest) {
         headers: {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
+          'Connection': 'keep-alive',
+          'X-RateLimit-Remaining': String(remaining),
         },
       });
     }
 
     // Non-streaming: return JSON
     const data = await backendRes.json();
-    return Response.json(data);
+    return Response.json(data, {
+      headers: { 'X-RateLimit-Remaining': String(remaining) },
+    });
   } catch (err) {
     console.error('[API/search] Proxy error:', err);
     return Response.json({ error: 'Internal proxy error' }, { status: 500 });

@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
 import { backendUrl, backendHeaders, validateXID } from '@/lib/api';
 
+export const runtime = 'edge';
+
 export async function POST(req: NextRequest) {
   try {
     const xid = req.headers.get('x-xid');

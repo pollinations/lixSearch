@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { validateXID } from '@/lib/api';
+import { getSessionWithMessages } from '@/lib/db';
+
+export const runtime = 'edge';
 
 export async function GET(
   req: NextRequest,
@@ -13,29 +15,13 @@ export async function GET(
     }
 
     const { sessionId } = await params;
+    const data = await getSessionWithMessages(sessionId);
 
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      include: {
-        messages: {
-          orderBy: { createdAt: 'asc' },
-        },
-      },
-    });
-
-    if (!session) {
+    if (!data) {
       return Response.json({ messages: [] });
     }
 
-    const messages = session.messages.map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      sources: m.sources || undefined,
-      images: m.images || undefined,
-    }));
-
-    return Response.json({ messages, title: session.title });
+    return Response.json(data);
   } catch (err) {
     console.error('[API/conversations] Load error:', err);
     return Response.json({ error: 'Failed to load conversation' }, { status: 500 });
