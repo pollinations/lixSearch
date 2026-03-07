@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { validateXID } from '@/lib/api';
+import { upsertSession, createMessage, listSessions } from '@/lib/db';
+
+export const runtime = 'edge';
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,40 +19,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Upsert session
-    const session = await prisma.session.upsert({
-      where: { id: sessionId },
-      create: {
-        id: sessionId,
-        clientId: body.clientId || 'anonymous',
-        title: query?.slice(0, 100) || null,
-      },
-      update: {
-        updatedAt: new Date(),
-        title: query?.slice(0, 100) || undefined,
-      },
-    });
+    const session = await upsertSession(
+      sessionId,
+      body.clientId || 'anonymous',
+      query?.slice(0, 100) || null
+    );
 
     // Save user message
     if (query) {
-      await prisma.message.create({
-        data: {
-          sessionId: session.id,
-          role: 'user',
-          content: query,
-        },
-      });
+      await createMessage(session.id, 'user', query);
     }
 
     // Save assistant message
-    const message = await prisma.message.create({
-      data: {
-        sessionId: session.id,
-        role: 'assistant',
-        content,
-        sources: sources || undefined,
-        images: images || undefined,
-      },
-    });
+    const message = await createMessage(session.id, 'assistant', content, sources, images);
 
     return Response.json({ id: message.id, sessionId: session.id });
   } catch (err) {
@@ -69,24 +50,8 @@ export async function GET(req: NextRequest) {
     const clientId = req.nextUrl.searchParams.get('clientId') || 'anonymous';
     const limit = parseInt(req.nextUrl.searchParams.get('limit') || '20');
 
-    const sessions = await prisma.session.findMany({
-      where: { clientId },
-      orderBy: { updatedAt: 'desc' },
-      take: limit,
-      include: {
-        _count: { select: { messages: true } },
-      },
-    });
-
-    return Response.json(
-      sessions.map((s) => ({
-        id: s.id,
-        title: s.title,
-        createdAt: s.createdAt.toISOString(),
-        updatedAt: s.updatedAt.toISOString(),
-        messageCount: s._count.messages,
-      }))
-    );
+    const sessions = await listSessions(clientId, limit);
+    return Response.json(sessions);
   } catch (err) {
     console.error('[API/conversations] List error:', err);
     return Response.json({ error: 'Failed to list conversations' }, { status: 500 });

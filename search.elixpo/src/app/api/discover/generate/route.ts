@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { backendUrl, backendHeaders, validateXID } from '@/lib/api';
+import { saveDiscoverArticles, cleanupOldArticles } from '@/lib/db';
+
+export const runtime = 'edge';
 
 const RETENTION_DAYS = 30;
 
@@ -28,54 +30,19 @@ export async function POST(req: NextRequest) {
 
     const result = await backendRes.json();
     const dayKey = result.dayKey;
-    const categoryArticles: Record<string, Array<{
-      title: string;
-      excerpt: string;
-      sourceUrl?: string;
-      sourceTitle?: string;
-    }>> = result.categories || {};
+    const categoryArticles = result.categories || {};
 
-    // 2. Delete existing articles for today's categories (idempotent regeneration)
-    await prisma.discoverArticle.deleteMany({
-      where: {
-        dayKey,
-        category: { in: categories },
-      },
-    });
+    // 2. Save to D1
+    const totalSaved = await saveDiscoverArticles(dayKey, categories, categoryArticles);
 
-    // 3. Persist generated articles
-    let totalSaved = 0;
-    for (const [category, articles] of Object.entries(categoryArticles)) {
-      if (!Array.isArray(articles)) continue;
-      for (const article of articles) {
-        await prisma.discoverArticle.create({
-          data: {
-            category,
-            title: article.title,
-            excerpt: article.excerpt,
-            sourceUrl: article.sourceUrl || null,
-            sourceTitle: article.sourceTitle || null,
-            dayKey,
-          },
-        });
-        totalSaved++;
-      }
-    }
-
-    // 4. Cleanup articles older than 30 days
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - RETENTION_DAYS);
-    const cutoffDayKey = cutoffDate.toISOString().slice(0, 10);
-
-    const deleted = await prisma.discoverArticle.deleteMany({
-      where: { dayKey: { lt: cutoffDayKey } },
-    });
+    // 3. Cleanup old articles
+    const expiredRemoved = await cleanupOldArticles(RETENTION_DAYS);
 
     return Response.json({
       status: 'ok',
       dayKey,
       saved: totalSaved,
-      expiredRemoved: deleted.count,
+      expiredRemoved,
     });
   } catch (err) {
     console.error('[API/discover/generate] Error:', err);

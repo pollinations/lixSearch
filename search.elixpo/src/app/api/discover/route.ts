@@ -1,21 +1,14 @@
 import { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { getDiscoverArticles } from '@/lib/db';
+
+export const runtime = 'edge';
 
 export async function GET(req: NextRequest) {
   try {
-    const category = req.nextUrl.searchParams.get('category');
-    const day = req.nextUrl.searchParams.get('day') || new Date().toISOString().slice(0, 10);
+    const category = req.nextUrl.searchParams.get('category') || undefined;
+    const day = req.nextUrl.searchParams.get('day') || undefined;
 
-    const where: Record<string, string> = { dayKey: day };
-    if (category) {
-      where.category = category;
-    }
-
-    const articles = await prisma.discoverArticle.findMany({
-      where,
-      orderBy: { generatedAt: 'desc' },
-    });
-
+    const articles = await getDiscoverArticles(category, day);
     return Response.json(articles);
   } catch (err) {
     console.error('[API/discover] Read error:', err);
