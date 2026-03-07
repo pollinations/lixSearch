@@ -265,7 +265,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         if core_service:
             try:
                 retrieval_result = await asyncio.wait_for(
-                    asyncio.to_thread(core_service.retrieve, user_query, 3),
+                    asyncio.to_thread(core_service.retrieve, user_query, RETRIEVAL_TOP_K),
                     timeout=3.0
                 )
                 if retrieval_result.get("count", 0) > 0:
