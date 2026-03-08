@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect, KeyboardEvent } from 'react';
 import {
   ArrowUp, Plus, Globe, GraduationCap, Users,
-  Upload, Search, Zap, X, Image as ImageIcon, Loader2,
+  Upload, Search, Zap, X, Loader2,
 } from 'lucide-react';
 
 export interface SearchPayload {
@@ -337,17 +337,6 @@ export default function SearchInput({ onSend, disabled, showPills }: SearchInput
                 </div>
               )}
             </div>
-
-            {/* Quick image attach button (visible when no images attached) */}
-            {attachedImages.length === 0 && !uploading && (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="p-1.5 rounded-lg transition-colors hover:text-white hover:bg-[#333]"
-                title="Attach image"
-              >
-                <ImageIcon size={18} />
-              </button>
-            )}
 
             {uploading && (
               <span className="flex items-center gap-1.5 text-xs text-[#888] ml-1">
