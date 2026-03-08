@@ -24,7 +24,9 @@ cache/
 chroma/
 session_embeddings/
 embeddings/
-*.rdb
+*.rdb\
+.next
+.wrangler
 data/
 wrangler.toml
 search.elixpo/wrangler.toml

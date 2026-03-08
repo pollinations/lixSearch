@@ -46,7 +46,7 @@ export default function SettingsContent() {
             <h1 className="text-2xl font-bold text-white font-display mb-8">Settings</h1>
 
             {!user ? (
-              <GuestPrompt onLogin={() => login('/settings')} />
+              <GuestPrompt onLogin={() => login('/profile')} />
             ) : (
               <>
                 {/* Tab navigation */}

@@ -1,9 +1,9 @@
-import dynamic from 'next/dynamic';
+'use client';
 
-export const runtime = 'edge';
+import dynamic from 'next/dynamic';
 
 const SettingsContent = dynamic(() => import('@/components/SettingsContent'), { ssr: false });
 
-export default function SettingsPage() {
+export default function ProfilePage() {
   return <SettingsContent />;
 }
