@@ -1,28 +1,28 @@
 export const colors = {
     bg: {
-        deep: "#0c0f0a",
-        card: "rgba(16, 24, 12, 0.8)",
+        deep: "#0a0c14",
+        card: "rgba(12, 16, 28, 0.8)",
         cardGlass: "rgba(255,255,255,0.05)",
         cardGlassHover: "rgba(255,255,255,0.08)",
-        overlay: "rgba(12, 15, 10, 0.95)",
-        overlayLight: "rgba(12, 15, 10, 0.8)",
+        overlay: "rgba(10, 12, 20, 0.95)",
+        overlayLight: "rgba(10, 12, 20, 0.8)",
     },
     lime: {
-        main: "#a3e635",
-        light: "#bef264",
-        dim: "rgba(163, 230, 53, 0.15)",
-        border: "rgba(163, 230, 53, 0.3)",
-        glow: "rgba(163, 230, 53, 0.6)",
+        main: "#444ce7",
+        light: "#5558e8",
+        dim: "rgba(68, 76, 231, 0.15)",
+        border: "rgba(68, 76, 231, 0.3)",
+        glow: "rgba(68, 76, 231, 0.6)",
     },
     sage: {
-        main: "#86efac",
-        dim: "rgba(134, 239, 172, 0.15)",
-        border: "rgba(134, 239, 172, 0.3)",
+        main: "#6ea8fe",
+        dim: "rgba(110, 168, 254, 0.15)",
+        border: "rgba(110, 168, 254, 0.3)",
     },
     honey: {
-        main: "#fbbf24",
-        dim: "rgba(251, 191, 36, 0.15)",
-        border: "rgba(251, 191, 36, 0.3)",
+        main: "#818cf8",
+        dim: "rgba(129, 140, 248, 0.15)",
+        border: "rgba(129, 140, 248, 0.3)",
     },
     lavender: {
         main: "#c4b5fd",
@@ -72,14 +72,14 @@ export const colors = {
     },
     category: {
         "AI/ML": {
-            bg: "rgba(251, 191, 36, 0.1)",
-            text: "#fbbf24",
-            border: "rgba(251, 191, 36, 0.3)",
+            bg: "rgba(129, 140, 248, 0.1)",
+            text: "#818cf8",
+            border: "rgba(129, 140, 248, 0.3)",
         },
         Infrastructure: {
-            bg: "rgba(163, 230, 53, 0.1)",
-            text: "#a3e635",
-            border: "rgba(163, 230, 53, 0.3)",
+            bg: "rgba(68, 76, 231, 0.1)",
+            text: "#444ce7",
+            border: "rgba(68, 76, 231, 0.3)",
         },
         "Game Development": {
             bg: "rgba(168, 85, 247, 0.1)",
@@ -92,9 +92,9 @@ export const colors = {
             border: "rgba(239, 68, 68, 0.3)",
         },
         "Developer Tools": {
-            bg: "rgba(16, 185, 129, 0.1)",
-            text: "#34d399",
-            border: "rgba(16, 185, 129, 0.3)",
+            bg: "rgba(110, 168, 254, 0.1)",
+            text: "#6ea8fe",
+            border: "rgba(110, 168, 254, 0.3)",
         },
         default: {
             bg: "rgba(156, 163, 175, 0.1)",
@@ -120,18 +120,18 @@ export const colors = {
 };
 
 export const gradients = {
-    cardAccent: "linear-gradient(90deg, #a3e635, #86efac, #fbbf24)",
+    cardAccent: "linear-gradient(90deg, #444ce7, #6ea8fe, #818cf8)",
     textHeading: "linear-gradient(to bottom right, #f5f5f4, #a1a1aa)",
     textHero:
-        "linear-gradient(135deg, #f5f5f4 0%, #a3e635 30%, #86efac 60%, #fbbf24 100%)",
+        "linear-gradient(135deg, #f5f5f4 0%, #444ce7 30%, #6ea8fe 60%, #818cf8 100%)",
     textAccent:
-        "linear-gradient(135deg, #a3e635 0%, #86efac 50%, #fbbf24 100%)",
-    bgPage: "linear-gradient(135deg, #0c0f0a 0%, #0f1410 50%, #0c0f0a 100%)",
+        "linear-gradient(135deg, #444ce7 0%, #6ea8fe 50%, #818cf8 100%)",
+    bgPage: "linear-gradient(135deg, #0a0c14 0%, #0c1018 50%, #0a0c14 100%)",
     bgCard: "linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)",
     bgOverlay:
-        "linear-gradient(135deg, rgba(12, 15, 10, 0.95) 0%, rgba(12, 15, 10, 0.8) 100%)",
+        "linear-gradient(135deg, rgba(10, 12, 20, 0.95) 0%, rgba(10, 12, 20, 0.8) 100%)",
     glowLime:
-        "radial-gradient(circle, rgba(163, 230, 53, 0.08) 0%, rgba(0,0,0,0) 70%)",
+        "radial-gradient(circle, rgba(68, 76, 231, 0.08) 0%, rgba(0,0,0,0) 70%)",
     glowWhite:
         "radial-gradient(circle, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0) 70%)",
 };
@@ -140,7 +140,7 @@ export const shadows = {
     card: "0 8px 32px 0 rgba(0, 0, 0, 0.37)",
     cardHover: "0 20px 40px -10px rgba(0,0,0,0.4)",
     cardLarge: "0 25px 50px -10px rgba(0,0,0,0.5)",
-    glowLime: "0 0 20px rgba(163, 230, 53, 0.6)",
+    glowLime: "0 0 20px rgba(68, 76, 231, 0.6)",
     glowWhite: "0 0 20px rgba(255,255,255,0.6)",
     button: "0 8px 25px rgba(0,0,0,0.3)",
 };
@@ -200,8 +200,8 @@ export const sx = {
         fontWeight: 600,
         border: `1px solid ${colors.lime.border}`,
         "&:hover": {
-            bgcolor: "rgba(163, 230, 53, 0.25)",
-            borderColor: "rgba(163, 230, 53, 0.5)",
+            bgcolor: "rgba(68, 76, 231, 0.25)",
+            borderColor: "rgba(68, 76, 231, 0.5)",
         },
     },
     chipTech: {

@@ -156,7 +156,7 @@ export default function SearchInput({ onSend, disabled, showPills }: SearchInput
                           </span>
                           <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
                             activeSources.has(src.id)
-                              ? 'bg-[#32aab5] border-[#32aab5]'
+                              ? 'bg-[#444ce7] border-[#444ce7]'
                               : 'border-[#555]'
                           }`}>
                             {activeSources.has(src.id) && (
