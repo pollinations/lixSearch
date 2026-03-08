@@ -62,15 +62,30 @@ export default function HomeContent({ initialSessionId }: HomeContentProps) {
     clearMessages();
   }, [newSession, clearMessages]);
 
+  const isLanding = messages.length === 0;
+
   return (
     <div className="h-screen flex bg-[#18191a]">
       <Sidebar onNewSearch={handleNewSearch} />
 
       <main className="flex-1 flex flex-col h-full overflow-hidden">
-        <SearchResults messages={messages} statusText={statusText} />
-        <div className="mb-3">
-          <SearchInput onSend={handleSend} disabled={isSearching} />
-        </div>
+        {isLanding ? (
+          /* Landing: centered branding + search */
+          <div className="flex-1 flex flex-col items-center justify-center px-4">
+            <h1 className="text-5xl font-display font-bold text-gradient-hero mb-10 select-none">
+              Lix-Search
+            </h1>
+            <SearchInput onSend={handleSend} disabled={isSearching} showPills />
+          </div>
+        ) : (
+          /* Conversation: results + pinned input at bottom */
+          <>
+            <SearchResults messages={messages} statusText={statusText} />
+            <div className="mb-3">
+              <SearchInput onSend={handleSend} disabled={isSearching} />
+            </div>
+          </>
+        )}
       </main>
     </div>
   );

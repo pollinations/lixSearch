@@ -28,13 +28,7 @@ export default function SearchResults({ messages, statusText }: SearchResultsPro
   }
 
   if (pairs.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <h1 className="text-3xl font-bold text-white font-display">
-          What do you want to search?
-        </h1>
-      </div>
-    );
+    return null;
   }
 
   return (
