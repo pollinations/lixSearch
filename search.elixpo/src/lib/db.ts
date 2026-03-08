@@ -189,6 +189,157 @@ export async function cleanupOldArticles(retentionDays: number = 30) {
   return result.meta?.changes || 0;
 }
 
+// ── User ─────────────────────────────────────────────────────────────────────
+
+export interface UserRow {
+  id: string;
+  email: string;
+  displayName: string | null;
+  avatar: string | null;
+  provider: string;
+  emailVerified: number;
+  bio: string | null;
+  location: string | null;
+  website: string | null;
+  company: string | null;
+  jobTitle: string | null;
+  theme: string;
+  language: string;
+  searchRegion: string;
+  safeSearch: number;
+  deepSearchDefault: number;
+  tier: string;
+  totalSearches: number;
+  totalSessions: number;
+  lastLoginAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function upsertUser(ssoUser: {
+  id: string;
+  email: string;
+  displayName?: string | null;
+  avatar?: string | null;
+  provider?: string;
+  emailVerified?: boolean;
+}): Promise<UserRow> {
+  const { DB } = getBindings();
+  const now = new Date().toISOString();
+
+  const existing = await DB.prepare('SELECT id FROM User WHERE id = ?')
+    .bind(ssoUser.id).first();
+
+  if (existing) {
+    // Update fields that may have changed on the SSO side
+    await DB.prepare(
+      `UPDATE User SET
+        email = ?, displayName = ?, avatar = ?, provider = ?,
+        emailVerified = ?, lastLoginAt = ?, updatedAt = ?
+      WHERE id = ?`
+    ).bind(
+      ssoUser.email,
+      ssoUser.displayName ?? null,
+      ssoUser.avatar ?? null,
+      ssoUser.provider ?? 'email',
+      ssoUser.emailVerified ? 1 : 0,
+      now, now,
+      ssoUser.id
+    ).run();
+  } else {
+    await DB.prepare(
+      `INSERT INTO User (id, email, displayName, avatar, provider, emailVerified, lastLoginAt, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      ssoUser.id,
+      ssoUser.email,
+      ssoUser.displayName ?? null,
+      ssoUser.avatar ?? null,
+      ssoUser.provider ?? 'email',
+      ssoUser.emailVerified ? 1 : 0,
+      now, now, now
+    ).run();
+  }
+
+  return getUserById(ssoUser.id) as Promise<UserRow>;
+}
+
+export async function getUserById(userId: string): Promise<UserRow | null> {
+  const { DB } = getBindings();
+  return DB.prepare('SELECT * FROM User WHERE id = ?')
+    .bind(userId).first<UserRow>();
+}
+
+export async function getUserByEmail(email: string): Promise<UserRow | null> {
+  const { DB } = getBindings();
+  return DB.prepare('SELECT * FROM User WHERE email = ?')
+    .bind(email).first<UserRow>();
+}
+
+export async function updateUserProfile(userId: string, fields: {
+  bio?: string | null;
+  location?: string | null;
+  website?: string | null;
+  company?: string | null;
+  jobTitle?: string | null;
+  theme?: string;
+  language?: string;
+  searchRegion?: string;
+  safeSearch?: number;
+  deepSearchDefault?: number;
+}): Promise<UserRow | null> {
+  const { DB } = getBindings();
+  const now = new Date().toISOString();
+
+  const setClauses: string[] = ['updatedAt = ?'];
+  const values: (string | number | null)[] = [now];
+
+  const allowed: Record<string, 'string' | 'number'> = {
+    bio: 'string', location: 'string', website: 'string',
+    company: 'string', jobTitle: 'string', theme: 'string',
+    language: 'string', searchRegion: 'string',
+    safeSearch: 'number', deepSearchDefault: 'number',
+  };
+
+  for (const [key, type] of Object.entries(allowed)) {
+    const val = (fields as Record<string, unknown>)[key];
+    if (val !== undefined) {
+      setClauses.push(`${key} = ?`);
+      values.push(val as string | number | null);
+    }
+  }
+
+  if (values.length <= 1) return getUserById(userId);
+
+  values.push(userId);
+  await DB.prepare(`UPDATE User SET ${setClauses.join(', ')} WHERE id = ?`)
+    .bind(...values).run();
+
+  return getUserById(userId);
+}
+
+export async function incrementUserSearchCount(userId: string) {
+  const { DB } = getBindings();
+  await DB.prepare('UPDATE User SET totalSearches = totalSearches + 1, updatedAt = ? WHERE id = ?')
+    .bind(new Date().toISOString(), userId).run();
+}
+
+export async function listUserSessions(userId: string, limit: number = 50) {
+  const { DB } = getBindings();
+  const { results } = await DB.prepare(
+    `SELECT s.id, s.title, s.createdAt, s.updatedAt,
+            (SELECT COUNT(*) FROM Message m WHERE m.sessionId = s.id) as messageCount
+     FROM Session s WHERE s.userId = ? ORDER BY s.updatedAt DESC LIMIT ?`
+  ).bind(userId, limit).all();
+  return results;
+}
+
+export async function deleteUserAccount(userId: string) {
+  const { DB } = getBindings();
+  // Cascade: bookmarks deleted, sessions unlinked (SET NULL)
+  await DB.prepare('DELETE FROM User WHERE id = ?').bind(userId).run();
+}
+
 // ── Rate Limiting ────────────────────────────────────────────────────────────
 
 export async function checkGuestRateLimit(ip: string, limit: number = 15): Promise<{ allowed: boolean; remaining: number }> {

@@ -27,3 +27,4 @@ embeddings/
 *.rdb
 data/
 wrangler.toml
+search.elixpo/wrangler.toml

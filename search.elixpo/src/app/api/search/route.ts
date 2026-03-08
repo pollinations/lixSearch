@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { backendUrl, backendHeaders, validateXID } from '@/lib/api';
-import { checkGuestRateLimit } from '@/lib/db';
+import { checkGuestRateLimit, incrementUserSearchCount } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 
 export const runtime = 'edge';
 
@@ -11,14 +12,21 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Guest rate limiting by IP
-    const ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || 'unknown';
-    const { allowed, remaining } = await checkGuestRateLimit(ip);
-    if (!allowed) {
-      return Response.json(
-        { error: 'Guest request limit reached. Sign in for unlimited access.' },
-        { status: 429, headers: { 'X-RateLimit-Remaining': '0' } }
-      );
+    // Check if user is authenticated — skip rate limit for logged-in users
+    const user = await getAuthUser(req);
+    let remaining = -1; // -1 = unlimited (authenticated)
+
+    if (!user) {
+      // Guest rate limiting by IP
+      const ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || 'unknown';
+      const rateCheck = await checkGuestRateLimit(ip);
+      if (!rateCheck.allowed) {
+        return Response.json(
+          { error: 'Guest request limit reached. Sign in for unlimited access.' },
+          { status: 429, headers: { 'X-RateLimit-Remaining': '0' } }
+        );
+      }
+      remaining = rateCheck.remaining;
     }
 
     const body = await req.json();
@@ -26,6 +34,11 @@ export async function POST(req: NextRequest) {
 
     if (!session_id || (!query && !image)) {
       return Response.json({ error: 'Missing session_id, and query or image' }, { status: 400 });
+    }
+
+    // Track search count for authenticated users (fire-and-forget)
+    if (user) {
+      incrementUserSearchCount(user.id).catch(() => {});
     }
 
     const backendPayload: Record<string, unknown> = { query: query || '', session_id, stream, deep_search };
@@ -42,6 +55,8 @@ export async function POST(req: NextRequest) {
       return new Response(text, { status: backendRes.status });
     }
 
+    const rateLimitHeader = remaining >= 0 ? String(remaining) : 'unlimited';
+
     // For streaming, pass through the SSE stream
     if (stream && backendRes.body) {
       return new Response(backendRes.body, {
@@ -49,7 +64,7 @@ export async function POST(req: NextRequest) {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
-          'X-RateLimit-Remaining': String(remaining),
+          'X-RateLimit-Remaining': rateLimitHeader,
         },
       });
     }
@@ -57,7 +72,7 @@ export async function POST(req: NextRequest) {
     // Non-streaming: return JSON
     const data = await backendRes.json();
     return Response.json(data, {
-      headers: { 'X-RateLimit-Remaining': String(remaining) },
+      headers: { 'X-RateLimit-Remaining': rateLimitHeader },
     });
   } catch (err) {
     console.error('[API/search] Proxy error:', err);

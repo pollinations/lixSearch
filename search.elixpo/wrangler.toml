@@ -29,8 +29,11 @@ id = "" # fill after `wrangler kv namespace create elixpo_search_ratelimit`
 [vars]
 BACKEND_URL = "https://search.elixpo.com:10001"
 GUEST_REQUEST_LIMIT = "15"
+SSO_REDIRECT_URI = "https://search.elixpo.com/api/auth/callback"
 
 # Secrets (set via `wrangler secret put <NAME>`):
-# - INTERNAL_API_KEY  — passed as X-Internal-Key to backend
-# - XID               — anti-abuse token for API route validation
-# - API_KEY           — nginx API key for backend requests
+# - INTERNAL_API_KEY    — passed as X-Internal-Key to backend
+# - XID                 — anti-abuse token for API route validation
+# - API_KEY             — nginx API key for backend requests
+# - SSO_CLIENT_ID       — OAuth client ID from accounts.elixpo.com
+# - SSO_CLIENT_SECRET   — OAuth client secret from accounts.elixpo.com

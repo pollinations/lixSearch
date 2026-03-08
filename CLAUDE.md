@@ -183,8 +183,8 @@ Browser → Cloudflare Pages (edge, Next.js API routes)
 - **Cloudflare D1** (SQLite) — persistent storage for sessions, messages, bookmarks, discover articles
 - **Cloudflare KV** (`SESSIONS_KV`) — read cache for session data (10min TTL, invalidated on write)
 - **Cloudflare KV** (`RATE_LIMIT_KV`) — guest IP rate limiting (24h TTL)
-- Schema: `workers/migrations/0001_init/schema.sql`
-- Models: `Session`, `Message`, `Bookmark`, `DiscoverArticle`
+- Schema: `workers/migrations/0001_init/schema.sql` (base), `0002_users/schema.sql` (users + auth)
+- Models: `Session`, `Message`, `Bookmark`, `DiscoverArticle`, `User`
 
 ### Frontend API routes
 
@@ -197,17 +197,25 @@ Browser → Cloudflare Pages (edge, Next.js API routes)
 | `api/discover` | Fetches discover articles (D1 direct) |
 | `api/discover/generate` | Generates articles via backend, saves to D1 |
 | `api/surf` | Proxies surf queries to backend |
+| `api/auth/login` | Redirects to Elixpo Accounts SSO |
+| `api/auth/callback` | OAuth callback — exchanges code, syncs user to D1, sets cookies |
+| `api/auth/me` | Returns current user (SSO + local profile merged) |
+| `api/auth/refresh` | Refreshes access token via refresh token cookie |
+| `api/auth/logout` | Clears auth cookies |
+| `api/user/profile` | GET/PATCH/DELETE user profile + preferences |
 
 ### Key frontend files
 
 | File | Role |
 |------|------|
 | `src/lib/api.ts` | Backend URL, headers, XID validation |
-| `src/lib/db.ts` | D1 queries + KV cache + rate limiting |
+| `src/lib/auth.ts` | SSO OAuth flow, token exchange, cookie management |
+| `src/lib/db.ts` | D1 queries + KV cache + rate limiting + user CRUD |
 | `src/hooks/useSession.ts` | Session/clientId management |
 | `src/app/api/search/route.ts` | Search proxy (SSE passthrough, rate-limited) |
 | `wrangler.toml` | Cloudflare Pages config (D1 + KV bindings) |
 | `workers/migrations/0001_init/schema.sql` | D1 database schema |
+| `workers/migrations/0002_users/schema.sql` | User table + auth columns |
 | `env.d.ts` | Cloudflare env type declarations |
 
 ### Deploy frontend
@@ -228,7 +236,18 @@ wrangler kv namespace create elixpo_search_ratelimit    # create KV for rate lim
 wrangler secret put INTERNAL_API_KEY         # backend auth key
 wrangler secret put XID                      # anti-abuse token
 wrangler secret put API_KEY                  # nginx API key
+wrangler secret put SSO_CLIENT_ID            # OAuth client ID from accounts.elixpo.com
+wrangler secret put SSO_CLIENT_SECRET        # OAuth client secret from accounts.elixpo.com
 ```
+
+### SSO Authentication (Elixpo Accounts)
+- **Provider**: `accounts.elixpo.com` — OAuth 2.0 Authorization Code flow
+- **Login**: `/api/auth/login` redirects to SSO → callback exchanges code for tokens → sets httpOnly cookies
+- **Cookies**: `elixpo_access_token` (15min), `elixpo_refresh_token` (7d), both httpOnly/Secure/SameSite=Lax
+- **User sync**: On login, user profile is upserted from SSO into local D1 `User` table
+- **Rate limiting**: Authenticated users skip guest rate limit; guests get 15 requests/IP/24h
+- **User profile**: Local D1 stores bio, location, website, company, jobTitle, preferences (theme, language, searchRegion, safeSearch, deepSearchDefault), tier, usage stats
+- Register an OAuth app at `accounts.elixpo.com/dashboard/oauth-apps` with redirect URI `https://search.elixpo.com/api/auth/callback`
 
 ## Environment Variables
 
@@ -237,5 +256,5 @@ Required: `TOKEN`, `MODEL`, `IMAGE_MODEL`, `HF_TOKEN`
 Optional overrides: `REDIS_HOST`, `REDIS_PORT`, `CHROMA_SERVER_HOST`, `CHROMA_SERVER_PORT`, `IPC_HOST`, `IPC_PORT`, `WORKERS` (Hypercorn workers per container, default 10), `WORKER_PORT` (default 9002), `LOG_LEVEL`
 
 ### Frontend (wrangler.toml vars + secrets)
-Vars: `BACKEND_URL`, `GUEST_REQUEST_LIMIT`
-Secrets (via `wrangler secret put`): `INTERNAL_API_KEY`, `XID`, `API_KEY`
+Vars: `BACKEND_URL`, `GUEST_REQUEST_LIMIT`, `SSO_REDIRECT_URI`
+Secrets (via `wrangler secret put`): `INTERNAL_API_KEY`, `XID`, `API_KEY`, `SSO_CLIENT_ID`, `SSO_CLIENT_SECRET`
