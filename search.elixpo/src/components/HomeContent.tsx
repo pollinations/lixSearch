@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
-import SidePanel from '@/components/layout/SidePanel';
 import SearchInput from '@/components/search/SearchInput';
 import SearchResults from '@/components/search/SearchResults';
 import { useSSESearch } from '@/hooks/useSSESearch';
@@ -66,7 +65,6 @@ export default function HomeContent({ initialSessionId }: HomeContentProps) {
   return (
     <div className="h-screen flex bg-[#18191a]">
       <Sidebar onNewSearch={handleNewSearch} />
-      <SidePanel />
 
       <main className="flex-1 flex flex-col h-full overflow-hidden">
         <SearchResults messages={messages} statusText={statusText} />
