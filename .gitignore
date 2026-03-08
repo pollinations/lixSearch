@@ -30,3 +30,4 @@ embeddings/
 data/
 wrangler.toml
 search.elixpo/wrangler.toml
+.dev.vars
