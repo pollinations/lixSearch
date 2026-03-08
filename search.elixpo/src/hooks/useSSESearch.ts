@@ -30,14 +30,19 @@ export function useSSESearch() {
     setState((prev) => ({ ...prev, messages }));
   }, []);
 
-  const sendQuery = useCallback(async (query: string, sessionId: string) => {
-    if (!query.trim() || state.isSearching) return;
+  const sendQuery = useCallback(async (
+    query: string,
+    sessionId: string,
+    options?: { images?: string[]; deepSearch?: boolean }
+  ) => {
+    if ((!query.trim() && !(options?.images?.length)) || state.isSearching) return;
     sessionRef.current = sessionId;
 
     const userMsg: SearchMessage = {
       id: `user_${Date.now()}`,
       role: 'user',
       content: query,
+      images: options?.images,
     };
 
     const assistantMsg: SearchMessage = {
@@ -60,13 +65,17 @@ export function useSSESearch() {
     abortRef.current = new AbortController();
 
     try {
+      const body: Record<string, unknown> = { query, session_id: sessionId, stream: true };
+      if (options?.images?.length) body.images = options.images;
+      if (options?.deepSearch) body.deep_search = true;
+
       const res = await fetch('/api/search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-xid': process.env.NEXT_PUBLIC_XID || '',
         },
-        body: JSON.stringify({ query, session_id: sessionId, stream: true }),
+        body: JSON.stringify(body),
         signal: abortRef.current.signal,
       });
 

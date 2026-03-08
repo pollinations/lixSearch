@@ -30,9 +30,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { query, session_id, stream = true, deep_search = false, image } = body;
+    const { query, session_id, stream = true, deep_search = false, image, images } = body;
 
-    if (!session_id || (!query && !image)) {
+    const hasImages = image || (Array.isArray(images) && images.length > 0);
+    if (!session_id || (!query && !hasImages)) {
       return Response.json({ error: 'Missing session_id, and query or image' }, { status: 400 });
     }
 
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
 
     const backendPayload: Record<string, unknown> = { query: query || '', session_id, stream, deep_search };
     if (image) backendPayload.image = image;
+    if (Array.isArray(images) && images.length > 0) backendPayload.images = images.slice(0, 3);
 
     const backendRes = await fetch(backendUrl('/api/search'), {
       method: 'POST',

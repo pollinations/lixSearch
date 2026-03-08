@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
-import SearchInput from '@/components/search/SearchInput';
+import SearchInput, { type SearchPayload } from '@/components/search/SearchInput';
 import SearchResults from '@/components/search/SearchResults';
 import { useSSESearch } from '@/hooks/useSSESearch';
 import { useSession } from '@/hooks/useSession';
@@ -48,9 +48,12 @@ export default function HomeContent({ initialSessionId }: HomeContentProps) {
   }, []);
 
   const handleSend = useCallback(
-    (query: string) => {
+    (payload: SearchPayload) => {
       if (sessionId) {
-        sendQuery(query, sessionId);
+        sendQuery(payload.query, sessionId, {
+          images: payload.images,
+          deepSearch: payload.deepSearch,
+        });
       }
     },
     [sessionId, sendQuery]
