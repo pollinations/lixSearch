@@ -1,7 +1,6 @@
 interface CloudflareEnv {
   DB: D1Database;
-  SESSIONS_KV: KVNamespace;
-  RATE_LIMIT_KV: KVNamespace;
+  KV: KVNamespace;
   BACKEND_URL: string;
   INTERNAL_API_KEY: string;
   XID: string;

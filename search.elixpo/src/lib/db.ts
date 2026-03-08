@@ -10,8 +10,7 @@ function getBindings() {
   const ctx = getRequestContext();
   return {
     DB: ctx.env.DB as D1Database,
-    SESSIONS_KV: ctx.env.SESSIONS_KV as KVNamespace,
-    RATE_LIMIT_KV: ctx.env.RATE_LIMIT_KV as KVNamespace,
+    KV: ctx.env.KV as KVNamespace,
   };
 }
 
@@ -42,10 +41,10 @@ export async function upsertSession(id: string, clientId: string, title?: string
 }
 
 export async function getSessionWithMessages(sessionId: string) {
-  const { DB, SESSIONS_KV } = getBindings();
+  const { DB, KV } = getBindings();
 
   // Try KV cache first
-  const cached = await SESSIONS_KV.get(`session:${sessionId}`, 'json');
+  const cached = await KV.get(`session:${sessionId}`, 'json');
   if (cached) return cached as { title: string | null; messages: Array<Record<string, unknown>> };
 
   const session = await DB.prepare('SELECT id, title FROM Session WHERE id = ?')
@@ -69,7 +68,7 @@ export async function getSessionWithMessages(sessionId: string) {
   };
 
   // Cache in KV for 10 minutes (sessions are mostly read)
-  await SESSIONS_KV.put(`session:${sessionId}`, JSON.stringify(data), { expirationTtl: 600 });
+  await KV.put(`session:${sessionId}`, JSON.stringify(data), { expirationTtl: 600 });
 
   return data;
 }
@@ -95,7 +94,7 @@ export async function createMessage(
   sources?: unknown,
   images?: unknown
 ) {
-  const { DB, SESSIONS_KV } = getBindings();
+  const { DB, KV } = getBindings();
   const id = cuid();
   const now = new Date().toISOString();
 
@@ -109,7 +108,7 @@ export async function createMessage(
   ).run();
 
   // Invalidate KV cache for this session (new message = stale cache)
-  await SESSIONS_KV.delete(`session:${sessionId}`);
+  await KV.delete(`session:${sessionId}`);
 
   return { id, sessionId, role, content };
 }
@@ -343,17 +342,17 @@ export async function deleteUserAccount(userId: string) {
 // ── Rate Limiting ────────────────────────────────────────────────────────────
 
 export async function checkGuestRateLimit(ip: string, limit: number = 15): Promise<{ allowed: boolean; remaining: number }> {
-  const { RATE_LIMIT_KV } = getBindings();
+  const { KV } = getBindings();
   const key = `guest:${ip}`;
 
-  const current = parseInt(await RATE_LIMIT_KV.get(key) || '0', 10);
+  const current = parseInt(await KV.get(key) || '0', 10);
 
   if (current >= limit) {
     return { allowed: false, remaining: 0 };
   }
 
   // Increment with 24h TTL
-  await RATE_LIMIT_KV.put(key, String(current + 1), { expirationTtl: 86400 });
+  await KV.put(key, String(current + 1), { expirationTtl: 86400 });
 
   return { allowed: true, remaining: limit - current - 1 };
 }
