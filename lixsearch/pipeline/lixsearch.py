@@ -205,16 +205,35 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             semantic_cache.load_for_request(session_id)
             logger.info(f"[Pipeline] Loaded persistent Redis cache for session {session_id}")
 
-        # --- Image handling ---
+        # --- Image handling (supports up to 3 images) ---
         image_context_provided = False
         image_analysis_result = None
+        _active_images = user_images if user_images else ([user_image] if user_image else [])
+        _num_images = len(_active_images)
+
         if image_only_mode:
-            logger.info("[Pipeline] Image-only mode: describing image directly via vision model")
+            logger.info(f"[Pipeline] Image-only mode: describing {_num_images} image(s) via vision model")
             try:
-                image_event = emit_event("INFO", "<TASK>Analyzing image</TASK>")
+                image_event = emit_event("INFO", f"<TASK>Analyzing {_num_images} image{'s' if _num_images > 1 else ''}</TASK>")
                 if image_event:
                     yield image_event
-                image_description = await describe_image(user_image)
+                # Process all images concurrently
+                descriptions = await asyncio.gather(
+                    *[describe_image(img) for img in _active_images],
+                    return_exceptions=True,
+                )
+                parts = []
+                for idx, desc in enumerate(descriptions):
+                    if isinstance(desc, Exception):
+                        logger.warning(f"[Pipeline] Failed to describe image {idx+1}: {desc}")
+                        continue
+                    if _num_images > 1:
+                        parts.append(f"### Image {idx+1}\n\n{desc}")
+                    else:
+                        parts.append(desc)
+                image_description = "\n\n".join(parts) if parts else ""
+                if not image_description:
+                    raise RuntimeError("All image descriptions failed")
                 logger.info(f"[Pipeline] Image description generated: {len(image_description)} chars")
                 done_event = emit_event("INFO", "<TASK>Image analysis complete</TASK>")
                 if done_event:
@@ -231,22 +250,37 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     semantic_cache.save_for_request(session_id)
                 return
             except Exception:
-                logger.warning("[Pipeline] Failed to describe image")
+                logger.warning("[Pipeline] Failed to describe image(s)")
                 user_query = "describe this image"
-        elif user_image and user_query.strip():
-            logger.info("[Pipeline] Image + Query mode: analyzing image in context of query")
+        elif _active_images and user_query.strip():
+            logger.info(f"[Pipeline] Image + Query mode: analyzing {_num_images} image(s) in context of query")
             try:
-                image_event = emit_event("INFO", "<TASK>Analyzing image</TASK>")
+                image_event = emit_event("INFO", f"<TASK>Analyzing {_num_images} image{'s' if _num_images > 1 else ''}</TASK>")
                 if image_event:
                     yield image_event
-                image_analysis_result = await replyFromImage(user_image, user_query)
-                image_context_provided = True
-                logger.info(f"[Pipeline] Image analysis done: {len(image_analysis_result)} chars")
-                done_event = emit_event("INFO", "<TASK>Image analyzed in context of your question</TASK>")
+                # Process all images concurrently
+                analyses = await asyncio.gather(
+                    *[replyFromImage(img, user_query) for img in _active_images],
+                    return_exceptions=True,
+                )
+                parts = []
+                for idx, analysis in enumerate(analyses):
+                    if isinstance(analysis, Exception):
+                        logger.warning(f"[Pipeline] Failed to analyze image {idx+1}: {analysis}")
+                        continue
+                    if _num_images > 1:
+                        parts.append(f"[Image {idx+1} Analysis]\n{analysis}")
+                    else:
+                        parts.append(analysis)
+                image_analysis_result = "\n\n".join(parts) if parts else None
+                if image_analysis_result:
+                    image_context_provided = True
+                    logger.info(f"[Pipeline] Image analysis done: {len(image_analysis_result)} chars")
+                done_event = emit_event("INFO", f"<TASK>Image{'s' if _num_images > 1 else ''} analyzed in context of your question</TASK>")
                 if done_event:
                     yield done_event
             except Exception:
-                logger.warning("[Pipeline] Failed to analyze image")
+                logger.warning("[Pipeline] Failed to analyze image(s)")
                 image_context_provided = False
 
         # --- Tool loop setup ---
