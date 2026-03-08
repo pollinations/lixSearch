@@ -5,12 +5,21 @@ import { NextRequest } from 'next/server';
 
 const ACCOUNTS_BASE = 'https://accounts.elixpo.com';
 
+function getEnv(key: string): string {
+  // process.env takes priority (set via .env locally, or runtime env in production)
+  if (process.env[key]) return process.env[key]!;
+  try {
+    const ctx = getRequestContext();
+    return (ctx.env as unknown as Record<string, string>)[key] || '';
+  } catch {}
+  return '';
+}
+
 function getSSO() {
-  const ctx = getRequestContext();
   return {
-    clientId: ctx.env.SSO_CLIENT_ID as string,
-    clientSecret: ctx.env.SSO_CLIENT_SECRET as string,
-    redirectUri: ctx.env.SSO_REDIRECT_URI as string,
+    clientId: getEnv('SSO_CLIENT_ID'),
+    clientSecret: getEnv('SSO_CLIENT_SECRET'),
+    redirectUri: getEnv('SSO_REDIRECT_URI'),
   };
 }
 
