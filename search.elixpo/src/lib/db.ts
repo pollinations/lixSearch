@@ -16,25 +16,42 @@ function getBindings() {
 
 // ── Session ──────────────────────────────────────────────────────────────────
 
-export async function upsertSession(id: string, clientId: string, title?: string | null) {
+export async function upsertSession(
+  id: string,
+  clientId: string,
+  title?: string | null,
+  opts?: { userId?: string; incognito?: boolean }
+) {
   const { DB } = getBindings();
   const now = new Date().toISOString();
+  const isGuest = opts?.userId ? 0 : 1;
+  const incognito = opts?.incognito ? 1 : 0;
+
+  // Guest sessions expire in 24 hours
+  const expiresAt = isGuest
+    ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    : null;
 
   const existing = await DB.prepare('SELECT id FROM Session WHERE id = ?').bind(id).first();
 
   if (existing) {
     const parts = ['updatedAt = ?'];
-    const vals: (string | null)[] = [now];
+    const vals: (string | number | null)[] = [now];
     if (title !== undefined) {
       parts.push('title = ?');
       vals.push(title ?? null);
+    }
+    if (opts?.userId) {
+      parts.push('userId = ?', 'isGuest = 0', 'expiresAt = NULL');
+      vals.push(opts.userId);
     }
     vals.push(id);
     await DB.prepare(`UPDATE Session SET ${parts.join(', ')} WHERE id = ?`).bind(...vals).run();
   } else {
     await DB.prepare(
-      'INSERT INTO Session (id, clientId, title, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)'
-    ).bind(id, clientId, title ?? null, now, now).run();
+      `INSERT INTO Session (id, clientId, title, isGuest, expiresAt, incognito, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(id, clientId, title ?? null, isGuest, expiresAt, incognito, now, now).run();
   }
 
   return { id, clientId, title };
@@ -337,6 +354,45 @@ export async function deleteUserAccount(userId: string) {
   const { DB } = getBindings();
   // Cascade: bookmarks deleted, sessions unlinked (SET NULL)
   await DB.prepare('DELETE FROM User WHERE id = ?').bind(userId).run();
+}
+
+// ── Guest Cleanup & Session Claiming ────────────────────────────────────────
+
+/**
+ * Delete expired guest sessions (24h TTL).
+ * Messages cascade-delete via FK constraint.
+ */
+export async function cleanupExpiredGuestSessions(): Promise<number> {
+  const { DB } = getBindings();
+  const now = new Date().toISOString();
+  const result = await DB.prepare(
+    'DELETE FROM Session WHERE isGuest = 1 AND expiresAt IS NOT NULL AND expiresAt < ?'
+  ).bind(now).run();
+  return result.meta?.changes || 0;
+}
+
+/**
+ * Claim guest sessions: link a clientId's guest sessions to an authenticated user.
+ * Removes the 24h expiry so they persist permanently.
+ */
+export async function claimGuestSessions(clientId: string, userId: string): Promise<number> {
+  const { DB } = getBindings();
+  const now = new Date().toISOString();
+  const result = await DB.prepare(
+    `UPDATE Session SET userId = ?, isGuest = 0, expiresAt = NULL, updatedAt = ?
+     WHERE clientId = ? AND isGuest = 1`
+  ).bind(userId, now, clientId).run();
+  return result.meta?.changes || 0;
+}
+
+/**
+ * Check if a session is in incognito mode.
+ */
+export async function isSessionIncognito(sessionId: string): Promise<boolean> {
+  const { DB } = getBindings();
+  const row = await DB.prepare('SELECT incognito FROM Session WHERE id = ?')
+    .bind(sessionId).first<{ incognito: number }>();
+  return row?.incognito === 1;
 }
 
 // ── Rate Limiting ────────────────────────────────────────────────────────────
