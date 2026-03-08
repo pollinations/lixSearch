@@ -105,7 +105,7 @@ export default function HomeContent({ initialSessionId }: HomeContentProps) {
                 : 'text-[#666] hover:text-[#999] hover:bg-[#222]'
             }`}
           >
-            {incognito ? <GhostIcon size={14} /> : <UserRound size={14} />}
+            {incognito ? <GhostIcon size={18} /> : <UserRound size={18} />}
             {incognito ? 'Incognito' : ''}
           </button>
         </div>
