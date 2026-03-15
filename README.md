@@ -229,7 +229,7 @@ curl -X POST https://search.elixpo.com/v1/chat/completions \
 
 Each will give you a complete, sourced answer.
 
-
+[!Sample Results](./public/images/response.png)
 
 ---
 
