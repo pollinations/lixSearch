@@ -235,6 +235,24 @@ Each will give you a complete, sourced answer.
 
 ---
 
+## Request Flow 
+
+> This is the flow of the request that we have from the CF Reverse proxy 
+
+```
+Browser → search.elixpo.com (Cloudflare Pages, edge)
+           ↓
+         Next.js API route (e.g. /api/search/route.ts)
+           ↓
+         backendUrl("/api/search") → "http://157.230.129.96:10001/api/search"
+           ↓
+         fetch() with headers:
+           X-API-Key: <API_KEY secret>           ← nginx auth on :10001
+           X-Internal-Key: <INTERNAL_API_KEY>    ← app-level auth
+           ↓
+         Your droplet :10001 (nginx) → :9002 (app)
+```
+
 ## ❔ FAQ
 
 **How is this different from Google?**
