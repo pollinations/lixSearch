@@ -110,7 +110,7 @@ flowchart TD
 ```
 
 **Result:** Fast, accurate answers you can trust.
-<img src="./public/images/architechture.png.png" alt="The Searching Process Explained in Detail" width="100%" /> 
+<img src="./public/images/architechture.png" alt="The Searching Process Explained in Detail" width="100%" /> 
 
 ---
 
