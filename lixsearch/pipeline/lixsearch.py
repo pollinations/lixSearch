@@ -39,7 +39,7 @@ MODEL = LLM_MODEL
 logger.debug(f"Model configured: {MODEL}")
 
 
-async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: str = None, session_id: str = None, deep_search: bool = False, user_images: list = None):
+async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: str = None, session_id: str = None, deep_search: bool = False, user_images: list = None, chat_history: list = None):
     # Normalize: user_images is the canonical list (max 3), user_image is first for backward compat
     if user_images is None:
         user_images = [user_image] if user_image else []

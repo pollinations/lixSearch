@@ -54,21 +54,6 @@ class lixSearch:
     def _setup_middleware(self):
         middleware = RequestIDMiddleware(self.app.asgi_app)
         self.app.asgi_app = middleware
-
-        internal_key = os.getenv('INTERNAL_API_KEY', '')
-
-        auth_exempt_paths = {'/api/health', '/docs', '/api/docs'}
-        auth_exempt_prefixes = ('/openapi.',)
-
-        @self.app.before_request
-        async def verify_internal_key():
-            if request.path in auth_exempt_paths or request.path.startswith(auth_exempt_prefixes):
-                return
-            if not internal_key:
-                return
-            key = request.headers.get('X-Internal-Key', '')
-            if key != internal_key:
-                return jsonify({"error": "unauthorized"}), 401
     
     def _register_routes(self):
         async def health_check_wrapper():
