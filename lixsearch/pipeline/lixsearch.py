@@ -340,24 +340,49 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             },
         ]
 
-        # Inject recent conversation history so the model has full multi-turn context
+        # Inject conversation history — from external chat_history (OpenAI messages)
+        # or from session context (Redis/disk), with dynamic token budget
         _injected_history = 0
-        if session_id and session_context:
+        _history_token_budget = HISTORY_TOKEN_BUDGET
+        _history_tokens_used = 0
+
+        if chat_history:
+            # External history from OpenAI-format messages array (excludes system + current user msg)
+            for msg in chat_history:
+                _role = msg.get("role", "user")
+                _content = msg.get("content", "")
+                if _role in ("user", "assistant") and _content:
+                    _msg_tokens = len(_content) // 4  # fast estimate
+                    if _history_tokens_used + _msg_tokens > _history_token_budget:
+                        break
+                    messages.append({"role": _role, "content": _content})
+                    _history_tokens_used += _msg_tokens
+                    _injected_history += 1
+            if _injected_history:
+                logger.info(f"[Pipeline] Injected {_injected_history} messages from external chat_history (~{_history_tokens_used} tokens)")
+        elif session_id and session_context:
             try:
                 _prev = session_context.get_context()
                 # Drop the last item if it's the current query we just added
                 if _prev and _prev[-1].get("role") == "user" and _prev[-1].get("content") == user_query:
                     _prev = _prev[:-1]
-                if len(_prev) > 16:
-                    _prev = _prev[-16:]
-                for msg in _prev:
+                # Dynamic sizing: keep adding messages until token budget is exhausted
+                _trimmed = []
+                for msg in reversed(_prev):
+                    _content = msg.get("content", "")
+                    _msg_tokens = len(_content) // 4
+                    if _history_tokens_used + _msg_tokens > _history_token_budget:
+                        break
+                    _trimmed.insert(0, msg)
+                    _history_tokens_used += _msg_tokens
+                for msg in _trimmed:
                     _role = msg.get("role", "user")
                     _content = msg.get("content", "")
                     if _role in ("user", "assistant") and _content:
-                        messages.append({"role": _role, "content": _content[:1500]})
+                        messages.append({"role": _role, "content": _content})
                         _injected_history += 1
                 if _injected_history:
-                    logger.info(f"[Pipeline] Injected {_injected_history} conversation history messages into context")
+                    logger.info(f"[Pipeline] Injected {_injected_history} session history messages (~{_history_tokens_used} tokens)")
             except Exception as e:
                 logger.warning(f"[Pipeline] Failed to inject conversation history: {e}")
 

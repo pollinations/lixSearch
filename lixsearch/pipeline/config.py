@@ -74,6 +74,7 @@ VISION_MODEL = "gemini-fast"
 RESPONSE_MODEL = "lixsearch"
 LLM_MAX_TOKENS = 1500
 LLM_MAX_TOKENS_DETAILED = 4096
+HISTORY_TOKEN_BUDGET = int(os.getenv("HISTORY_TOKEN_BUDGET", "6000"))  # max tokens for conversation history injection
 LLM_TEMPERATURE = 0.7
 LLM_TOP_P = 1.0
 

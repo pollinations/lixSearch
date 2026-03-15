@@ -12,22 +12,41 @@ from sessions.main import get_session_manager
 from ragService.main import get_retrieval_system
 from chatEngine.main import initialize_chat_engine
 from commons.requestID import RequestIDMiddleware
-from app.gateways import health, search, session, chat, stats, websocket, surf, discover
+from app.gateways import health, search, session, chat, stats, websocket, surf, discover, completions
 logger = logging.getLogger("lixsearch-api")
 
 
-def _run_archive_startup_cleanup() -> None:
-    """
-    Synchronous startup task: clean up expired conversation archives (>30 days old).
-    Runs once per process start, in a thread so it doesn't block startup.
-    """
+def _run_archive_cleanup() -> None:
+    """Clean up expired conversation archives (>30 days old)."""
     try:
         from sessions.hybrid_conversation_cache import _get_archive
         archive = _get_archive()
         removed = archive.cleanup_expired()
-        logger.info(f"[APP] Startup archive cleanup: removed {removed} expired sessions")
+        if removed:
+            logger.info(f"[APP] Archive cleanup: removed {removed} expired sessions")
     except Exception as e:
-        logger.warning(f"[APP] Startup archive cleanup error: {e}")
+        logger.warning(f"[APP] Archive cleanup error: {e}")
+
+
+def _run_redis_memory_check() -> None:
+    """Log Redis memory usage and warn if approaching limit."""
+    try:
+        from pipeline.config import create_redis_client
+        client = create_redis_client(db=0)
+        info = client.info("memory")
+        used = info.get("used_memory", 0)
+        maxmem = info.get("maxmemory", 0)
+        if maxmem > 0:
+            usage_pct = (used / maxmem) * 100
+            if usage_pct > 85:
+                logger.warning(
+                    f"[APP] Redis memory pressure: {usage_pct:.0f}% "
+                    f"({info.get('used_memory_human')}/{info.get('maxmemory_human')})"
+                )
+            else:
+                logger.debug(f"[APP] Redis memory: {usage_pct:.0f}%")
+    except Exception as e:
+        logger.debug(f"[APP] Redis memory check failed: {e}")
 
 
 class lixSearch:
@@ -44,12 +63,7 @@ class lixSearch:
         self._register_lifecycle_hooks()
     
     def _setup_cors(self):
-        allowed_origins = [
-            "http://localhost:3000",
-            "https://search.elixpo.com",
-            "https://www.search.elixpo.com",
-        ]
-        cors(self.app, allow_origin=allowed_origins)
+        cors(self.app, allow_origin="*", allow_headers=["Content-Type", "Authorization", "X-Request-ID", "X-API-Key"])
     
     def _setup_middleware(self):
         middleware = RequestIDMiddleware(self.app.asgi_app)
@@ -104,6 +118,10 @@ class lixSearch:
         
         self.app.route('/api/health', methods=['GET'])(health_check_wrapper)
         self.app.route('/api/search', methods=['POST', 'GET'])(search_wrapper)
+
+        async def completions_wrapper():
+            return await completions.chat_completions(self.pipeline_initialized)
+        self.app.route('/v1/chat/completions', methods=['POST'])(completions_wrapper)
         self.app.route('/api/session/create', methods=['POST'])(session.create_session)
         self.app.route('/api/session/<session_id>', methods=['GET'])(session.get_session_info)
         self.app.route('/api/session/<session_id>/kg', methods=['GET'])(session.get_session_kg)
