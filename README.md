@@ -118,7 +118,7 @@ flowchart TD
 ```
 
 **Result:** Fast, accurate answers you can trust.
-
+[!The Searching Process Explained in Detail](./public/images/search_arch.png) 
 
 ---
 
