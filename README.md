@@ -135,7 +135,9 @@ flowchart TD
 
 ---
 
-## 📖 API Usage
+## 📖 API Usage 
+
+> Right now we have stopped public access, but it will be available soon with [Pollinations.ai API] (https://enter.pollinations.ai). In the meantime, you can run your own instance of lixSearch and use the same API.
 
 lixSearch exposes an **OpenAI-compatible** API. Any client that works with OpenAI works with lixSearch.
 
