@@ -20,13 +20,17 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 COMPOSE_FILE="docker-compose.yml"
-CONTAINER_COUNT=${2:-1}
 
-# Validate numeric args to prevent injection
-if ! [[ "$CONTAINER_COUNT" =~ ^[0-9]+$ ]]; then
-    echo -e "${RED}✗${NC} Container count must be a number"
-    exit 1
-fi
+# Only validate container count for commands that use it
+case "${1:-help}" in
+    start|scale)
+        CONTAINER_COUNT=${2:-1}
+        if ! [[ "$CONTAINER_COUNT" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}✗${NC} Container count must be a number"
+            exit 1
+        fi
+        ;;
+esac
 
 info() {
     echo -e "${BLUE}ℹ${NC} $1"
@@ -57,8 +61,8 @@ check_env() {
 }
 
 check_docker() {
-    if ! command -v docker-compose &> /dev/null; then
-        error "docker-compose is not installed"
+    if ! command -v docker compose &> /dev/null; then
+        error "docker compose is not installed"
         exit 1
     fi
 }
@@ -71,9 +75,9 @@ start_services() {
     info "Starting lixSearch with $count container(s)..."
 
     if [ "$count" -eq 1 ]; then
-        docker-compose -f "$COMPOSE_FILE" up -d
+        docker compose -f "$COMPOSE_FILE" up -d
     else
-        docker-compose -f "$COMPOSE_FILE" up -d --scale lixsearch-app="$count"
+        docker compose -f "$COMPOSE_FILE" up -d --scale lixsearch-app="$count"
     fi
 
     info "Waiting for services to be healthy (90 seconds)..."
@@ -91,9 +95,9 @@ build_image() {
     
     if [ "$no_cache" = "true" ]; then
         info "Building with --no-cache flag (smallest image)..."
-        docker-compose -f "$COMPOSE_FILE" build --no-cache
+        docker compose -f "$COMPOSE_FILE" build --no-cache
     else
-        docker-compose -f "$COMPOSE_FILE" build
+        docker compose -f "$COMPOSE_FILE" build
     fi
 
     success "Image built successfully"
@@ -108,7 +112,7 @@ scale_containers() {
     check_docker
 
     info "Scaling to $count container(s)..."
-    docker-compose -f "$COMPOSE_FILE" up -d --scale lixsearch-app="$count"
+    docker compose -f "$COMPOSE_FILE" up -d --scale lixsearch-app="$count"
 
     sleep 10
     success "Scaled to $count container(s)"
@@ -118,7 +122,7 @@ scale_containers() {
 stop_services() {
     check_docker
     info "Stopping all services..."
-    docker-compose -f "$COMPOSE_FILE" down
+    docker compose -f "$COMPOSE_FILE" down
     success "Services stopped"
 }
 
@@ -129,14 +133,14 @@ clean_volumes() {
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         info "Removing containers and volumes..."
-        docker-compose -f "$COMPOSE_FILE" down -v
+        docker compose -f "$COMPOSE_FILE" down -v
         success "Cleaned up"
     fi
 }
 
 show_status() {
     echo ""
-    docker-compose -f "$COMPOSE_FILE" ps
+    docker compose -f "$COMPOSE_FILE" ps
     echo ""
 }
 
@@ -146,16 +150,16 @@ show_logs() {
 
     case "$service" in
         app|lixsearch)
-            docker-compose -f "$COMPOSE_FILE" logs -f lixsearch-app
+            docker compose -f "$COMPOSE_FILE" logs -f lixsearch-app
             ;;
         redis)
-            docker-compose -f "$COMPOSE_FILE" logs -f redis
+            docker compose -f "$COMPOSE_FILE" logs -f redis
             ;;
         chroma)
-            docker-compose -f "$COMPOSE_FILE" logs -f chroma-server
+            docker compose -f "$COMPOSE_FILE" logs -f chroma-server
             ;;
         *)
-            docker-compose -f "$COMPOSE_FILE" logs -f nginx
+            docker compose -f "$COMPOSE_FILE" logs -f nginx
             ;;
     esac
 }
@@ -175,13 +179,13 @@ check_health() {
         error "Nginx & API: UNREACHABLE"
     fi
 
-    if docker-compose -f "$COMPOSE_FILE" exec redis redis-cli ping > /dev/null 2>&1; then
+    if docker compose -f "$COMPOSE_FILE" exec redis redis-cli ping > /dev/null 2>&1; then
         success "Redis: HEALTHY"
     else
         error "Redis: UNREACHABLE"
     fi
 
-    if docker-compose -f "$COMPOSE_FILE" exec chroma-server curl -s http://localhost:8000/api/version > /dev/null 2>&1; then
+    if docker compose -f "$COMPOSE_FILE" exec chroma-server curl -s http://localhost:8000/api/version > /dev/null 2>&1; then
         success "Chroma: HEALTHY"
     else
         error "Chroma: UNREACHABLE"
@@ -193,7 +197,7 @@ check_health() {
 restart_services() {
     check_docker
     info "Restarting all services..."
-    docker-compose -f "$COMPOSE_FILE" restart
+    docker compose -f "$COMPOSE_FILE" restart
     sleep 10
     success "Services restarted"
     check_health
@@ -207,11 +211,11 @@ backup_redis() {
     mkdir -p "$backup_dir"
 
     info "Backing up Redis data..."
-    docker-compose -f "$COMPOSE_FILE" exec redis redis-cli BGSAVE > /dev/null 2>&1
+    docker compose -f "$COMPOSE_FILE" exec redis redis-cli BGSAVE > /dev/null 2>&1
 
     sleep 2
 
-    docker-compose -f "$COMPOSE_FILE" cp redis:/data/dump.rdb \
+    docker compose -f "$COMPOSE_FILE" cp redis:/data/dump.rdb \
         "$backup_dir/redis_dump_${timestamp}.rdb" 2>/dev/null || true
 
     success "Redis backed up to $backup_dir/redis_dump_${timestamp}.rdb"
