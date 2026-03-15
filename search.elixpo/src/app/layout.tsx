@@ -15,8 +15,8 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: 'Elixpo Search - AI Search & Synthesize',
-  description: 'AI-powered search with citations, images, and synthesized answers',
+  title: 'lixSearch - AI Search Engine',
+  description: 'Open-source intelligent search assistant that searches the web, fetches content, and synthesizes answers with real sources and citations.',
   icons: { icon: '/favicon.png' },
 };
 
@@ -27,7 +27,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${dmSans.variable} ${spaceGrotesk.variable}`}>
-      <body className="font-body bg-bg-deep text-txt-primary h-screen overflow-hidden">
+      <body className="font-body bg-[#0a0c14] text-txt-primary">
         {children}
       </body>
     </html>
