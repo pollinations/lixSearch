@@ -1,28 +1,20 @@
 {
-  "name": "elixpo-search",
-  "version": "2.0.0",
+  "name": "lixsearch-landing",
+  "version": "1.0.0",
   "private": true,
-  "description": "Elixpo Search - AI Search & Synthesize",
+  "description": "lixSearch - AI Search Engine Landing Page",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "pages:build": "npx @cloudflare/next-on-pages",
-    "pages:dev": "npx wrangler pages dev .vercel/output/static --compatibility-date=2024-12-01 --compatibility-flags=nodejs_compat --d1=DB --kv=KV",
-    "pages:deploy": "npx wrangler pages deploy .vercel/output/static",
-    "db:migrate": "npx wrangler d1 migrations apply elixpo_search",
-    "db:migrate:local": "npx wrangler d1 migrations apply elixpo_search --local"
+    "deploy": "./deploy.sh"
   },
   "dependencies": {
-    "@cloudflare/next-on-pages": "^1.13.0",
     "lucide-react": "^0.400.0",
     "next": "^15.3.3",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-markdown": "^9.0.0",
-    "rehype-highlight": "^7.0.0",
-    "remark-gfm": "^4.0.0"
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

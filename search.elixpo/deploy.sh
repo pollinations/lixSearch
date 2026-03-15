@@ -1,89 +1,46 @@
 #!/usr/bin/env bash
 # Usage:
-#   ./deploy.sh              — runs all steps: secrets + build + deploy
-#   ./deploy.sh secrets      — push .env secrets to Cloudflare
-#   ./deploy.sh build        — build for Cloudflare Pages
-#   ./deploy.sh deploy       — deploy built output to Cloudflare Pages
-#   ./deploy.sh build deploy — build then deploy (skip secrets)
+#   ./deploy.sh              — build + deploy
+#   ./deploy.sh build        — build only
+#   ./deploy.sh deploy       — deploy only (must build first)
 
 set -euo pipefail
 
-PROJECT="elixpo-accounts"
-ENV_FILE=".env"
-
-# ── Commands ──────────────────────────────────────────────────────────
-
-push_secrets() {
-  if [ ! -f "$ENV_FILE" ]; then
-    echo "Error: $ENV_FILE not found"
-    exit 1
-  fi
-
-  echo "=== Pushing secrets to Cloudflare Pages ==="
-  count=0
-  while IFS= read -r line; do
-    [[ -z "$line" || "$line" =~ ^# ]] && continue
-
-    key="${line%%=*}"
-    value="${line#*=}"
-
-    # Strip surrounding quotes
-    value="${value#\"}"
-    value="${value%\"}"
-
-    # NEXT_PUBLIC_ vars are baked at build time, not runtime secrets
-    [[ "$key" == NEXT_PUBLIC_* ]] && continue
-
-    # Skip vars already defined in wrangler.toml (would cause "binding already in use" error)
-    [[ "$key" == "ENVIRONMENT" || "$key" == "NODE_ENV" || \
-       "$key" == "JWT_EXPIRATION_MINUTES" || "$key" == "REFRESH_TOKEN_EXPIRATION_DAYS" ]] && continue
-
-    echo "  Setting: $key"
-    echo "$value" | npx wrangler pages secret put "$key" --project-name "$PROJECT" 2>&1
-    count=$((count + 1))
-  done < "$ENV_FILE"
-  echo "Pushed $count secrets."
-  echo ""
-}
+PROJECT="lixsearch"
 
 do_build() {
-  echo "=== Building for Cloudflare Pages ==="
-  sudo npm run pages:build
-  echo "Build complete."
+  echo "=== Building static site ==="
+  npm run build
+  echo "Build complete — output in ./out/"
   echo ""
 }
 
 do_deploy() {
-  if [ ! -d ".vercel/output/static" ]; then
-    echo "Error: .vercel/output/static not found. Run './deploy.sh build' first."
+  if [ ! -d "out" ]; then
+    echo "Error: ./out/ not found. Run './deploy.sh build' first."
     exit 1
   fi
 
   echo "=== Deploying to Cloudflare Pages ==="
-  sudo npx wrangler pages deploy ./.vercel/output/static --project-name "$PROJECT"
+  npx wrangler pages deploy ./out --project-name "$PROJECT"
   echo "Deploy complete."
   echo ""
 }
 
-# ── Entry point ───────────────────────────────────────────────────────
-
-# No args = run everything
+# No args = build + deploy
 if [ $# -eq 0 ]; then
-  push_secrets
   do_build
   do_deploy
   exit 0
 fi
 
-# Run only the requested steps, in order
 for cmd in "$@"; do
   case "$cmd" in
-    secrets) push_secrets ;;
-    build)   do_build ;;
-    deploy)  do_deploy ;;
+    build)  do_build ;;
+    deploy) do_deploy ;;
     *)
       echo "Unknown command: $cmd"
-      echo "Usage: ./deploy.sh [secrets] [build] [deploy]"
+      echo "Usage: ./deploy.sh [build] [deploy]"
       exit 1
       ;;
   esac
