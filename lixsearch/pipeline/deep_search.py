@@ -90,7 +90,7 @@ async def _execute_deep_search_sub_query(
     rag_context = ""
     if core_service:
         try:
-            retrieval_result = core_service.retrieve(sub_query, top_k=3)
+            retrieval_result = core_service.retrieve(sub_query, top_k=10)
             if retrieval_result.get("count", 0) > 0:
                 rag_context = "\n".join(
                     [r["metadata"]["text"] for r in retrieval_result.get("results", [])]
