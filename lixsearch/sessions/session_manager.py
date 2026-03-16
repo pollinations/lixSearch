@@ -21,11 +21,12 @@ class SessionManager:
         self.lock = threading.RLock()
         logger.info(f"[SessionManager] Initialized with max {max_sessions} sessions, TTL: {ttl_minutes}m, embedding_dim: {embedding_dim}")
     
-    def create_session(self, query: str) -> str:
+    def create_session(self, query: str, session_id: str = None) -> str:
         with self.lock:
             if len(self.sessions) >= self.max_sessions:
                 self._cleanup_expired()
-            session_id = str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE]
+            if not session_id:
+                session_id = str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE]
             self.sessions[session_id] = SessionData(session_id, query, embedding_dim=self.embedding_dim)
             logger.info(f"[SessionManager] Created session {session_id} for query: {query[:LOG_MESSAGE_QUERY_TRUNCATE]}")
             return session_id

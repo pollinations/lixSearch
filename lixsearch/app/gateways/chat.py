@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import uuid
 from datetime import datetime
@@ -6,6 +7,13 @@ from sessions.main import get_session_manager
 from chatEngine.main import get_chat_engine
 from pipeline.config import X_REQ_ID_SLICE_SIZE, LOG_MESSAGE_QUERY_TRUNCATE
 from app.utils import validate_session_id
+
+
+def _session_id_from_ip() -> str:
+    """Derive a deterministic session_id from the client IP address."""
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "unknown")
+    client_ip = client_ip.split(",")[0].strip()
+    return f"ip-{hashlib.sha256(client_ip.encode()).hexdigest()[:16]}"
 
 logger = logging.getLogger("lixsearch-api")
 
@@ -25,9 +33,11 @@ async def chat(pipeline_initialized: bool):
             return jsonify({"error": "Message is required"}), 400
 
         if not session_id:
+            session_id = _session_id_from_ip()
             session_manager = get_session_manager()
-            session_id = session_manager.create_session(user_message)
-            logger.info(f"[chat] Created new session: {session_id}")
+            if not session_manager.get_session(session_id):
+                session_manager.create_session(user_message, session_id=session_id)
+            logger.info(f"[chat] Using IP-derived session: {session_id}")
 
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE])
         logger.info(

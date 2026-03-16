@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import uuid
 import json
@@ -6,6 +7,14 @@ from quart import request, jsonify, Response
 from pipeline.searchPipeline import run_elixposearch_pipeline
 from app.utils import validate_query, validate_url, format_openai_response
 from pipeline.config import X_REQ_ID_SLICE_SIZE, REQUEST_ID_HEX_SLICE_SIZE, LOG_MESSAGE_QUERY_TRUNCATE, RESPONSE_MODEL
+
+
+def _session_id_from_ip() -> str:
+    """Derive a deterministic session_id from the client IP address."""
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "unknown")
+    # Take the first IP if X-Forwarded-For has multiple
+    client_ip = client_ip.split(",")[0].strip()
+    return f"ip-{hashlib.sha256(client_ip.encode()).hexdigest()[:16]}"
 
 logger = logging.getLogger("lixsearch-api")
 
@@ -68,8 +77,8 @@ async def search(pipeline_initialized: bool):
             image_url = image_urls[0]
 
         if not session_id:
-            logger.warning(f"[search] Missing mandatory 'session_id' parameter")
-            return jsonify({"error": "Missing mandatory parameter: session_id"}), 400
+            session_id = _session_id_from_ip()
+            logger.info(f"[search] No session_id provided, derived from IP: {session_id}")
 
         if not validate_query(query) and not image_urls:
             logger.warning(f"[{session_id}] Invalid query and no image: {query[:50]}")
