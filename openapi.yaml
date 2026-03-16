@@ -23,7 +23,7 @@ info:
     # Simple search
     curl "https://search.elixpo.com/api/search?query=latest+AI+news&session_id=my-session&stream=false"
     ```
-  version: 2.0.0
+  version: 2.1.0
   contact:
     name: Elixpo
     url: https://elixpo.com
@@ -51,6 +51,10 @@ tags:
     description: Lightweight URL and image search without LLM synthesis
   - name: Discover
     description: Auto-generated category-based news articles
+  - name: Export
+    description: Export responses as PDF documents
+  - name: Images
+    description: Generated image proxy endpoints
   - name: System
     description: Health checks, statistics, and operational endpoints
 
@@ -198,10 +202,10 @@ paths:
           example: "latest breakthroughs in AI"
         - name: session_id
           in: query
-          required: true
+          required: false
           schema:
             type: string
-          description: Session identifier for context persistence
+          description: Session identifier for context persistence. If omitted, a session is derived from the client IP.
           example: "sess-abc123"
         - name: stream
           in: query
@@ -266,14 +270,13 @@ paths:
               type: object
               required:
                 - query
-                - session_id
               properties:
                 query:
                   type: string
                   description: Search query text
                 session_id:
                   type: string
-                  description: Session identifier for context persistence
+                  description: Session identifier for context persistence. If omitted, derived from client IP.
                 stream:
                   type: boolean
                   default: true
@@ -889,6 +892,86 @@ paths:
       responses:
         '101':
           description: WebSocket upgrade successful
+
+  # ──────────────────────────────────────────────
+  # Export
+  # ──────────────────────────────────────────────
+  /api/export/pdf:
+    post:
+      operationId: exportPdf
+      summary: Export response as PDF
+      description: |
+        Convert a markdown response into a downloadable PDF document.
+        Handles literal `\n` characters, markdown headers, lists, blockquotes, code blocks,
+        and strips formatting for clean PDF text.
+      tags:
+        - Export
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                  description: Markdown content to render as PDF
+                title:
+                  type: string
+                  default: "lixSearch Response"
+                  description: PDF document title
+            example:
+              content: "## Quantum Computing\n\nQuantum computing uses **qubits** to perform calculations..."
+              title: "Quantum Computing Overview"
+      responses:
+        '200':
+          description: PDF document
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ──────────────────────────────────────────────
+  # Generated Images
+  # ──────────────────────────────────────────────
+  /api/image/{image_id}:
+    get:
+      operationId: getGeneratedImage
+      summary: Get generated image
+      description: |
+        Serve a previously generated image by its ID. Images are stored in-memory with a 1-hour TTL.
+        These URLs are returned by the search pipeline when image generation is triggered.
+      tags:
+        - Images
+      parameters:
+        - name: image_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Image identifier (UUID returned from image generation)
+      responses:
+        '200':
+          description: Image data
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Image not found or expired
 
   # ──────────────────────────────────────────────
   # System
