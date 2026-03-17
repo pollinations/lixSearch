@@ -49,10 +49,6 @@ tags:
     description: Session lifecycle management and knowledge graph access
   - name: Surf
     description: Lightweight URL and image search without LLM synthesis
-  - name: Discover
-    description: Auto-generated category-based news articles
-  - name: Export
-    description: Export responses as PDF documents
   - name: Images
     description: Generated image proxy endpoints
   - name: System
@@ -815,58 +811,6 @@ paths:
           $ref: '#/components/responses/NotInitialized'
 
   # ──────────────────────────────────────────────
-  # Discover
-  # ──────────────────────────────────────────────
-  /api/discover/generate:
-    post:
-      operationId: generateDiscover
-      summary: Generate discover articles
-      description: |
-        Generate category-based news articles by searching the web and using LLM synthesis.
-        Generates up to 6 articles per category. Categories include: finance, academic, sports, patent, tech, health, entertainment, science.
-      tags:
-        - Discover
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                categories:
-                  type: array
-                  items:
-                    type: string
-                  description: List of categories to generate articles for. Defaults to all categories.
-            example:
-              categories: ["tech", "science"]
-      responses:
-        '200':
-          description: Generated articles grouped by category
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
-                  dayKey:
-                    type: string
-                    example: "2026-03-15"
-                  generated_count:
-                    type: integer
-                  categories:
-                    type: object
-                    additionalProperties:
-                      type: array
-                      items:
-                        $ref: '#/components/schemas/DiscoverArticle'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '503':
-          $ref: '#/components/responses/NotInitialized'
-
-  # ──────────────────────────────────────────────
   # WebSocket
   # ──────────────────────────────────────────────
   /ws/search:
@@ -892,51 +836,6 @@ paths:
       responses:
         '101':
           description: WebSocket upgrade successful
-
-  # ──────────────────────────────────────────────
-  # Export
-  # ──────────────────────────────────────────────
-  /api/export/pdf:
-    post:
-      operationId: exportPdf
-      summary: Export response as PDF
-      description: |
-        Convert a markdown response into a downloadable PDF document.
-        Handles literal `\n` characters, markdown headers, lists, blockquotes, code blocks,
-        and strips formatting for clean PDF text.
-      tags:
-        - Export
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - content
-              properties:
-                content:
-                  type: string
-                  description: Markdown content to render as PDF
-                title:
-                  type: string
-                  default: "lixSearch Response"
-                  description: PDF document title
-            example:
-              content: "## Quantum Computing\n\nQuantum computing uses **qubits** to perform calculations..."
-              title: "Quantum Computing Overview"
-      responses:
-        '200':
-          description: PDF document
-          content:
-            application/pdf:
-              schema:
-                type: string
-                format: binary
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '500':
-          $ref: '#/components/responses/InternalError'
 
   # ──────────────────────────────────────────────
   # Generated Images
@@ -1250,21 +1149,6 @@ components:
             type: string
             format: uri
           description: Image URLs (only present when `images=true`)
-
-    DiscoverArticle:
-      type: object
-      properties:
-        title:
-          type: string
-          maxLength: 200
-        excerpt:
-          type: string
-          maxLength: 500
-        sourceUrl:
-          type: string
-          format: uri
-        sourceTitle:
-          type: string
 
     Error:
       type: object
