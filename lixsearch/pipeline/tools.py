@@ -216,7 +216,7 @@ tools = [
         "type": "function",
         "function": {
             "name": "deep_research",
-            "description": "Trigger multi-step deep research mode. Decomposes the query into sub-topics, researches each independently with multiple sources, and synthesizes a comprehensive answer. Use ONLY when the query genuinely requires deep, multi-angle research — e.g. comparative analysis, multi-faceted topics, investigative questions, or when the user explicitly asks for thorough/comprehensive/in-depth research. Do NOT use for simple factual lookups, definitions, how-tos, or single-topic questions.",
+            "description": "Trigger multi-step deep research mode. Decomposes the query into sub-topics, researches each independently, and synthesizes a comprehensive answer. Use ONLY when the query is a genuine research question requiring investigation from multiple angles (e.g. comparative analysis across 3+ options, multi-domain impact studies, investigative deep dives into complex events). NEVER use for: PDF exports, summaries, recaps, image generation, simple lookups, single-topic questions, follow-up questions, or any request that can be handled by another tool.",
             "parameters": {
                 "type": "object",
                 "properties": {
