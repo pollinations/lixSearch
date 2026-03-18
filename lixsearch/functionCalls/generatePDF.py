@@ -39,7 +39,7 @@ def _markdown_to_pdf(markdown_text: str, title: str = "lixSearch Response") -> b
         def header(self):
             self.set_font("Helvetica", "B", 9)
             self.set_text_color(100, 100, 100)
-            self.cell(0, 8, "lixSearch", align="L")
+            self.cell(0, 8, "LixSearch", align="L")
             self.cell(0, 8, "search.elixpo.com", align="R", new_x="LMARGIN", new_y="NEXT")
             self.set_draw_color(30, 30, 60)
             self.set_line_width(0.5)
@@ -66,7 +66,7 @@ def _markdown_to_pdf(markdown_text: str, title: str = "lixSearch Response") -> b
     # Metadata line
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(120, 120, 120)
-    pdf.cell(0, 6, f"Generated {datetime.utcnow().strftime('%B %d, %Y at %H:%M UTC')}  |  Powered by lixSearch", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Generated {datetime.utcnow().strftime('%B %d, %Y at %H:%M UTC')}  |  Powered by LixSearch", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(6)
 
     # Divider
