@@ -75,9 +75,9 @@ start_services() {
     info "Starting lixSearch with $count container(s)..."
 
     if [ "$count" -eq 1 ]; then
-        docker compose -f "$COMPOSE_FILE" up -d
+        docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
     else
-        docker compose -f "$COMPOSE_FILE" up -d --scale lixsearch-app="$count"
+        docker compose -f "$COMPOSE_FILE" up -d --remove-orphans --scale lixsearch-app="$count"
     fi
 
     info "Waiting for services to be healthy (90 seconds)..."
@@ -112,7 +112,7 @@ scale_containers() {
     check_docker
 
     info "Scaling to $count container(s)..."
-    docker compose -f "$COMPOSE_FILE" up -d --scale lixsearch-app="$count"
+    docker compose -f "$COMPOSE_FILE" up -d --remove-orphans --scale lixsearch-app="$count"
 
     sleep 10
     success "Scaled to $count container(s)"
