@@ -314,7 +314,7 @@ case "${1:-help}" in
         check_env
         check_docker
         docker compose -f "$COMPOSE_FILE" build lixsearch-app
-        docker compose -f "$COMPOSE_FILE" up -d --no-deps --scale lixsearch-app="${CONTAINER_COUNT}" lixsearch-app
+        docker compose -f "$COMPOSE_FILE" up -d --remove-orphans --no-deps --scale lixsearch-app="${CONTAINER_COUNT}" lixsearch-app
         info "Waiting for health..."
         sleep 30
         success "App containers restarted (${CONTAINER_COUNT} replicas)"
