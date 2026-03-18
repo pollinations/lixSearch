@@ -48,8 +48,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
     logger.info(
         f"[pipeline] session={session_id} Starting ElixpoSearch: "
-        f"query='{user_query[:LOG_MESSAGE_QUERY_TRUNCATE]}...' images={len(user_images)} "
-        f"deep_search={deep_search}"
+        f"query='{user_query[:LOG_MESSAGE_QUERY_TRUNCATE]}...' images={len(user_images)}"
     )
 
     # Register session in SessionManager so /api/session/* routes can find it
@@ -70,9 +69,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
     original_user_query = user_query or ""
     image_only_mode = bool(user_image and not original_user_query.strip())
 
-    # --- Deep search gating ---
-    is_deep_search = deep_search and not image_only_mode
-    if is_deep_search:
+    # --- Deep search gating (LLM auto-detects from query) ---
+    is_deep_search = False
+    if not image_only_mode and original_user_query.strip():
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {POLLINATIONS_TOKEN}",
@@ -80,36 +79,14 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
         llm_verdict = await _evaluate_deep_search_need(original_user_query, headers)
 
-        if llm_verdict is False:
-            logger.info("[DeepSearch] LLM gating DOWNGRADE: query too simple for deep search")
-            is_deep_search = False
-            downgrade_event = emit_event("INFO", "<TASK>Query is straightforward — using standard search</TASK>")
-            if downgrade_event:
-                yield downgrade_event
-        elif llm_verdict is None:
-            from pipeline.queryDecomposition import QueryAnalyzer, QueryComplexity
-            gate_analyzer = QueryAnalyzer()
-            gate_complexity = gate_analyzer.detect_query_complexity(original_user_query)
-            complexity_rank = {
-                QueryComplexity.SIMPLE: 0,
-                QueryComplexity.MODERATE: 1,
-                QueryComplexity.COMPLEX: 2,
-                QueryComplexity.HIGHLY_COMPLEX: 3,
-            }
-            min_rank = complexity_rank.get(QueryComplexity(DEEP_SEARCH_GATING_MIN_COMPLEXITY.lower()), 1)
-            if complexity_rank.get(gate_complexity, 0) < min_rank:
-                logger.info(
-                    f"[DeepSearch] Heuristic gating DOWNGRADE: complexity={gate_complexity.value} "
-                    f"below minimum={DEEP_SEARCH_GATING_MIN_COMPLEXITY}"
-                )
-                is_deep_search = False
-                downgrade_event = emit_event("INFO", "<TASK>Query is straightforward — using standard search</TASK>")
-                if downgrade_event:
-                    yield downgrade_event
-            else:
-                logger.info(f"[DeepSearch] Heuristic gating PASS: complexity={gate_complexity.value}")
-        else:
+        if llm_verdict is True:
             logger.info("[DeepSearch] LLM gating PASS: proceeding with deep search")
+            is_deep_search = True
+        elif llm_verdict is False:
+            logger.info("[DeepSearch] LLM gating: standard search sufficient")
+        else:
+            # LLM gating call failed — default to standard search
+            logger.info("[DeepSearch] LLM gating unavailable — defaulting to standard search")
 
     if is_deep_search:
         async for event in _run_deep_search_pipeline(
