@@ -25,7 +25,7 @@ async def create_image_from_prompt(prompt: str) -> str:
     model = next(_model_cycle)
     seed = random.randint(0, 10000)
     t0 = time.perf_counter()
-    upstream_url = f"{POLLINATIONS_ENDPOINT_IMAGE}{quote(prompt)}?model={model}&height=512&width=512&seed={seed}&quality=hd&enhance=true"
+    upstream_url = f"{POLLINATIONS_ENDPOINT_IMAGE}{quote(prompt)}?model=dirtberry-pro&height=512&width=512&seed={seed}&quality=hd&enhance=true"
 
     headers = {
         "Authorization": f"Bearer {os.getenv('TOKEN')}"

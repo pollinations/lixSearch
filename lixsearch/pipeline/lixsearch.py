@@ -25,10 +25,7 @@ from pipeline.helpers import (
     _decompose_query_with_llm,
     _synthesize_subtopic,
 )
-from pipeline.deep_search import (
-    _evaluate_deep_search_need,
-    _run_deep_search_pipeline,
-)
+from pipeline.deep_search import _run_deep_search_pipeline
 from functionCalls.getImagePrompt import describe_image, replyFromImage
 import asyncio
 
@@ -39,7 +36,7 @@ MODEL = LLM_MODEL
 logger.debug(f"Model configured: {MODEL}")
 
 
-async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: str = None, session_id: str = None, deep_search: bool = False, user_images: list = None, chat_history: list = None):
+async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: str = None, session_id: str = None, user_images: list = None, chat_history: list = None):
     # Normalize: user_images is the canonical list (max 3), user_image is first for backward compat
     if user_images is None:
         user_images = [user_image] if user_image else []
@@ -69,37 +66,12 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
     original_user_query = user_query or ""
     image_only_mode = bool(user_image and not original_user_query.strip())
 
-    # --- Deep search gating (LLM auto-detects from query) ---
-    is_deep_search = False
-    if not image_only_mode and original_user_query.strip():
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {POLLINATIONS_TOKEN}",
-        }
+    # Send the first SSE immediately so the client knows we're alive
+    initial_event = emit_event("INFO", get_user_message("processing"))
+    if initial_event:
+        yield initial_event
 
-        llm_verdict = await _evaluate_deep_search_need(original_user_query, headers)
-
-        if llm_verdict is True:
-            logger.info("[DeepSearch] LLM gating PASS: proceeding with deep search")
-            is_deep_search = True
-        elif llm_verdict is False:
-            logger.info("[DeepSearch] LLM gating: standard search sufficient")
-        else:
-            # LLM gating call failed — default to standard search
-            logger.info("[DeepSearch] LLM gating unavailable — defaulting to standard search")
-
-    if is_deep_search:
-        async for event in _run_deep_search_pipeline(
-            user_query=original_user_query,
-            user_image=user_image,
-            event_id=event_id,
-            session_id=session_id,
-            emit_event=emit_event,
-        ):
-            yield event
-        return
-
-    # --- Standard pipeline ---
+    # --- Standard pipeline (deep search is triggered via deep_research tool call) ---
     _detail_keywords = re.compile(
         r"\b(detail(?:ed|s)?|comprehensive|in[- ]?depth|thorough|extensive|elaborate|full|complete|everything about|deep dive|lengthy|long)\b",
         re.IGNORECASE,
@@ -112,10 +84,6 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
     active_sources_per_search = SOURCES_PER_SEARCH
     if is_detailed_mode:
         logger.info(f"[Pipeline] Detailed mode ON: links={active_min_links}-{active_max_links}, max_tokens={active_max_tokens}, max_sources={active_max_sources}")
-
-    initial_event = emit_event("INFO", get_user_message("processing"))
-    if initial_event:
-        yield initial_event
     status_tracker = SSEStatusTracker(emit_fn=emit_event, stale_threshold=10.0)
     semantic_cache = None
     memoized_results = {}
@@ -330,7 +298,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         # Inject conversation history — from external chat_history (OpenAI messages)
         # or from session context (Redis/disk), with adaptive token budget
         _injected_history = 0
-        _history_token_budget = HISTORY_TOKEN_BUDGET_DETAILED if (is_detailed_mode or is_deep_search) else HISTORY_TOKEN_BUDGET
+        _history_token_budget = HISTORY_TOKEN_BUDGET_DETAILED if is_detailed_mode else HISTORY_TOKEN_BUDGET
         _history_tokens_used = 0
 
         if chat_history:
@@ -513,9 +481,12 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             fetch_calls = []
             web_search_calls = []
             other_calls = []
+            _deep_research_call = None
             for tool_call in tool_calls:
                 fn_name = tool_call["function"]["name"]
-                if fn_name == "fetch_full_text":
+                if fn_name == "deep_research":
+                    _deep_research_call = tool_call
+                elif fn_name == "fetch_full_text":
                     fetch_calls.append(tool_call)
                 elif fn_name == "web_search":
                     web_search_calls.append(tool_call)
@@ -532,6 +503,24 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         pass
                 else:
                     other_calls.append(tool_call)
+
+            # --- deep_research tool: hand off to deep search pipeline ---
+            if _deep_research_call:
+                try:
+                    _dr_args = json.loads(_deep_research_call["function"]["arguments"])
+                    _dr_query = _dr_args.get("query", original_user_query)
+                except Exception:
+                    _dr_query = original_user_query
+                logger.info(f"[Pipeline] Model triggered deep_research for: '{_dr_query[:80]}'")
+                async for event in _run_deep_search_pipeline(
+                    user_query=_dr_query,
+                    user_image=user_image,
+                    event_id=event_id,
+                    session_id=session_id,
+                    emit_event=emit_event,
+                ):
+                    yield event
+                return
 
             if web_search_calls and len(fetch_calls) < active_min_links:
                 logger.info(f"[URL-LIMITS] Web search detected but only {len(fetch_calls)} URLs to fetch. Need {active_min_links - len(fetch_calls)} more to meet minimum of {active_min_links}")
