@@ -24,6 +24,7 @@ from pipeline.helpers import (
     _decompose_query,
     _decompose_query_with_llm,
     _synthesize_subtopic,
+    extract_leaked_tool_call,
 )
 from pipeline.deep_search import _run_deep_search_pipeline
 from functionCalls.getImagePrompt import describe_image, replyFromImage
@@ -481,46 +482,67 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
             if not tool_calls:
                 raw_content = assistant_message.get("content", "")
-                is_reasoning_leak = _looks_like_internal_reasoning(raw_content)
-                is_placeholder = raw_content.strip() in (
-                    "Processing your request...",
-                    "I'll help you with that. Let me gather the information you need.",
-                    "",
-                )
-                has_useful_context = bool(collected_sources) or tool_call_count > 0
 
-                if (is_reasoning_leak or is_placeholder) and has_useful_context and current_iteration < max_iterations:
-                    logger.warning(
-                        f"[COMPLETION] Iteration {current_iteration}: LLM returned reasoning/placeholder text "
-                        f"(leak={is_reasoning_leak}, placeholder={is_placeholder}). Forcing synthesis instead of using raw content."
+                # --- Recovery: detect leaked tool call tokens in content ---
+                leaked_fn, leaked_args = extract_leaked_tool_call(raw_content)
+                if leaked_fn:
+                    logger.info(f"[RECOVERY] Recovered leaked tool call from content: {leaked_fn}")
+                    # Synthesize a proper tool_calls structure so the normal handler runs
+                    import uuid as _uuid
+                    tool_calls = [{
+                        "id": f"recovered-{_uuid.uuid4().hex[:8]}",
+                        "type": "function",
+                        "function": {
+                            "name": leaked_fn,
+                            "arguments": json.dumps(leaked_args),
+                        }
+                    }]
+                    # Replace the leaked content with a clean placeholder
+                    assistant_message["content"] = f"Calling {leaked_fn}..."
+                    assistant_message["tool_calls"] = tool_calls
+                    # Fall through to the tool processing block below
+
+                if not tool_calls:
+                    is_reasoning_leak = _looks_like_internal_reasoning(raw_content)
+                    is_placeholder = raw_content.strip() in (
+                        "Processing your request...",
+                        "I'll help you with that. Let me gather the information you need.",
+                        "",
                     )
-                    if event_id:
-                        yield format_sse("INFO", get_user_message("synthesizing"))
-                        status_tracker.touch()
-                    _has_images = image_context_provided or bool(collected_images_from_web) or bool(collected_similar_images)
-                    messages.append({
-                        "role": "user",
-                        "content": synthesis_instruction(user_query, image_context=_has_images, is_detailed=is_detailed_mode)
-                    })
-                    force_synthesis = True
-                    continue
+                    has_useful_context = bool(collected_sources) or tool_call_count > 0
 
-                # Retry once if model returned placeholder/empty on first iteration
-                # with no useful context — the model sometimes blanks out, just nudge it
-                if (is_reasoning_leak or is_placeholder) and not has_useful_context and current_iteration == 1:
-                    logger.warning(
-                        f"[COMPLETION] Iteration {current_iteration}: LLM returned placeholder with no context. "
-                        f"Retrying with nudge."
-                    )
-                    messages.append({
-                        "role": "user",
-                        "content": "Your previous response was empty. Re-read the query and either call the appropriate tool or answer directly."
-                    })
-                    continue
+                    if (is_reasoning_leak or is_placeholder) and has_useful_context and current_iteration < max_iterations:
+                        logger.warning(
+                            f"[COMPLETION] Iteration {current_iteration}: LLM returned reasoning/placeholder text "
+                            f"(leak={is_reasoning_leak}, placeholder={is_placeholder}). Forcing synthesis instead of using raw content."
+                        )
+                        if event_id:
+                            yield format_sse("INFO", get_user_message("synthesizing"))
+                            status_tracker.touch()
+                        _has_images = image_context_provided or bool(collected_images_from_web) or bool(collected_similar_images)
+                        messages.append({
+                            "role": "user",
+                            "content": synthesis_instruction(user_query, image_context=_has_images, is_detailed=is_detailed_mode)
+                        })
+                        force_synthesis = True
+                        continue
 
-                final_message_content = raw_content
-                logger.info(f"[COMPLETION] No tool calls found, setting final message: {final_message_content[:LOG_MESSAGE_PREVIEW_TRUNCATE] if final_message_content else 'EMPTY'}")
-                break
+                    # Retry once if model returned placeholder/empty on first iteration
+                    # with no useful context — the model sometimes blanks out, just nudge it
+                    if (is_reasoning_leak or is_placeholder) and not has_useful_context and current_iteration == 1:
+                        logger.warning(
+                            f"[COMPLETION] Iteration {current_iteration}: LLM returned placeholder with no context. "
+                            f"Retrying with nudge."
+                        )
+                        messages.append({
+                            "role": "user",
+                            "content": "Your previous response was empty. Re-read the query and either call the appropriate tool or answer directly."
+                        })
+                        continue
+
+                    final_message_content = raw_content
+                    logger.info(f"[COMPLETION] No tool calls found, setting final message: {final_message_content[:LOG_MESSAGE_PREVIEW_TRUNCATE] if final_message_content else 'EMPTY'}")
+                    break
 
             # --- Process tool calls ---
             tool_outputs = []
