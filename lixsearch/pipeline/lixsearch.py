@@ -970,8 +970,10 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
             # Detect if user asked for a PDF — keep export_to_pdf available during synthesis
             _pdf_keywords = ("pdf", "export", "save as", "download", "document")
-            _wants_pdf = any(kw in _query_lower for kw in _pdf_keywords) and not memoized_results.get("generated_pdfs")
+            _already_has_pdf = bool(memoized_results.get("generated_pdfs"))
+            _wants_pdf = any(kw in _query_lower for kw in _pdf_keywords) and not _already_has_pdf
             _pdf_tool = [t for t in tools if t["function"]["name"] == "export_to_pdf"]
+            logger.info(f"[SYNTHESIS] PDF check: query_lower='{_query_lower[:60]}', wants_pdf={_wants_pdf}, already_has_pdf={_already_has_pdf}")
 
             payload = {
                 "model": MODEL,
@@ -1196,6 +1198,29 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                         logger.info(f"[FINAL] Synthesis generated new content, length: {len(final_message_content)}")
                 except Exception as e:
                     logger.warning(f"[FINAL] Synthesis generation failed: {e}, using existing content")
+
+            # --- Auto-generate PDF if user asked for one and we haven't yet ---
+            _already_has_pdf = bool(memoized_results.get("generated_pdfs"))
+            if not _already_has_pdf and any(kw in _query_lower for kw in ("pdf", "export", "save as", "document")):
+                if final_message_content and len(final_message_content) > 100:
+                    logger.info(f"[FINAL] User requested PDF — auto-generating from synthesis content ({len(final_message_content)} chars)")
+                    try:
+                        if event_id:
+                            yield format_sse("INFO", "<TASK>Generating PDF document</TASK>")
+                        from functionCalls.generatePDF import create_pdf_from_content
+                        _pdf_title_match = re.search(r'^#+\s+(.+)', final_message_content, re.MULTILINE)
+                        _auto_pdf_title = _pdf_title_match.group(1).strip() if _pdf_title_match else None
+                        pdf_url = await create_pdf_from_content(final_message_content, _auto_pdf_title)
+                        if "generated_pdfs" not in memoized_results:
+                            memoized_results["generated_pdfs"] = []
+                        memoized_results["generated_pdfs"].append(pdf_url)
+                        if event_id:
+                            yield format_sse("INFO", "<TASK>PDF ready for download</TASK>")
+                        # Append PDF link to the response
+                        final_message_content += f"\n\n---\n\n[Download PDF]({pdf_url})"
+                        logger.info(f"[FINAL] Auto-generated PDF: {pdf_url}")
+                    except Exception as _pdf_err:
+                        logger.error(f"[FINAL] Auto PDF generation failed: {_pdf_err}")
 
             # --- Image assembly ---
             has_image_markdown = bool(re.search(r'!\[([^\]]*)\]\(https?://[^\)]+\)', final_message_content))
