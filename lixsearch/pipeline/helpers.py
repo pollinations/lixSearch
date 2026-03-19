@@ -1,4 +1,3 @@
-"""Pipeline helper functions — text processing, sanitization, query decomposition, and fetch evaluation."""
 
 import re
 import json
@@ -52,16 +51,7 @@ _TOOL_NAME_TOKEN_RE = re.compile(r"<\|tool_call_name:(\w+)\|>")
 
 
 def extract_leaked_tool_call(content: str) -> tuple:
-    """Detect and parse leaked tool call tokens in model content.
 
-    Some model APIs fail to structure tool calls properly and instead leak raw
-    tokens like <|tool_call_argument_begin|>{"content": "..."} into the content
-    field. This function detects that pattern and extracts the tool name + args.
-
-    Returns:
-        (function_name, function_args) if a leaked tool call is found,
-        (None, None) otherwise.
-    """
     if not content or "<|tool_call" not in content:
         return None, None
 
