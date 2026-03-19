@@ -176,8 +176,13 @@ async def _execute_deep_search_sub_query(
         if len(messages) > 8:
             messages = messages[:2] + messages[-6:]
 
+        # Truncate tool output content to keep context lean
         for m in messages:
-            if m.get("role") == "assistant" and not m.get("content"):
+            if m.get("role") == "tool":
+                content = m.get("content", "")
+                if len(content) > 400:
+                    m["content"] = content[:400] + "..."
+            elif m.get("role") == "assistant" and not m.get("content"):
                 if m.get("tool_calls"):
                     m["content"] = f"Executing {len(m['tool_calls'])} tool(s)..."
                 else:
@@ -380,20 +385,24 @@ async def _deep_search_final_synthesis(
     sub_results: list,
     headers: dict,
 ) -> str:
+    """Combine sub-query results into a cohesive final answer.
+
+    If the full synthesis fails (context too large / timeout), retries with
+    a trimmed version. Returns empty string on total failure — the caller
+    already streamed the individual sub-results so the user still has content.
+    """
+    system_msg = (
+        "You are lixSearch. Write a cohesive summary that ties together research findings. "
+        "Never mention sub-queries, research threads, findings, or internal processes. "
+        "NEVER mention internal tool names, function calls, or cache operations. "
+        "NEVER include your thinking or reasoning — output only the final answer."
+    )
+
+    user_content = deep_search_final_synthesis_instruction(original_query, sub_results)
+
     messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are lixSearch. Combine multiple research findings into a single "
-                "comprehensive, well-structured answer. Never mention sub-queries, "
-                "research threads, or internal processes. "
-                "NEVER mention internal tool names, function calls, or cache operations."
-            ),
-        },
-        {
-            "role": "user",
-            "content": deep_search_final_synthesis_instruction(original_query, sub_results),
-        },
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": user_content},
     ]
 
     payload = {
@@ -404,18 +413,52 @@ async def _deep_search_final_synthesis(
         "stream": False,
     }
 
-    response = await asyncio.wait_for(
-        asyncio.to_thread(
-            requests.post,
-            POLLINATIONS_ENDPOINT,
-            json=payload,
-            headers=headers,
-            timeout=30,
-        ),
-        timeout=35.0,
-    )
-    response.raise_for_status()
-    return response.json()["choices"][0]["message"].get("content", "").strip()
+    # Attempt 1: full synthesis
+    for attempt in range(1, 3):
+        try:
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    requests.post,
+                    POLLINATIONS_ENDPOINT,
+                    json=payload,
+                    headers=headers,
+                    timeout=45,
+                ),
+                timeout=50.0,
+            )
+            response.raise_for_status()
+            result = response.json()["choices"][0]["message"]
+            result.pop("reasoning_content", None)
+            content = result.get("content", "").strip()
+            if content:
+                content = _strip_reasoning_leak(content)
+                if content:
+                    logger.info(f"[DeepSearch] Final synthesis succeeded (attempt {attempt}): {len(content)} chars")
+                    return content
+            logger.warning(f"[DeepSearch] Final synthesis returned empty (attempt {attempt})")
+        except asyncio.TimeoutError:
+            logger.error(f"[DeepSearch] Final synthesis timed out (attempt {attempt})")
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"[DeepSearch] Final synthesis HTTP error (attempt {attempt}): {e}")
+        except Exception as e:
+            logger.error(f"[DeepSearch] Final synthesis failed (attempt {attempt}): {e}")
+
+        # Retry with aggressively trimmed input
+        if attempt == 1:
+            logger.info("[DeepSearch] Retrying synthesis with trimmed context")
+            # Keep only first 1000 chars of each sub-result
+            trimmed_results = []
+            for sub_q, summary, sources in sub_results:
+                trimmed_results.append((sub_q, summary[:1000], sources))
+            user_content = deep_search_final_synthesis_instruction(original_query, trimmed_results)
+            messages = [
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_content},
+            ]
+            payload["messages"] = messages
+
+    logger.warning("[DeepSearch] Final synthesis failed after all attempts — sub-results already streamed")
+    return ""
 
 
 async def _run_deep_search_pipeline(
@@ -600,6 +643,17 @@ async def _run_deep_search_pipeline(
             if timeout_event:
                 yield timeout_event
 
+    # Append sources regardless of synthesis success (sub-results already streamed)
+    if all_collected_sources:
+        unique_sources = sorted(set(all_collected_sources))[:8]
+        source_block = "\n\n---\n**Sources:**\n"
+        for i, src in enumerate(unique_sources, 1):
+            source_block += f"{i}. [{src}]({src})\n"
+        if event_id:
+            yield format_sse("RESPONSE", source_block)
+        else:
+            yield source_block
+
     if len(all_sub_results) > 1:
         synth_event = emit_event("INFO", "<TASK>Combining all research into final answer</TASK>")
         if synth_event:
@@ -615,33 +669,17 @@ async def _run_deep_search_pipeline(
             if final_response:
                 final_response = _scrub_tool_names(final_response)
 
-                if all_collected_sources:
-                    unique_sources = sorted(set(all_collected_sources))[:8]
-                    source_block = "\n\n---\n**Sources:**\n"
-                    for i, src in enumerate(unique_sources, 1):
-                        source_block += f"{i}. [{src}]({src})\n"
-                    final_response += source_block
-
                 if event_id:
                     yield format_sse("RESPONSE", final_response)
                 else:
                     yield final_response
+            else:
+                # Synthesis returned empty — sub-results + sources already streamed, just log
+                logger.info("[DeepSearch] Synthesis empty — sub-results already delivered to user")
 
         except Exception as e:
             logger.error(f"[DeepSearch] Final synthesis failed: {e}", exc_info=True)
-
-    elif len(all_sub_results) == 1:
-        _sq, _resp, _srcs = all_sub_results[0]
-        if _srcs:
-            unique_sources = sorted(set(_srcs))[:5]
-            source_block = "\n\n---\n**Sources:**\n"
-            for i, src in enumerate(unique_sources, 1):
-                source_block += f"{i}. [{src}]({src})\n"
-            source_response = _resp + source_block
-            if event_id:
-                yield format_sse("RESPONSE", source_response)
-            else:
-                yield source_response
+            # Not fatal — sub-results already streamed to user
 
     combined_content = "\n\n".join(r[1] for r in all_sub_results) if all_sub_results else None
     if combined_content:

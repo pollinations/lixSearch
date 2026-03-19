@@ -141,13 +141,30 @@ RULES:
 
 
 def deep_search_final_synthesis_instruction(original_query, sub_results):
+    # Truncate each finding to ~600 words to stay within context limits
     summaries = ""
     for i, (sub_q, summary, _sources) in enumerate(sub_results, 1):
-        summaries += f"\n### Finding {i}: {sub_q}\n{summary}\n"
+        # Keep first ~2400 chars (~600 words) per finding
+        truncated = summary[:2400]
+        if len(summary) > 2400:
+            # Cut at last sentence boundary
+            last_period = truncated.rfind(".")
+            if last_period > 1500:
+                truncated = truncated[:last_period + 1]
+            truncated += "\n[...continued in detail above]"
+        summaries += f"\n### Finding {i}: {sub_q}\n{truncated}\n"
 
     return f"""Synthesize a final answer for: "{original_query}"
 
-Research findings:
+You already sent the detailed findings to the user. Now write a cohesive SUMMARY that ties everything together — do NOT repeat all the details, just unify the key insights.
+
+Research findings (abbreviated):
 {summaries}
 
-Combine into one cohesive answer. No redundancy. Use markdown headers. 1500-3000 words for complex topics. Cite as [Title](URL). Never mention sub-queries or internal processes."""
+RULES:
+- Write 800-1500 words combining the key points into a unified narrative.
+- Use markdown headers to organize by theme, not by finding number.
+- Remove redundancy — if multiple findings cover the same point, mention it once.
+- Cite sources as [Title](URL).
+- NEVER mention "findings", "sub-queries", "research threads", or any internal process.
+- NEVER include your thinking or reasoning. Start directly with the content."""
