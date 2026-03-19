@@ -296,10 +296,35 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         ]
 
         # Inject conversation history — from external chat_history (OpenAI messages)
-        # or from session context (Redis/disk), with adaptive token budget
+        # or from session context (Redis/disk), with adaptive token budget.
+        # Each message gets a [sent at ...] timestamp prefix so the LLM is
+        # aware of timing gaps (e.g. user returning after hours/days).
         _injected_history = 0
         _history_token_budget = HISTORY_TOKEN_BUDGET_DETAILED if is_detailed_mode else HISTORY_TOKEN_BUDGET
         _history_tokens_used = 0
+        _last_msg_ts = None  # track last message timestamp for gap detection
+
+        def _format_ts(ts):
+            """Human-readable timestamp for the LLM context."""
+            try:
+                dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
+                return dt.strftime("%b %d, %H:%M UTC")
+            except Exception:
+                return None
+
+        def _time_gap_label(prev_ts, curr_ts):
+            """Return a human label if there's a significant gap between messages."""
+            try:
+                gap = float(curr_ts) - float(prev_ts)
+                if gap > 86400:
+                    days = int(gap // 86400)
+                    return f"[{days} day{'s' if days != 1 else ''} later]"
+                elif gap > 3600:
+                    hours = int(gap // 3600)
+                    return f"[{hours} hour{'s' if hours != 1 else ''} later]"
+            except Exception:
+                pass
+            return None
 
         if chat_history:
             # External history from OpenAI-format messages array (excludes system + current user msg)
@@ -333,17 +358,56 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 for msg in _trimmed:
                     _role = msg.get("role", "user")
                     _content = msg.get("content", "")
+                    _ts = msg.get("timestamp")
                     if _role in ("user", "assistant") and _content:
-                        messages.append({"role": _role, "content": _content})
+                        # Build timestamp-annotated content for the LLM
+                        _prefix_parts = []
+                        if _ts and _last_msg_ts:
+                            _gap = _time_gap_label(_last_msg_ts, _ts)
+                            if _gap:
+                                _prefix_parts.append(_gap)
+                        if _ts:
+                            _ts_str = _format_ts(_ts)
+                            if _ts_str:
+                                _prefix_parts.append(f"[{_ts_str}]")
+                        _annotated = f"{' '.join(_prefix_parts)} {_content}".strip() if _prefix_parts else _content
+                        messages.append({"role": _role, "content": _annotated})
                         _injected_history += 1
+                        if _ts:
+                            _last_msg_ts = _ts
                 if _injected_history:
-                    logger.info(f"[Pipeline] Injected {_injected_history} session history messages (~{_history_tokens_used} tokens)")
+                    # Compute session age for system context
+                    _first_ts = None
+                    for msg in _trimmed:
+                        if msg.get("timestamp"):
+                            _first_ts = msg["timestamp"]
+                            break
+                    _session_age = ""
+                    if _first_ts and _last_msg_ts:
+                        try:
+                            _total_span = float(_last_msg_ts) - float(_first_ts)
+                            if _total_span > 86400:
+                                _session_age = f" (conversation spans {int(_total_span // 86400)} days)"
+                            elif _total_span > 3600:
+                                _session_age = f" (conversation spans {int(_total_span // 3600)} hours)"
+                        except Exception:
+                            pass
+                    logger.info(f"[Pipeline] Injected {_injected_history} timestamped session history messages (~{_history_tokens_used} tokens){_session_age}")
             except Exception as e:
                 logger.warning(f"[Pipeline] Failed to inject conversation history: {e}")
 
+        # Annotate the current user query with timing context
+        _now_ts = current_utc_time.timestamp()
+        _now_label = current_utc_time.strftime("%b %d, %H:%M UTC")
+        _current_prefix = f"[{_now_label}]"
+        if _last_msg_ts:
+            _gap = _time_gap_label(_last_msg_ts, _now_ts)
+            if _gap:
+                _current_prefix = f"{_gap} {_current_prefix}"
+        _annotated_user_msg = f"{_current_prefix} {user_msg_content}" if _injected_history > 0 else user_msg_content
         messages.append({
             "role": "user",
-            "content": user_msg_content
+            "content": _annotated_user_msg
         })
         force_synthesis = False
 
