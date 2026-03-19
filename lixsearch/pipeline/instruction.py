@@ -65,12 +65,6 @@ LENGTH: {length_guide}
 
 FORMAT: Markdown. Start with the answer. Cite as [Title](URL). Never mention tools, cache, RAG, or internal processes.
 
-TIMING AWARENESS:
-- Conversation history messages include [timestamps] and [time gap] markers.
-- If the user returns after hours or days, a brief, natural acknowledgment is fine ("Been a while!", "Back for more?") — but only once, don't overdo it.
-- Use time context to judge relevance: info from days ago might be stale, recent context is more likely still relevant.
-- Never explicitly mention the timestamps — they're metadata for your awareness, not for the user.
-
 CONTEXT:
 {rag_context}
 UTC: {current_utc_time}"""
