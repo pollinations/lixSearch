@@ -505,6 +505,19 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     force_synthesis = True
                     continue
 
+                # Retry once if model returned placeholder/empty on first iteration
+                # with no useful context — the model sometimes blanks out, just nudge it
+                if (is_reasoning_leak or is_placeholder) and not has_useful_context and current_iteration == 1:
+                    logger.warning(
+                        f"[COMPLETION] Iteration {current_iteration}: LLM returned placeholder with no context. "
+                        f"Retrying with nudge."
+                    )
+                    messages.append({
+                        "role": "user",
+                        "content": "Your previous response was empty. Re-read the query and either call the appropriate tool or answer directly."
+                    })
+                    continue
+
                 final_message_content = raw_content
                 logger.info(f"[COMPLETION] No tool calls found, setting final message: {final_message_content[:LOG_MESSAGE_PREVIEW_TRUNCATE] if final_message_content else 'EMPTY'}")
                 break
