@@ -32,6 +32,63 @@ load_dotenv()
 MODEL = LLM_MODEL
 POLLINATIONS_TOKEN = os.getenv("TOKEN")
 
+import re as _re
+
+# Patterns that indicate the model is reasoning/thinking instead of writing user-facing content
+_REASONING_PATTERNS = _re.compile(
+    r"^(?:"
+    r"(?:The user|I (?:need|should|will|have to|must|can see|see|notice|want))|"
+    r"(?:Looking at|Let me|Wait,|Actually,|However,|Given (?:the|that|this))|"
+    r"(?:Based on (?:the|my)|I (?:don't|also) (?:see|have|need))|"
+    r"(?:So (?:I|the|let)|Hmm|OK,|Alright)|"
+    r"(?:The (?:context|question|query|instruction|prompt|search) )"
+    r")",
+    _re.IGNORECASE,
+)
+
+
+def _strip_reasoning_leak(text: str) -> str:
+    """Remove internal reasoning that leaked into the beginning of a response.
+
+    Scans line by line; once a line starts with a markdown heading (#), bold
+    (**), list item (- or 1.), or doesn't match reasoning patterns, everything
+    from that line onward is kept.
+    """
+    if not text:
+        return text
+
+    lines = text.split("\n")
+    start_idx = 0
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Keep everything from the first "real content" line
+        if (
+            stripped.startswith("#")
+            or stripped.startswith("**")
+            or stripped.startswith("- ")
+            or stripped.startswith("* ")
+            or _re.match(r"^\d+\.", stripped)
+            or stripped.startswith("> ")
+            or stripped.startswith("![")
+            or stripped.startswith("[")
+        ):
+            start_idx = i
+            break
+        # If it matches reasoning patterns, skip it
+        if _REASONING_PATTERNS.match(stripped):
+            continue
+        # Otherwise it's real content — keep from here
+        start_idx = i
+        break
+
+    result = "\n".join(lines[start_idx:]).strip()
+    if len(result) < len(text) * 0.3:
+        # Safety: if we'd strip more than 70% of the content, keep original
+        return text
+    return result
+
 
 async def _evaluate_deep_search_need(query: str, headers: dict) -> bool:
     gating_messages = [
@@ -153,6 +210,9 @@ async def _execute_deep_search_sub_query(
             break
 
         assistant_message = response_data["choices"][0]["message"]
+        # Strip internal reasoning — never user-facing
+        assistant_message.pop("reasoning_content", None)
+
         if not assistant_message.get("content"):
             if assistant_message.get("tool_calls"):
                 assistant_message["content"] = "Gathering information..."
@@ -303,6 +363,10 @@ async def _execute_deep_search_sub_query(
         except Exception as e:
             logger.error(f"[DeepSearch:Sub{sub_query_index}] Forced synthesis failed: {e}")
             final_content = f"Research on '{sub_query}' gathered {len(collected_sources)} sources."
+
+    # Strip any reasoning leaks from the final content
+    if final_content:
+        final_content = _strip_reasoning_leak(final_content)
 
     logger.info(
         f"[DeepSearch:Sub{sub_query_index}] Complete: {len(final_content or '')} chars, "
@@ -455,20 +519,23 @@ async def _run_deep_search_pipeline(
     if plan_event:
         yield plan_event
 
-    all_sub_results = []
-    all_collected_sources = []
-    all_collected_images = []
-
+    # Emit all sub-query topics upfront so the user sees the plan
     for sq_idx, sub_query in enumerate(sub_queries, 1):
-        logger.info(f"[DeepSearch] Sub-query {sq_idx}/{len(sub_queries)}: '{sub_query[:80]}'")
-
         sq_event = emit_event(
             "INFO",
-            f"<TASK>Researching ({sq_idx}/{len(sub_queries)}): {sub_query[:60]}</TASK>",
+            f"<TASK>Researching ({sq_idx}/{len(sub_queries)}): {sub_query[:80]}</TASK>",
         )
         if sq_event:
             yield sq_event
 
+    all_sub_results = []
+    all_collected_sources = []
+    all_collected_images = []
+
+    # Run ALL sub-queries in parallel — results stream as they complete
+    async def _run_sub(sq_idx, sub_query):
+        """Execute a single sub-query and return its result."""
+        logger.info(f"[DeepSearch] Sub-query {sq_idx}/{len(sub_queries)}: '{sub_query[:80]}'")
         try:
             sq_response, sq_sources, sq_images = await asyncio.wait_for(
                 _execute_deep_search_sub_query(
@@ -484,35 +551,54 @@ async def _run_deep_search_pipeline(
                 ),
                 timeout=float(DEEP_SEARCH_TIMEOUT_PER_SUB),
             )
-
             if sq_response:
                 sq_response = _scrub_tool_names(sq_response)
-                all_sub_results.append((sub_query, sq_response, sq_sources))
-                all_collected_sources.extend(sq_sources)
-                all_collected_images.extend(sq_images)
-
-                if event_id:
-                    yield format_sse("RESPONSE", sq_response)
-                else:
-                    yield sq_response
-
-                logger.info(
-                    f"[DeepSearch] Sub-query {sq_idx} complete: "
-                    f"{len(sq_response)} chars, {len(sq_sources)} sources"
-                )
-            else:
-                logger.warning(f"[DeepSearch] Sub-query {sq_idx} returned empty response")
-
+                # Strip reasoning leaks: remove everything before the first markdown heading or real content
+                sq_response = _strip_reasoning_leak(sq_response)
+            return sq_idx, sub_query, sq_response, sq_sources, sq_images
         except asyncio.TimeoutError:
             logger.error(f"[DeepSearch] Sub-query {sq_idx} timed out after {DEEP_SEARCH_TIMEOUT_PER_SUB}s")
+            return sq_idx, sub_query, None, [], []
+        except Exception as e:
+            logger.error(f"[DeepSearch] Sub-query {sq_idx} failed: {e}", exc_info=True)
+            return sq_idx, sub_query, None, [], []
+
+    # Launch all sub-queries concurrently and stream results as they finish
+    tasks = [
+        asyncio.create_task(_run_sub(sq_idx, sq))
+        for sq_idx, sq in enumerate(sub_queries, 1)
+    ]
+    for coro in asyncio.as_completed(tasks):
+        sq_idx, sub_query, sq_response, sq_sources, sq_images = await coro
+        if sq_response:
+            all_sub_results.append((sub_query, sq_response, sq_sources))
+            all_collected_sources.extend(sq_sources)
+            all_collected_images.extend(sq_images)
+
+            done_event = emit_event(
+                "INFO",
+                f"<TASK>Completed ({sq_idx}/{len(sub_queries)}): {sub_query[:60]}</TASK>",
+            )
+            if done_event:
+                yield done_event
+
+            if event_id:
+                yield format_sse("RESPONSE", sq_response)
+            else:
+                yield sq_response
+
+            logger.info(
+                f"[DeepSearch] Sub-query {sq_idx} complete: "
+                f"{len(sq_response)} chars, {len(sq_sources)} sources"
+            )
+        else:
+            logger.warning(f"[DeepSearch] Sub-query {sq_idx} returned empty response")
             timeout_event = emit_event(
                 "INFO",
                 f"<TASK>Research thread {sq_idx} timed out, continuing</TASK>",
             )
             if timeout_event:
                 yield timeout_event
-        except Exception as e:
-            logger.error(f"[DeepSearch] Sub-query {sq_idx} failed: {e}", exc_info=True)
 
     if len(all_sub_results) > 1:
         synth_event = emit_event("INFO", "<TASK>Combining all research into final answer</TASK>")

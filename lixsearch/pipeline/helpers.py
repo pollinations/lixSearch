@@ -195,10 +195,23 @@ async def _decompose_query_with_llm(query: str, headers: dict, max_parts: int = 
         {
             "role": "system",
             "content": (
-                f"You are a query decomposition engine. Break the following query into "
-                f"2 to {max_parts} focused sub-topics for comprehensive research. "
-                f"Return ONLY a JSON array of strings, each being a focused sub-question. "
-                f'Example: ["What is X?", "How does X compare to Y?", "Recent developments in X"]'
+                f"You are a query decomposition engine. Break the user's query into "
+                f"2 to {max_parts} specific, focused sub-questions that DIRECTLY address "
+                f"different aspects of what the user is asking.\n\n"
+                f"RULES:\n"
+                f"- Every sub-question MUST be about the user's specific topic — not generic.\n"
+                f"- Include the key subject/entity from the original query in each sub-question.\n"
+                f"- Sub-questions should cover different angles of the SAME topic, not tangential topics.\n"
+                f"- Keep sub-questions concrete and searchable — they will be used as web search queries.\n"
+                f"- Return ONLY a JSON array of strings.\n\n"
+                f'Good example for "How is Rust changing systems programming?":\n'
+                f'["What are Rust\'s key advantages over C/C++ for systems programming?", '
+                f'"Which major companies and projects have adopted Rust for systems-level code?", '
+                f'"What is Rust\'s current ecosystem and tooling maturity for systems programming?"]\n\n'
+                f'Bad example (too generic/off-topic):\n'
+                f'["What is the history of systems programming?", '
+                f'"What are programming language paradigms?", '
+                f'"Future trends in software development"]'
             )
         },
         {

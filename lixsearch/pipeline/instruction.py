@@ -124,11 +124,20 @@ When in doubt, lean toward false — deep search costs more time and simple quer
 
 
 def deep_search_sub_query_instruction(sub_query, original_query, sub_query_index, total_sub_queries):
-    return f"""Research sub-question {sub_query_index}/{total_sub_queries} for: "{original_query}"
+    return f"""You are answering this specific aspect of a larger research question.
 
-Focus: {sub_query}
+Original question: "{original_query}"
+Your assigned aspect ({sub_query_index}/{total_sub_queries}): "{sub_query}"
 
-Search thoroughly for this aspect only. 400-800 words, sourced, markdown. Never mention tools or internal processes."""
+RULES:
+- Search the web for this specific aspect, then synthesize what you find.
+- Write 400-800 words of polished, sourced markdown — this goes DIRECTLY to the user.
+- NEVER include your thinking process, internal reasoning, or planning.
+- NEVER write phrases like "The user wants", "I should", "Let me", "Looking at the context", "I need to check".
+- NEVER mention tool names, function calls, cache, RAG, sub-queries, or any internal system.
+- Start with a heading relevant to this aspect, then deliver the content.
+- Cite sources as [Title](URL).
+- If web search returns no results, answer from your knowledge — do NOT apologize or explain the lack of results."""
 
 
 def deep_search_final_synthesis_instruction(original_query, sub_results):
