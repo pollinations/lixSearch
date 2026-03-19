@@ -967,14 +967,25 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     m.pop("tool_calls", None)
 
             messages.append(synthesis_prompt)
+
+            # Detect if user asked for a PDF — keep export_to_pdf available during synthesis
+            _pdf_keywords = ("pdf", "export", "save as", "download", "document")
+            _wants_pdf = any(kw in _query_lower for kw in _pdf_keywords) and not memoized_results.get("generated_pdfs")
+            _pdf_tool = [t for t in tools if t["function"]["name"] == "export_to_pdf"]
+
             payload = {
                 "model": MODEL,
                 "messages": messages,
                 "seed": random.randint(1000, 9999),
                 "max_tokens": active_max_tokens,
                 "stream": False,
-                "tool_choice": "none",
             }
+            if _wants_pdf and _pdf_tool:
+                payload["tools"] = _pdf_tool
+                payload["tool_choice"] = "auto"
+                logger.info("[SYNTHESIS] PDF requested — keeping export_to_pdf tool available")
+            else:
+                payload["tool_choice"] = "none"
 
             _stale_event = status_tracker.refresh_if_stale()
             if _stale_event:
@@ -1006,14 +1017,75 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
                         final_message_content = message.get("content", "").strip()
 
+                        # Recovery: if synthesis content has leaked tool call tokens, parse and execute
+                        if final_message_content and "<|tool_call" in final_message_content:
+                            _leaked_fn, _leaked_args = extract_leaked_tool_call(final_message_content)
+                            if _leaked_fn == "export_to_pdf" and _leaked_args.get("content"):
+                                logger.info("[SYNTHESIS] Recovered leaked export_to_pdf from synthesis content")
+                                try:
+                                    if event_id:
+                                        yield format_sse("INFO", "<TASK>Generating PDF document</TASK>")
+                                    from functionCalls.generatePDF import create_pdf_from_content
+                                    pdf_url = await create_pdf_from_content(_leaked_args["content"], _leaked_args.get("title"))
+                                    if "generated_pdfs" not in memoized_results:
+                                        memoized_results["generated_pdfs"] = []
+                                    memoized_results["generated_pdfs"].append(pdf_url)
+                                    if event_id:
+                                        yield format_sse("INFO", "<TASK>PDF ready for download</TASK>")
+                                    final_message_content = f"Here's your PDF:\n\n[Download PDF]({pdf_url})"
+                                except Exception as _e:
+                                    logger.error(f"[SYNTHESIS] Leaked export_to_pdf recovery failed: {_e}")
+                                    final_message_content = _scrub_tool_names(final_message_content)
+                            else:
+                                # Strip the leaked tokens but keep the text content
+                                final_message_content = _scrub_tool_names(final_message_content)
+
                         if not final_message_content and "reasoning_content" in message:
                             logger.warning("[SYNTHESIS] Model returned reasoning_content but empty content — ignoring internal reasoning")
 
-                        # If model returned tool_calls during synthesis, the content (if any) is an
-                        # intermediate "I'll search more..." message, not a real synthesis. Discard it.
-                        if message.get("tool_calls"):
-                            logger.warning(f"[SYNTHESIS] Model returned tool_calls during synthesis — discarding intermediate content: {final_message_content[:100] if final_message_content else 'EMPTY'}")
-                            final_message_content = ""
+                        # If model returned tool_calls during synthesis, check if it's export_to_pdf
+                        _synth_tool_calls = message.get("tool_calls")
+                        if _synth_tool_calls:
+                            _synth_pdf_call = None
+                            for _tc in _synth_tool_calls:
+                                if _tc.get("function", {}).get("name") == "export_to_pdf":
+                                    _synth_pdf_call = _tc
+                                    break
+
+                            if _synth_pdf_call:
+                                # Execute export_to_pdf during synthesis
+                                logger.info("[SYNTHESIS] Model called export_to_pdf — executing it")
+                                try:
+                                    _pdf_args = json.loads(_synth_pdf_call["function"]["arguments"])
+                                    _pdf_content = _pdf_args.get("content", "")
+                                    _pdf_title = _pdf_args.get("title")
+
+                                    # Also try leaked token recovery on the args
+                                    if not _pdf_content:
+                                        leaked_fn, leaked_args = extract_leaked_tool_call(_synth_pdf_call["function"]["arguments"])
+                                        if leaked_args:
+                                            _pdf_content = leaked_args.get("content", "")
+                                            _pdf_title = leaked_args.get("title", _pdf_title)
+
+                                    if _pdf_content:
+                                        if event_id:
+                                            yield format_sse("INFO", "<TASK>Generating PDF document</TASK>")
+                                        from functionCalls.generatePDF import create_pdf_from_content
+                                        pdf_url = await create_pdf_from_content(_pdf_content, _pdf_title)
+                                        if "generated_pdfs" not in memoized_results:
+                                            memoized_results["generated_pdfs"] = []
+                                        memoized_results["generated_pdfs"].append(pdf_url)
+                                        if event_id:
+                                            yield format_sse("INFO", "<TASK>PDF ready for download</TASK>")
+                                        # Use a clean response with the PDF link
+                                        final_message_content = f"Here's your PDF:\n\n[Download PDF]({pdf_url})"
+                                        logger.info(f"[SYNTHESIS] PDF generated: {pdf_url}")
+                                except Exception as _pdf_err:
+                                    logger.error(f"[SYNTHESIS] export_to_pdf execution failed: {_pdf_err}")
+                                    # Fall through to use text content if available
+                            else:
+                                logger.warning(f"[SYNTHESIS] Model returned non-PDF tool_calls during synthesis — discarding")
+                                final_message_content = ""
 
                         if not final_message_content:
                             logger.error(f"[SYNTHESIS] API returned empty content after all fallbacks. Full response: {response_data}")
