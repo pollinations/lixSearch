@@ -248,11 +248,6 @@ Sources: {cache_metadata.get('sources', 'N/A')}"""
         elif function_name == "export_to_pdf":
             content = function_args.get("content", "")
             title = function_args.get("title")
-            has_searched = bool(memoized_results.get("web_searches"))
-            if not has_searched and not memoized_results.get("generated_pdfs"):
-                logger.info("[Pipeline] export_to_pdf called before any web search — deferring to auto-PDF after synthesis")
-                yield "[DEFERRED] PDF will be generated automatically after gathering information. Search the web first to get accurate content."
-                return
             if not content or not content.strip():
                 yield "[ERROR] No content provided for PDF export. Provide the markdown content to export."
                 return

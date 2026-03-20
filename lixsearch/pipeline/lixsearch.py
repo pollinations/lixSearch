@@ -32,7 +32,6 @@ from pipeline.synthesis import (
 from pipeline.response_builder import (
     is_placeholder_or_fallback,
     try_image_synthesis,
-    auto_generate_pdf,
     assemble_images,
     append_sources,
     build_fallback_response,
@@ -496,7 +495,8 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
             # --- Other tools ---
             _tool_labels = {"image_search": "Searching for images", "youtubeMetadata": "Looking up YouTube videos",
-                            "transcribe_audio": "Transcribing audio", "get_local_time": "Getting local time", "create_image": "Generating image"}
+                            "transcribe_audio": "Transcribing audio", "get_local_time": "Getting local time", "create_image": "Generating image",
+                            "export_to_pdf": "Generating PDF document"}
             for idx, tc in enumerate(other_calls):
                 fn_name = tc["function"]["name"]
                 fn_args = json.loads(tc["function"]["arguments"])
@@ -656,19 +656,11 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 if better:
                     final_message_content = better
 
-            _wants_pdf = any(kw in _query_lower for kw in ("pdf", "export", "save as", "document"))
-            _already_has_pdf = bool(memoized_results.get("generated_pdfs"))
-            if _wants_pdf and not _already_has_pdf and final_message_content and len(final_message_content) > 100:
-                try:
-                    if event_id:
-                        yield format_sse("INFO", "<TASK>Generating PDF document</TASK>")
-                    pdf_url = await auto_generate_pdf(final_message_content, _query_lower, memoized_results, event_id)
-                    if pdf_url:
-                        final_message_content += f"\n\n---\n\n[Download PDF]({pdf_url})"
-                        if event_id:
-                            yield format_sse("INFO", "<TASK>PDF ready for download</TASK>")
-                except Exception as e:
-                    logger.error(f"[FINAL] Auto PDF generation failed: {e}")
+            # Append PDF link if tool generated one during the loop
+            if memoized_results.get("generated_pdfs"):
+                _pdf_url = memoized_results["generated_pdfs"][-1]
+                if _pdf_url not in final_message_content:
+                    final_message_content += f"\n\n---\n\n[Download PDF]({_pdf_url})"
 
             # Assemble images and sources
             response_parts = assemble_images(final_message_content, collected_images_from_web,
