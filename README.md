@@ -3,8 +3,14 @@
 <h1 style="display: flex; align-items: center; justify-content: center; gap: 10px; color: #6391F8;"> <img src="./public/images/icon.png" height="48px" width=48px" alt="searchIcon"> LixSearch </h1>
 
 **Intelligent search assistant with real-time web research, RAG, and OpenAI-compatible API**
+<div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
 
-[![GitHub license](https://img.shields.io/badge/Built%20with-Pollinations-8a2be2?style=for-the-badge)]
+[![Pollinations Attribute](https://img.shields.io/badge/Built%20with-Pollinations-8a2be2?style=for-the-badge)](https://img.shields.io/badge/Built%20with-Pollinations-8a2be2?style=for-the-badge)
+</div>
+
+<hr>
+<br>
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
