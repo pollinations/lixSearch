@@ -180,7 +180,7 @@ async def chat_completions(session_id: str, pipeline_initialized: bool):
                     break
 
             return jsonify({
-                "id": f"chatcmpl-{str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE]}",
+                "id": f"elixpo-{str(uuid.uuid4())[:X_REQ_ID_SLICE_SIZE]}",
                 "object": "chat.completion",
                 "created": int(datetime.utcnow().timestamp()),
                 "model": "lixsearch",

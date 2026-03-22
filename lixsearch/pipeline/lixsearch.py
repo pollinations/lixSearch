@@ -750,6 +750,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             final_message_content = await run_standard_synthesis(
                 messages, user_query, active_max_tokens, headers, is_detailed_mode,
                 image_context_provided, collected_images_from_web, collected_similar_images,
+                event_id=event_id, format_sse_fn=format_sse,
             )
 
             if not final_message_content:
@@ -762,11 +763,15 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             final_message_content = f"Here's your PDF, ready to download:\n\n[Download PDF]({_pdf_url})"
 
         if final_message_content:
-            final_message_content = await sanitize_final_response(final_message_content, user_query, collected_sources, headers)
+            # Check if content was already streamed to the user
+            _already_streamed = bool(_streamed_content) and _streamed_content == final_message_content
+
+            if not _already_streamed:
+                final_message_content = await sanitize_final_response(final_message_content, user_query, collected_sources, headers)
             final_message_content = _scrub_tool_names(final_message_content)
 
             # If we got placeholder content with images, try one more synthesis
-            if is_placeholder_or_fallback(final_message_content) and (collected_images_from_web or collected_similar_images):
+            if not _already_streamed and is_placeholder_or_fallback(final_message_content) and (collected_images_from_web or collected_similar_images):
                 _pool = collected_similar_images if (image_only_mode and collected_similar_images) else collected_images_from_web
                 better = await try_image_synthesis(messages, user_query, _pool, headers, event_id)
                 if better:
@@ -791,7 +796,13 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
             memoized_results["final_response"] = response_with_sources
 
-            if event_id:
+            if _already_streamed and event_id:
+                # Content was already streamed — only send extras (sources, images, PDF)
+                _extras = response_with_sources[len(final_message_content):]
+                if _extras.strip():
+                    yield format_sse("RESPONSE", _extras)
+                yield format_sse("INFO", "<TASK>DONE</TASK>")
+            elif event_id:
                 yield format_sse("RESPONSE", response_with_sources)
                 yield format_sse("INFO", "<TASK>DONE</TASK>")
             else:

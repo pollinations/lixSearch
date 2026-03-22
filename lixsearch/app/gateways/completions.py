@@ -64,7 +64,7 @@ async def chat_completions(pipeline_initialized: bool):
     if not pipeline_initialized:
         return jsonify({"error": {"message": "Server not initialized", "type": "server_error"}}), 503
 
-    request_id = f"chatcmpl-{uuid.uuid4().hex[:REQUEST_ID_HEX_SLICE_SIZE]}"
+    request_id = f"elixpo-{uuid.uuid4().hex[:REQUEST_ID_HEX_SLICE_SIZE]}"
 
     try:
         data = await request.get_json()

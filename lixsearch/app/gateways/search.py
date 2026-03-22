@@ -17,7 +17,7 @@ logger = logging.getLogger("lixsearch-api")
 def format_sse_event_openai(event_type: str, content: str, request_id: str = None) -> str:
     is_done_signal = (event_type == "INFO" and "<TASK>DONE</TASK>" in content)
     response = {
-        "id": request_id or f"chatcmpl-{uuid.uuid4().hex[:REQUEST_ID_HEX_SLICE_SIZE]}",
+        "id": request_id or f"elixpo-{uuid.uuid4().hex[:REQUEST_ID_HEX_SLICE_SIZE]}",
         "object": "chat.completion.chunk",
         "created": int(datetime.now(timezone.utc).timestamp()),
         "model": RESPONSE_MODEL,
