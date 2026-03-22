@@ -267,7 +267,13 @@ async def sanitize_final_response(content: str, query: str, sources: list[str], 
 
     fallback = f"Here is a concise update on '{query}'."
     if sources:
-        fallback += "\n\n**Sources:**\n" + "\n".join([f"- {s}" for s in sources[:3]])
+        from pipeline.utils import clean_source_list
+        from urllib.parse import urlparse
+        cleaned = clean_source_list(sources)[:3]
+        if cleaned:
+            fallback += "\n\n**Sources:**\n" + "\n".join(
+                [f"- [{urlparse(s).netloc.replace('www.', '')}]({s})" for s in cleaned]
+            )
     return fallback
 
 

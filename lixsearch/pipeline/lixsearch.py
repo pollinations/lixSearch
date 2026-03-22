@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from pipeline.config import *
 from pipeline.instruction import system_instruction, user_instruction, synthesis_instruction
 from pipeline.optimized_tool_execution import optimized_tool_execution
-from pipeline.utils import format_sse
+from pipeline.utils import format_sse, clean_url, clean_source_list
 from pipeline.sse_messages import SSEStatusTracker
 from pipeline.helpers import (
     _scrub_tool_names,
@@ -504,7 +504,8 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 for result in ws_results:
                     if not isinstance(result, Exception):
                         if result["name"] == "web_search" and "current_search_urls" in memoized_results:
-                            collected_sources.extend(memoized_results["current_search_urls"][:active_sources_per_search])
+                            _raw_urls = memoized_results["current_search_urls"][:active_sources_per_search]
+                            collected_sources.extend(clean_source_list(_raw_urls))
                         tool_outputs.append({"role": "tool", "tool_call_id": result["tool_call_id"],
                                              "name": result["name"], "content": str(result["result"]) if result["result"] else "No result"})
                 if event_id and collected_sources:
@@ -577,7 +578,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                 for fr in fetch_results:
                     if isinstance(fr, Exception):
                         continue
-                    url = fr["url"]
+                    url = clean_url(fr["url"]) or fr["url"]
                     if len(collected_sources) < active_max_sources:
                         collected_sources.append(url)
                     if core_service:
