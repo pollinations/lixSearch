@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import uuid
 import json
@@ -9,12 +8,8 @@ from app.utils import validate_query, validate_url, format_openai_response
 from pipeline.config import X_REQ_ID_SLICE_SIZE, REQUEST_ID_HEX_SLICE_SIZE, LOG_MESSAGE_QUERY_TRUNCATE, RESPONSE_MODEL
 
 
-def _session_id_from_ip() -> str:
-
-    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "unknown")
-    # Take the first IP if X-Forwarded-For has multiple
-    client_ip = client_ip.split(",")[0].strip()
-    return f"ip-{hashlib.sha256(client_ip.encode()).hexdigest()[:16]}"
+def _ephemeral_session_id() -> str:
+    return f"eph-{uuid.uuid4().hex[:16]}"
 
 logger = logging.getLogger("lixsearch-api")
 
@@ -74,9 +69,10 @@ async def search(pipeline_initialized: bool):
         if image_urls:
             image_url = image_urls[0]
 
+        is_ephemeral = not session_id
         if not session_id:
-            session_id = _session_id_from_ip()
-            logger.info(f"[search] No session_id provided, derived from IP: {session_id}")
+            session_id = _ephemeral_session_id()
+            logger.info(f"[search] No session_id provided, using ephemeral: {session_id}")
 
         if not validate_query(query) and not image_urls:
             logger.warning(f"[{session_id}] Invalid query and no image: {query[:50]}")
@@ -104,6 +100,7 @@ async def search(pipeline_initialized: bool):
                     user_images=image_urls,
                     event_id=request_id,
                     session_id=session_id,
+                    is_ephemeral=is_ephemeral,
                 ):
                     chunk_str = chunk if isinstance(chunk, str) else chunk.decode('utf-8')
 
@@ -145,6 +142,7 @@ async def search(pipeline_initialized: bool):
                 user_images=image_urls,
                 event_id=None,
                 session_id=session_id,
+                is_ephemeral=is_ephemeral,
             ):
                 if chunk:
                     response_content = chunk  # non-streaming mode: pipeline yields raw text

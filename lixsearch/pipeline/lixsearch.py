@@ -54,7 +54,7 @@ _DETAIL_RE = re.compile(
 
 async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: str = None,
                                      session_id: str = None, user_images: list = None,
-                                     chat_history: list = None):
+                                     chat_history: list = None, is_ephemeral: bool = False):
     if user_images is None:
         user_images = [user_image] if user_image else []
     if not user_image and user_images:
@@ -62,7 +62,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
 
     logger.info(f"[pipeline] session={session_id} query='{user_query[:LOG_MESSAGE_QUERY_TRUNCATE]}...' images={len(user_images)}")
 
-    if session_id:
+    if session_id and not is_ephemeral:
         try:
             from sessions.main import get_session_manager
             sm = get_session_manager()
@@ -112,9 +112,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             "session_id": session_id or "", "generated_images": [],
         }
 
-        # --- Session context ---
+        # --- Session context (skip for ephemeral — no history to load or persist) ---
         session_context = None
-        if session_id:
+        if session_id and not is_ephemeral:
             try:
                 session_context = SessionContextWindow(session_id=session_id)
                 memoized_results["session_context"] = session_context
@@ -689,10 +689,11 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                                               collected_similar_images, image_only_mode, memoized_results)
             response_with_sources = append_sources(response_parts, collected_sources)
 
-            # Save to caches
-            await save_to_caches(user_query, final_message_content, collected_sources, tool_call_count,
-                                  current_iteration, memoized_results, core_service, conversation_cache,
-                                  session_context, session_id)
+            # Save to caches (skip for ephemeral sessions)
+            if not is_ephemeral:
+                await save_to_caches(user_query, final_message_content, collected_sources, tool_call_count,
+                                      current_iteration, memoized_results, core_service, conversation_cache,
+                                      session_context, session_id)
 
             memoized_results["final_response"] = response_with_sources
 
@@ -724,18 +725,20 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         if event_id:
             yield format_sse("INFO", "<TASK>DONE</TASK>")
     finally:
-        if session_id and "session_context" in memoized_results and memoized_results["session_context"]:
-            try:
-                ctx = memoized_results["session_context"]
-                if memoized_results.get("final_response") and not memoized_results.get("_assistant_response_saved"):
-                    ctx.add_message(role="assistant", content=memoized_results["final_response"])
-            except Exception:
-                pass
+        # Skip all persistence for ephemeral sessions — nothing to save
+        if not is_ephemeral:
+            if session_id and "session_context" in memoized_results and memoized_results["session_context"]:
+                try:
+                    ctx = memoized_results["session_context"]
+                    if memoized_results.get("final_response") and not memoized_results.get("_assistant_response_saved"):
+                        ctx.add_message(role="assistant", content=memoized_results["final_response"])
+                except Exception:
+                    pass
 
-        if session_id and semantic_cache is not None:
-            semantic_cache.save_for_request(session_id)
-            try:
-                if "conversation_cache" in memoized_results:
-                    conversation_cache.save_to_disk(session_id=session_id)
-            except Exception:
-                pass
+            if session_id and semantic_cache is not None:
+                semantic_cache.save_for_request(session_id)
+                try:
+                    if "conversation_cache" in memoized_results:
+                        conversation_cache.save_to_disk(session_id=session_id)
+                except Exception:
+                    pass
