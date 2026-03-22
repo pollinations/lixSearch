@@ -407,15 +407,16 @@ async def _synthesize_subtopic(
     max_tokens: int,
     rag_context: str = "",
 ) -> str:
-    synthesis_messages = messages_context[:2]
+    # Keep system message + all tool results (the actual fetched content)
+    synthesis_messages = list(messages_context)
 
     focused_prompt = {
         "role": "user",
         "content": (
-            f"Focus specifically on this aspect of the query '{original_query}':\n\n"
+            f"Using the information gathered above, write a focused response about this aspect of '{original_query}':\n\n"
             f"Sub-topic: {subtopic}\n\n"
-            f"Provide a focused, detailed response for this specific aspect. "
-            f"Use markdown formatting with \\n for line breaks. "
+            f"Synthesize the fetched content into a detailed answer for this specific aspect. "
+            f"Use markdown formatting. Cite sources as [Title](URL). "
             f"Do not repeat information that would belong to other sub-topics. "
             f"Be thorough but concise for this specific angle.\n"
             f"NEVER mention internal tool names, function calls, or cache operations."
