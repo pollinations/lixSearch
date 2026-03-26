@@ -1,7 +1,7 @@
 # Fdb version 4
-["pdflatex"] 1774505260.95459 "/mnt/volume_sfo2_01/lixSearch/docs/paper/lix_cache_paper.tex" "lix_cache_paper.pdf" "lix_cache_paper" 1774505262.03021 0
+["pdflatex"] 1774505649.71334 "/mnt/volume_sfo2_01/lixSearch/docs/paper/lix_cache_paper.tex" "lix_cache_paper.pdf" "lix_cache_paper" 1774505651.06413 0
   "/etc/texmf/web2c/texmf.cnf" 1774466716.6827 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/mnt/volume_sfo2_01/lixSearch/docs/paper/lix_cache_paper.tex" 1774505259.27532 40048 04c9238b31afa3d990d3692e8f954a96 ""
+  "/mnt/volume_sfo2_01/lixSearch/docs/paper/lix_cache_paper.tex" 1774505646.94036 39807 0ab4742ece165b2c9e4bd8329a51d5fd ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/adobe/courier/pcrb8r.tfm" 1136768653 1292 3059476c50a24578715759f22652f3d0 ""
@@ -50,7 +50,6 @@
   "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb" 1248133631 35752 024fb6c41858982481f6968b5fc26508 ""
   "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb" 1248133631 32762 224316ccc9ad3ca0423a14971cfa7fc1 ""
   "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb" 1248133631 32569 5e5ddc8df908dea60932f3c484a54c0d ""
-  "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy5.pfb" 1248133631 32915 7bf7720c61a5b3a7ff25b0964421c9b6 ""
   "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb" 1248133631 32716 08e384dc442464e7285e891af9f45947 ""
   "/usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb" 1248133631 34694 ad62b13721ee8eda1dcc8993c8bd7041 ""
   "/usr/share/texlive/texmf-dist/fonts/type1/urw/courier/ucrb8a.pfb" 1136849748 50493 4ed1f7e9eba8f1f3e1ec25195460190d ""
@@ -213,10 +212,10 @@
   "/usr/share/texmf/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1774466725.50968 165012 f177baa1c39a3ebd62c3096a43521a0d ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1774466734 6831078 7a2d7d3d60b71ac35077dbd818a7fffc ""
-  "architecture_inline.tex" 1774504227.80159 4584 5c860630f1c2c066eb753a6dbdd2c2c3 ""
-  "lix_cache_paper.aux" 1774505261.88432 7412 483d327b337fad96bae61e819c4bd6fc "pdflatex"
-  "lix_cache_paper.out" 1774505261.88532 6016 96b36b50eb6075339672fb1c8effda6f "pdflatex"
-  "lix_cache_paper.tex" 1774505259.27532 40048 04c9238b31afa3d990d3692e8f954a96 ""
+  "architecture_inline.tex" 1774505531.49476 4859 18a5d3bcf3149a6d3299f85621983da3 ""
+  "lix_cache_paper.aux" 1774505650.92634 7010 560657921549cabec773caa8a3d76663 "pdflatex"
+  "lix_cache_paper.out" 1774505650.92834 6016 96b36b50eb6075339672fb1c8effda6f "pdflatex"
+  "lix_cache_paper.tex" 1774505646.94036 39807 0ab4742ece165b2c9e4bd8329a51d5fd ""
   (generated)
   "lix_cache_paper.aux"
   "lix_cache_paper.log"

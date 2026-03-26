@@ -233,20 +233,7 @@ With the architecture settled, the implementation came together over several wee
 
 \subsection{Package Structure}
 
-\begin{lstlisting}[caption={Module layout},label=lst:layout]
-lix_chat/
-  lix_cache/
-    config.py            # CacheConfig dataclass
-    redis_pool.py        # Connection-pooled Redis factory
-    huffman_codec.py     # Canonical Huffman encoder/decoder
-    conversation_archive.py  # .huff disk persistence
-    hybrid_cache.py      # Redis hot + disk cold + LRU
-    semantic_cache.py    # SemanticCacheRedis + URLEmbeddingCache
-    context_window.py    # SessionContextWindow wrapper
-    coordinator.py       # CacheCoordinator facade
-\end{lstlisting}
-
-All public classes are re-exported through \texttt{lix\_chat/\_\_init\_\_.py}, giving users a flat import surface (e.g., \texttt{from lix\_chat import CacheCoordinator}).
+The library is organized into eight modules under the \texttt{lix\_chat} package, each responsible for a single concern: configuration, Redis connection pooling, Huffman encoding/decoding, disk archival, hybrid hot/cold caching, semantic caching, the session context window wrapper, and the top-level coordinator fa\c{c}ade. All public classes are re-exported through \texttt{lix\_chat/\_\_init\_\_.py}, giving users a flat import surface (e.g., \texttt{from lix\_chat import CacheCoordinator}).
 
 \subsection{Huffman Codec}
 
@@ -284,17 +271,18 @@ Decoding reconstructs the canonical codes from the symbol table, then reads the 
 Each session's disk archive is a single \texttt{.huff} file with a 24-byte application header followed by a Huffman-compressed JSON payload:
 
 \begin{center}
-\begin{tabular}{lrl}
+{\scriptsize
+\begin{tabular}{@{}rrl@{}}
 \toprule
-\textbf{Offset} & \textbf{Size} & \textbf{Field} \\
+\textbf{Off.} & \textbf{Size} & \textbf{Field} \\
 \midrule
 0 & 4\,B & Magic: \texttt{"CAv1"} \\
-4 & 8\,B & \texttt{created\_at} (float64 LE, Unix timestamp) \\
-12 & 8\,B & \texttt{updated\_at} (float64 LE, Unix timestamp) \\
-20 & 4\,B & \texttt{num\_turns} (uint32 LE) \\
-24 & var & Huffman-compressed JSON array of turn objects \\
+4 & 8\,B & \texttt{created\_at} (f64 LE) \\
+12 & 8\,B & \texttt{updated\_at} (f64 LE) \\
+20 & 4\,B & \texttt{num\_turns} (u32 LE) \\
+24 & var & Huffman-compressed JSON \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{center}
 
 The fixed-size header allows \texttt{get\_metadata()} to read session information (creation time, turn count) in a single 24-byte \texttt{read()} without decompressing the payload. This is used by the TTL cleanup daemon to efficiently scan all archives.
@@ -321,20 +309,7 @@ Turn IDs are derived from the current timestamp: \texttt{int(time.time() * 1000)
 
 \subsection{Semantic Cache}
 
-The \texttt{SemanticCacheRedis} stores cached items as a JSON document per \texttt{(session\_id, URL)} pair:
-
-\begin{lstlisting}[caption={Semantic cache Redis value structure},label=lst:semcache]
-{
-  "items": [
-    {
-      "embedding": [0.12, -0.34, ...],  // 384-dim
-      "response": {"answer": "...", "sources": [...]},
-      "timestamp": 1711234567.89
-    },
-    ...  // up to max_items_per_url (50)
-  ]
-}
-\end{lstlisting}
+The \texttt{SemanticCacheRedis} stores cached items as a JSON document per \texttt{(session\_id, URL)} pair. Each document contains an \texttt{items} array of up to \texttt{max\_items\_per\_url} (default 50) entries. Each entry holds three fields: an \texttt{embedding} (384-dim float array), a \texttt{response} object (the cached LLM output with answer and sources), and a \texttt{timestamp} (Unix epoch float).
 
 On lookup, all cached embeddings for the URL are compared against the query embedding via normalized dot product (cosine similarity). The normalization ($\mathbf{v} / (\|\mathbf{v}\| + 10^{-8})$) uses an epsilon to avoid division by zero. The best match above threshold $\tau$ is returned.
 
