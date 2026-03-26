@@ -381,34 +381,67 @@ NOTES
 
 release_docker() {
     local bump_type=${1:-patch}
-    local image="ghcr.io/elixpo/lix-open-search"
 
-    # Read version from package pyproject (keeps them in sync)
+    # Load credentials from .env
+    if [ -f ".env" ]; then
+        set -a
+        source .env
+        set +a
+    fi
+
+    # Validate required vars
+    if [ -z "$GITHUB_TOKEN" ]; then
+        error "GITHUB_TOKEN not set in .env"
+        exit 1
+    fi
+    if [ -z "$DOCKER_HUB_API" ]; then
+        warning "DOCKER_HUB_API not set in .env — skipping Docker Hub push"
+    fi
+
+    local ghcr_image="ghcr.io/${GITHUB_USER:-elixpo}/lix-open-search"
+    local hub_image="${GITHUB_USER:-elixpo}/lix-open-search"
+
+    # Read version from package pyproject
     local pyproject="package/pyproject.toml"
     if [ ! -f "$pyproject" ]; then
-        error "lix_open_search/pyproject.toml not found"
+        error "package/pyproject.toml not found"
         exit 1
     fi
 
     local version=$(grep '^version' "$pyproject" | sed 's/version = "\(.*\)"/\1/')
-    info "Building Docker image: ${image}:${version}"
+    info "Building Docker image v${version}"
 
     check_docker
 
-    # Build the image
-    docker build -f Dockerfile.open -t "${image}:${version}" -t "${image}:latest" .
-    success "Built ${image}:${version}"
+    # Build with all tags at once
+    docker build -f Dockerfile.open \
+        -t "${ghcr_image}:${version}" \
+        -t "${ghcr_image}:latest" \
+        -t "${hub_image}:${version}" \
+        -t "${hub_image}:latest" \
+        .
+    success "Built image v${version}"
 
-    # Push to GHCR
-    info "Pushing to GitHub Container Registry..."
+    # Push to GitHub Container Registry
+    info "Pushing to ghcr.io..."
     echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_USER:-elixpo}" --password-stdin
-    docker push "${image}:${version}"
-    docker push "${image}:latest"
-    success "Pushed ${image}:${version} and :latest"
+    docker push "${ghcr_image}:${version}"
+    docker push "${ghcr_image}:latest"
+    success "Pushed ${ghcr_image}:${version}"
+
+    # Push to Docker Hub
+    if [ -n "$DOCKER_HUB_API" ]; then
+        info "Pushing to Docker Hub..."
+        echo "${DOCKER_HUB_API}" | docker login -u "${GITHUB_USER:-elixpo}" --password-stdin
+        docker push "${hub_image}:${version}"
+        docker push "${hub_image}:latest"
+        success "Pushed ${hub_image}:${version}"
+    fi
 
     echo ""
-    success "Docker image published"
-    info "Pull: docker pull ${image}:${version}"
+    success "Docker image v${version} published"
+    info "GHCR: docker pull ${ghcr_image}:${version}"
+    info "Hub:  docker pull ${hub_image}:${version}"
     info "Run:  docker compose -f docker-compose.open.yml up -d"
 }
 
