@@ -1,12 +1,25 @@
 # lix-open-search
 
-Python client SDK for [lixSearch](https://github.com/elixpo/lixSearch) — a multi-tool AI search engine with web search, video, images, deep research, and RAG-augmented synthesis.
+Open-source AI search engine with web search, video, images, deep research, and RAG-augmented synthesis. Built for self-hosting on commodity hardware.
+
+**Live demo**: [search.elixpo.com](https://search.elixpo.com)
 
 ```bash
 pip install lix-open-search
 ```
 
-## Quick Start
+## What's in this package
+
+| Module | Purpose | Dependencies |
+|--------|---------|-------------|
+| `lix_open_search` | Python client SDK — sync + async, streaming, multimodal | `httpx` |
+| `lix_open_cache` | Multi-layer Redis caching + Huffman disk archival | `redis`, `numpy`, `loguru` |
+
+The SDK connects to a running lixSearch server (self-hosted or `search.elixpo.com`). The cache library works standalone with just Redis.
+
+---
+
+## Search SDK (`lix_open_search`)
 
 ### One-shot search
 
@@ -29,9 +42,6 @@ for chunk in lix.search_stream("latest advances in fusion energy"):
 ### Multi-turn conversation
 
 ```python
-lix = LixSearch("http://localhost:9002")
-
-# First turn
 result = lix.chat([
     {"role": "user", "content": "Compare Tesla and BYD sales in 2025"}
 ], session_id="my-session")
@@ -43,7 +53,6 @@ result = lix.chat([
     {"role": "assistant", "content": result.content},
     {"role": "user", "content": "What about their market cap?"}
 ], session_id="my-session")
-print(result.content)
 ```
 
 ### Image + text (multimodal)
@@ -80,50 +89,15 @@ async def main():
 asyncio.run(main())
 ```
 
-## API Reference
+### Hosted instance
 
-### `LixSearch(base_url, api_key=None, timeout=120)`
+```python
+lix = LixSearch("https://search.elixpo.com", api_key="your-key")
+```
 
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `search(query, session_id=, images=)` | `SearchResult` | Search with full LLM synthesis |
-| `search_stream(query, session_id=, images=)` | `Iterator[StreamChunk]` | Streaming search |
-| `chat(messages, session_id=, stream=)` | `SearchResult` or `Iterator` | Multi-turn conversation |
-| `surf(query, limit=5, images=False)` | `SurfResult` | Raw URL + image search (no LLM) |
-| `create_session(query)` | `Session` | Create a persistent session |
-| `get_session(session_id)` | `Session` | Get session info |
-| `get_history(session_id)` | `list[Message]` | Get conversation history |
-| `delete_session(session_id)` | `None` | Delete a session |
-| `health()` | `dict` | Health check |
+### OpenAI compatibility
 
-### `AsyncLixSearch(base_url, api_key=None, timeout=120)`
-
-Same methods as `LixSearch`, but `async`. Use `async with` as context manager.
-
-### Response Models
-
-**`SearchResult`** — LLM-synthesized response
-- `.content` — response text (markdown)
-- `.model` — model name
-- `.session_id` — session ID if provided
-- `.usage` — token usage stats
-- `.raw` — full OpenAI-format response dict
-
-**`StreamChunk`** — single streaming token
-- `.content` — text fragment
-- `.finish_reason` — `None` or `"stop"`
-- `.raw` — raw SSE chunk
-
-**`SurfResult`** — raw search results
-- `.urls` — list of URLs
-- `.images` — list of image URLs
-- `.query` — the query
-
-**`Session`** / **`Message`** — session and message objects
-
-## OpenAI Compatibility
-
-lixSearch exposes an OpenAI-compatible API. You can also use the standard OpenAI client:
+lixSearch is a drop-in OpenAI-compatible API:
 
 ```python
 from openai import OpenAI
@@ -141,23 +115,163 @@ for chunk in response:
         print(chunk.choices[0].delta.content, end="")
 ```
 
-## Running the Server
+### SDK API Reference
 
-The SDK connects to a running lixSearch instance. Deploy it with Docker:
+**`LixSearch(base_url, api_key=None, timeout=120)`** / **`AsyncLixSearch(...)`**
 
-```bash
-git clone https://github.com/elixpo/lixSearch.git
-cd lixSearch
-cp .env.example .env  # fill in TOKEN, MODEL, HF_TOKEN
-./deploy.sh build
-./deploy.sh start 3
-```
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `search(query, session_id=, images=)` | `SearchResult` | Search with full LLM synthesis |
+| `search_stream(query, session_id=, images=)` | `Iterator[StreamChunk]` | Streaming search |
+| `chat(messages, session_id=, stream=)` | `SearchResult` or `Iterator` | Multi-turn conversation |
+| `surf(query, limit=5, images=False)` | `SurfResult` | Raw URL + image search (no LLM) |
+| `create_session(query)` | `Session` | Create a persistent session |
+| `get_session(session_id)` | `Session` | Get session info |
+| `get_history(session_id)` | `list[Message]` | Get conversation history |
+| `delete_session(session_id)` | `None` | Delete a session |
+| `health()` | `dict` | Health check |
 
-Or point the client at the hosted instance:
+### Response models
+
+- **`SearchResult`** — `.content`, `.model`, `.session_id`, `.usage`, `.raw`
+- **`StreamChunk`** — `.content`, `.finish_reason`, `.raw`
+- **`SurfResult`** — `.urls`, `.images`, `.query`
+- **`Session`** / **`Message`** — session and message objects
+
+---
+
+## Cache Library (`lix_open_cache`)
+
+Standalone multi-layer caching for conversational AI. Works independently — just needs Redis.
 
 ```python
-lix = LixSearch("https://search.elixpo.com", api_key="your-key")
+from lix_open_cache import CacheConfig, CacheCoordinator
+
+config = CacheConfig(redis_host="localhost", redis_port=6379)
+cache = CacheCoordinator(session_id="user-abc", config=config)
+
+# Store & retrieve conversation context
+cache.add_message_to_context("user", "What's the weather in Tokyo?")
+cache.add_message_to_context("assistant", "22C and sunny.")
+history = cache.get_context_messages()
+
+# Semantic cache — skip LLM on similar queries
+import numpy as np
+embedding = np.random.rand(384).astype(np.float32)
+cached = cache.get_semantic_response("https://weather.com", embedding)
 ```
+
+### Three cache layers
+
+| Layer | Purpose | Backend | TTL |
+|-------|---------|---------|-----|
+| Session Context Window | Rolling 20-message window + disk overflow | Redis DB 2 + `.huff` files | 24h |
+| Semantic Query Cache | Deduplicate similar queries (cosine >= 0.90) | Redis DB 0 | 5 min |
+| URL Embedding Cache | Cache embedding vectors per URL | Redis DB 1 | 24h |
+
+### Key features
+
+- **Two-tier hybrid storage** — Redis hot window + Huffman-compressed disk cold archive
+- **LRU eviction daemon** — auto-migrates idle sessions to disk, re-hydrates on return
+- **smart_context()** — recent messages + semantically relevant history from disk
+- **Pure Python Huffman codec** — ~54% compression, zero native dependencies
+- **CacheConfig dataclass** — all tunables in one place, 12-factor env var support
+
+### Research paper
+
+> **A Three-Layer Caching Architecture for Low-Latency LLM Web Search on Commodity CPU Hardware**
+> Ayushman Bhattacharya, 2026
+> [Read the paper](https://github.com/Circuit-Overtime/lixSearch/blob/main/docs/paper/lix_cache_paper.pdf)
+
+---
+
+## Self-Hosting with Docker
+
+Run the full lixSearch engine on your own hardware.
+
+### Quick start
+
+```bash
+git clone https://github.com/Circuit-Overtime/lixSearch.git
+cd lixSearch
+cp .env.example .env   # fill in TOKEN, MODEL, HF_TOKEN
+
+# Build and run
+docker compose -f package/docker-compose.yml up -d
+
+# Check health
+curl http://localhost:9002/api/health
+
+# Scale workers
+docker compose -f package/docker-compose.yml up -d --scale app=3
+```
+
+### Docker images
+
+| Registry | Image |
+|----------|-------|
+| GitHub Container Registry | `ghcr.io/circuit-overtime/lix-open-search` |
+| Docker Hub | `elixpo/lix-open-search` |
+
+```bash
+docker pull ghcr.io/circuit-overtime/lix-open-search:latest
+# or
+docker pull elixpo/lix-open-search:latest
+```
+
+### What's in the image
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| App (Quart API) | 9002 | Search endpoints, OpenAI-compatible API |
+| IPC Service | 9510 | Embedding model + Playwright search agents |
+| Redis | 9530 | 3-layer cache (sessions, semantic, URL embeddings) |
+| ChromaDB | 9001 | Vector database |
+
+### Environment variables
+
+```bash
+# Required
+TOKEN=your_llm_api_token
+MODEL=openai                  # LLM model name
+HF_TOKEN=your_huggingface_token
+
+# Optional
+IMAGE_MODEL=zimage
+VISION_MODEL=gemini-fast
+WORKERS=10                    # Hypercorn workers per container
+PUBLISHED_PORT=9002           # Host port
+REPLICAS=1                    # Number of app containers
+REDIS_PASSWORD=your_password
+```
+
+### Architecture
+
+```
+User / SDK client
+    |
+    v
+App Workers (:9002, N replicas, 10 Hypercorn workers each)
+    |-- Pipeline: query decomposition -> tool routing -> RAG -> LLM synthesis
+    |-- IPC client -> IPC Service (:9510, singleton)
+    |                   |-- Embedding model (sentence-transformers)
+    |                   |-- Playwright search agent pool
+    |                   |-- ChromaDB (:9001)
+    |-- Redis (:9530)
+         |-- DB 0: Semantic query cache (5min TTL)
+         |-- DB 1: URL embedding cache (24h TTL)
+         |-- DB 2: Session context window (20 msgs hot, overflow to disk)
+```
+
+---
+
+## Links
+
+- [Live Demo](https://search.elixpo.com)
+- [PyPI](https://pypi.org/project/lix-open-search/)
+- [GitHub](https://github.com/Circuit-Overtime/lixSearch)
+- [Docker Hub](https://hub.docker.com/r/elixpo/lix-open-search)
+- [Research Paper](https://github.com/Circuit-Overtime/lixSearch/blob/main/docs/paper/lix_cache_paper.pdf)
 
 ## License
 
