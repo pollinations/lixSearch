@@ -31,7 +31,7 @@
 
 \hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue}
 
-\title{A Multi-Layer Caching Architecture\\for Conversational AI Session Management}
+\title{Scaling LLM-Powered Web Search on CPU:\\A Three-Layer Caching Architecture with 89\%\\Hit Rate at 0.1\,ms Latency}
 
 \author{
 \IEEEauthorblockN{Ayushman Bhattacharya}
@@ -46,13 +46,13 @@
 % ABSTRACT
 % ============================================================
 \begin{abstract}
-When OpenAI launched SearchGPT, it promised the future of AI-powered web search-but at a cost that made it prohibitive for independent developers. At \$30--100+ per thousand API queries, building a search assistant on top of SearchGPT was a non-starter. We set out to build \texttt{lixSearch}, an open-source alternative that could surf the internet with LLMs at a fraction of the cost, using Playwright-based search agents and open models. The system worked, but as users grew, so did the problems. Sessions lost context between turns. Semantically identical queries triggered redundant LLM calls. The same URLs were embedded over and over across sessions. Each problem ate into the cost savings we had fought to achieve.
+When OpenAI launched SearchGPT, it promised the future of AI-powered web search---but at a cost that made it prohibitive for independent developers. At \$30--100+ per thousand API queries, building a search assistant on top of SearchGPT was a non-starter. We set out to build an open-source alternative that could surf the internet with LLMs at a fraction of the cost, using Playwright-based search agents and open models---running entirely on CPU, without GPU acceleration. The system worked, but as users grew, so did the problems. Sessions lost context between turns. Semantically identical queries triggered redundant LLM calls. The same URLs were embedded over and over across sessions. On a resource-constrained 8-vCPU server, every wasted computation mattered.
 
-This paper tells the story of how we solved those problems. We present \texttt{lix\_cache}, a Python library extracted from \texttt{lixSearch} that implements a three-layer caching architecture: (1)~a \emph{Session Context Window} maintaining a rolling window of recent messages in Redis with automatic overflow to Huffman-compressed disk archives; (2)~a \emph{Semantic Query Cache} that catches rephrasings via cosine similarity on embedding vectors, eliminating redundant LLM invocations; and (3)~a \emph{URL Embedding Cache} that deduplicates embedding computations across sessions. A background LRU eviction daemon transparently migrates idle sessions from Redis to disk and re-hydrates them on demand. We describe the journey from a bare-bones search pipeline to a production system serving thousands of queries, detail the architecture and implementation of each caching layer, and evaluate the system's compression efficiency, cache hit rates, and latency characteristics. The library is pip-installable and designed for drop-in integration with any chatbot, search assistant, or RAG pipeline.
+This paper tells the story of how we solved those problems. We present a three-layer caching architecture, now available as the open-source Python library \texttt{lix\_cache}: (1)~a \emph{Session Context Window} maintaining a rolling window of recent messages in Redis with automatic overflow to Huffman-compressed disk archives; (2)~a \emph{Semantic Query Cache} that catches rephrasings via cosine similarity on embedding vectors, eliminating redundant LLM invocations; and (3)~a \emph{URL Embedding Cache} that deduplicates embedding computations across sessions. Deployed on a single 8-vCPU Intel Cascade Lake server (2\,GHz, 32\,GB RAM) running 30 async workers across three containerized replicas, the system achieves an 89.3\% cache hit rate with 0.1\,ms Redis read latency and just 1.38\,MB of memory overhead. A background LRU eviction daemon transparently migrates idle sessions from Redis to disk and re-hydrates them on demand. We describe the journey from a bare-bones search pipeline to a production system, detail the architecture and implementation of each caching layer, and evaluate the system's throughput, latency, and compression characteristics on commodity CPU hardware. The library is pip-installable and designed for drop-in integration with any chatbot, search assistant, or RAG pipeline.
 \end{abstract}
 
 \begin{IEEEkeywords}
-caching, conversational AI, session management, Redis, Huffman coding, semantic similarity, embedding cache, RAG
+caching, LLM web search, CPU inference, session management, Redis, Huffman coding, semantic similarity, embedding cache
 \end{IEEEkeywords}
 
 % ============================================================
@@ -318,7 +318,7 @@ We chose re-entrant locks specifically because the call graph is nested: flushin
 \section{Evaluation}
 \label{sec:evaluation}
 
-The real test of any caching system is whether it actually delivers in production. We deployed \texttt{lix\_cache} on the live \texttt{lixSearch} search assistant, running three application replicas behind an nginx load balancer on a single server. Redis 7.4 runs on a dedicated container with password authentication. All measurements below were taken from the live system-no synthetic benchmarks, no cherry-picked scenarios.
+The real test of any caching system is whether it actually delivers in production---especially on modest hardware. Our entire stack runs on a single DigitalOcean droplet: an 8-vCPU Intel Cascade Lake (2\,GHz) with 32\,GB RAM, no GPU. The search assistant runs as three containerized replicas (2\,vCPU, 2\,GB RAM limit each) with 10 Hypercorn async workers per replica---30 workers total. Redis 7.4 runs in its own container capped at 2\,GB, and an nginx load balancer sits in front. All measurements below were taken from this live system---no synthetic benchmarks, no cherry-picked scenarios.
 
 \subsection{Cost Comparison: SearchGPT vs.\ lixSearch}
 
