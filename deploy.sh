@@ -364,9 +364,9 @@ release_pypi() {
 
     _do_pypi() {
         local pkg_dir=$1 pkg_name=$2
-        if [ ! -d "${pkg_dir}/dist" ]; then
-            release_build "$(echo "$pkg_name" | sed 's/lix-open-//')"
-        fi
+        local target_name=$(echo "$pkg_name" | sed 's/lix-open-//')
+        # Always rebuild to ensure dist matches current version
+        release_build "$target_name"
         local v=$(_pkg_version "$pkg_dir")
         info "Uploading ${pkg_name} v${v} to PyPI..."
         twine upload "${pkg_dir}/dist/"*
