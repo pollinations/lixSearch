@@ -761,73 +761,68 @@ Underfull \hbox (badness 2376) in paragraph at lines 236--237
 \T1/ptm/m/n/10 a flat im-port sur-face (e.g., \T1/pcr/m/n/10 from lix_chat import
  []
 
-
-Overfull \hbox (28.4077pt too wide) in paragraph at lines 274--285
- [] 
- []
-
 [4]
-Overfull \hbox (50.09729pt too wide) in paragraph at lines 298--299
+Overfull \hbox (50.09729pt too wide) in paragraph at lines 299--300
 []\T1/pcr/m/n/10 {prefix}:session_context:{session_id}:{turn_id}
  []
 
 
-Underfull \hbox (badness 4673) in paragraph at lines 301--302
+Underfull \hbox (badness 4673) in paragraph at lines 302--303
 []\T1/ptm/m/n/10 Turn IDs are de-rived from the cur-rent times-tamp:
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 311--312
+Underfull \hbox (badness 10000) in paragraph at lines 312--313
 []\T1/ptm/m/n/10 The \T1/pcr/m/n/10 SemanticCacheRedis \T1/ptm/m/n/10 stores cached items
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 311--312
+Underfull \hbox (badness 10000) in paragraph at lines 312--313
 \T1/ptm/m/n/10 as a JSON doc-u-ment per \T1/pcr/m/n/10 (session_id, URL)
  []
 
 
-Underfull \hbox (badness 1490) in paragraph at lines 311--312
+Underfull \hbox (badness 1490) in paragraph at lines 312--313
 \T1/pcr/m/n/10 max_items_per_url \T1/ptm/m/n/10 (de-fault 50) en-tries. Each en-try
  []
 
 
-Underfull \hbox (badness 4569) in paragraph at lines 319--320
+Underfull \hbox (badness 4569) in paragraph at lines 320--321
 []\T1/ptm/m/n/10 Embeddings are stored as raw \T1/pcr/m/n/10 float32 \T1/ptm/m/n/10 byte ar-
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 326--327
+Underfull \hbox (badness 10000) in paragraph at lines 327--328
 []\T1/ptm/m/n/10 Instance-level locks in
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 326--327
+Underfull \hbox (badness 10000) in paragraph at lines 327--328
 \T1/pcr/m/n/10 HybridConversationCache\T1/ptm/m/n/10 ,
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 330--331
+Underfull \hbox (badness 10000) in paragraph at lines 331--332
 []\T1/pcr/m/n/10 RLock \T1/ptm/m/n/10 (re-entrant lock) is used through-out to
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 330--331
+Underfull \hbox (badness 10000) in paragraph at lines 331--332
 \T1/ptm/m/n/10 al-low nested calls with-out deadlock---for ex-am-ple,
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 330--331
+Underfull \hbox (badness 10000) in paragraph at lines 331--332
 \T1/pcr/m/n/10 HybridConversationCache.flush_to_disk()
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 330--331
+Underfull \hbox (badness 10000) in paragraph at lines 331--332
 \T1/ptm/m/n/10 ac-quires the in-stance lock and then calls
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 330--331
+Underfull \hbox (badness 10000) in paragraph at lines 331--332
 \T1/pcr/m/n/10 ConversationArchive.append_turns()\T1/ptm/m/n/10 , which
  []
 
@@ -838,47 +833,47 @@ LaTeX Warning: `h' float specifier changed to `ht'.
 LaTeX Warning: `h' float specifier changed to `ht'.
 
 [5]
-Underfull \hbox (badness 10000) in paragraph at lines 411--412
+Underfull \hbox (badness 10000) in paragraph at lines 412--413
 []\T1/ptm/m/n/10 The pro-duc-tion Re-dis in-stance serves all three
  []
 
 
-Underfull \hbox (badness 4454) in paragraph at lines 411--412
+Underfull \hbox (badness 4454) in paragraph at lines 412--413
 \T1/ptm/m/n/10 databases with a to-tal mem-ory foot-print of \T1/ptm/b/n/10 1.38MB
  []
 
 
-Underfull \hbox (badness 6575) in paragraph at lines 411--412
+Underfull \hbox (badness 6575) in paragraph at lines 412--413
 \T1/ptm/m/n/10 (\T1/pcr/m/n/10 used_memory_human\T1/ptm/m/n/10 ), of which 96.4% is dataset
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 441--443
+Underfull \hbox (badness 10000) in paragraph at lines 442--444
 []\T1/ptm/b/n/10 Conversation mem-ory in LLM frame-
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 441--443
+Underfull \hbox (badness 10000) in paragraph at lines 442--444
 \T1/ptm/b/n/10 works. \T1/ptm/m/n/10 LangChain [[]] pro-vides sev-eral mem-
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 441--443
+Underfull \hbox (badness 10000) in paragraph at lines 442--444
 \T1/ptm/m/n/10 ory classes (\T1/pcr/m/n/10 ConversationBufferMemory\T1/ptm/m/n/10 ,
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 441--443
+Underfull \hbox (badness 10000) in paragraph at lines 442--444
 \T1/pcr/m/n/10 ConversationSummaryMemory\T1/ptm/m/n/10 ,
  []
 
 
-Underfull \hbox (badness 5878) in paragraph at lines 441--443
+Underfull \hbox (badness 5878) in paragraph at lines 442--444
 \T1/pcr/m/n/10 ConversationBufferWindowMemory\T1/ptm/m/n/10 ) that main-tain
  []
 
 
-Underfull \hbox (badness 5091) in paragraph at lines 441--443
+Underfull \hbox (badness 5091) in paragraph at lines 442--444
 \T1/ptm/m/n/10 Lla-maIn-dex [[]] of-fers sim-i-lar in-memory chat stores.
  []
 
@@ -886,39 +881,39 @@ Underfull \hbox (badness 5091) in paragraph at lines 441--443
 pdfTeX warning (ext4): destination with the same identifier (name{table.1}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.452 
+l.453 
       
 pdfTeX warning (ext4): destination with the same identifier (name{table.2}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.452 
+l.453 
       
 pdfTeX warning (ext4): destination with the same identifier (name{table.3}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.452 
+l.453 
       ]
-Underfull \hbox (badness 4013) in paragraph at lines 486--487
+Underfull \hbox (badness 4013) in paragraph at lines 487--488
 []\T1/ptm/m/n/8 Zilliz, ``GPT-Cache: A li-brary for cre-at-ing se-man-tic cache for
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 510--511
+Underfull \hbox (badness 10000) in paragraph at lines 511--512
 []\T1/ptm/m/n/8 OpenAI Com-mu-nity Fo-rum, ``Heads up: Web search tool
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 510--511
+Underfull \hbox (badness 10000) in paragraph at lines 511--512
 \T1/ptm/m/n/8 billing can be higher than you ex-pect --- here's why,''
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 510--511
+Underfull \hbox (badness 10000) in paragraph at lines 511--512
 \T1/ptm/m/n/8 2025. [On-line]. Avail-able: [][]$https : / / community . openai . com / t /
  []
 
 
-Overfull \hbox (22.25386pt too wide) in paragraph at lines 510--511
+Overfull \hbox (22.25386pt too wide) in paragraph at lines 511--512
 \T1/ptm/m/n/8 heads-[]up-[]web-[]search-[]tool-[]billing-[]can-[]be-[]higher-[]than-[]you-[]expect-[]here-[]s-[]why /
  []
 
@@ -942,15 +937,15 @@ Package rerunfilecheck Info: File `lix_cache_paper.out' has not changed.
 (rerunfilecheck)             Checksum: 96B36B50EB6075339672FB1C8EFFDA6F;6016.
  ) 
 Here is how much of TeX's memory you used:
- 24749 strings out of 476106
- 463944 string characters out of 5793933
+ 24752 strings out of 476106
+ 463968 string characters out of 5793933
  1952975 words of memory out of 5000000
- 46246 multiletter control sequences out of 15000+600000
- 677848 words of font info for 164 fonts, out of 8000000 for 9000
+ 46247 multiletter control sequences out of 15000+600000
+ 679576 words of font info for 167 fonts, out of 8000000 for 9000
  59 hyphenation exceptions out of 8191
  84i,10n,93p,1191b,928s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/courier/ucrb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmbi8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on lix_cache_paper.pdf (7 pages, 230576 bytes).
+Output written on lix_cache_paper.pdf (7 pages, 230521 bytes).
 PDF statistics:
  339 PDF objects out of 1000 (max. 8388607)
  295 compressed objects within 3 object streams
