@@ -18,11 +18,17 @@ classifiers = [
 ]
 dependencies = [
     "httpx>=0.25",
+    "redis>=5.0",
+    "numpy>=1.24",
+    "loguru>=0.7",
 ]
+
+[project.optional-dependencies]
+lz4 = ["lz4>=4.0"]
 
 [project.urls]
 Homepage = "https://github.com/elixpo/lixSearch"
 Documentation = "https://github.com/elixpo/lixSearch/blob/main/lix_open_search/README.md"
 
 [tool.setuptools.packages.find]
-include = ["lix_open_search*"]
+include = ["lix_open_search*", "lix_open_cache*"]

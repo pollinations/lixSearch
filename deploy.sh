@@ -248,7 +248,61 @@ test_scaling() {
     echo ""
 }
 
-release_package() {
+_bump_version() {
+    local pyproject=$1
+    local bump_type=$2
+    local current=$(grep '^version' "$pyproject" | sed 's/version = "\(.*\)"/\1/')
+    IFS='.' read -r major minor patch <<< "$current"
+    case "$bump_type" in
+        major) major=$((major + 1)); minor=0; patch=0 ;;
+        minor) minor=$((minor + 1)); patch=0 ;;
+        patch) patch=$((patch + 1)) ;;
+    esac
+    echo "${major}.${minor}.${patch}"
+}
+
+_build_and_upload_pypi() {
+    local pkg_dir=$1
+    local pkg_name=$2
+    local new_version=$3
+
+    info "Building ${pkg_name}..."
+    cd "$pkg_dir"
+    rm -rf dist/ build/ *.egg-info
+    python -m build
+    cd ..
+    success "Built dist files"
+
+    info "Uploading ${pkg_name} to PyPI..."
+    twine upload "${pkg_dir}/dist/*"
+    success "Published ${pkg_name} ${new_version} to PyPI"
+}
+
+_github_release() {
+    local tag=$1
+    local title=$2
+    local notes=$3
+    shift 3
+    local assets=("$@")
+
+    if ! command -v gh &> /dev/null; then
+        warning "gh CLI not installed — skipping GitHub release"
+        info "Install: https://cli.github.com"
+        return 1
+    fi
+
+    info "Creating GitHub release ${tag}..."
+    git add -A
+    git commit -m "release: ${title}"
+    git tag "$tag"
+    git push origin main --tags
+    gh release create "$tag" "${assets[@]}" \
+        --title "$title" \
+        --notes "$notes"
+    success "GitHub release ${tag} created"
+}
+
+release_pypi() {
     local bump_type=${1:-patch}
     local pyproject="package/pyproject.toml"
 
@@ -257,118 +311,118 @@ release_package() {
         exit 1
     fi
 
-    # Read current version
     local current=$(grep '^version' "$pyproject" | sed 's/version = "\(.*\)"/\1/')
-    info "Current version: $current"
+    local new_version=$(_bump_version "$pyproject" "$bump_type")
+    info "lix-open-search: ${current} → ${new_version}"
 
-    # Parse semver
-    IFS='.' read -r major minor patch <<< "$current"
-
-    case "$bump_type" in
-        major) major=$((major + 1)); minor=0; patch=0 ;;
-        minor) minor=$((minor + 1)); patch=0 ;;
-        patch) patch=$((patch + 1)) ;;
-        *)
-            error "Unknown bump type: $bump_type (use major, minor, or patch)"
-            exit 1
-            ;;
-    esac
-
-    local new_version="${major}.${minor}.${patch}"
-    info "Bumping to: $new_version"
-
-    # Update pyproject.toml
+    # Bump version in pyproject.toml and __init__.py
     sed -i "s/^version = \".*\"/version = \"${new_version}\"/" "$pyproject"
-    success "Updated $pyproject"
+    sed -i "s/^__version__ = \".*\"/__version__ = \"${new_version}\"/" package/lix_open_search/__init__.py 2>/dev/null || true
 
-    # Build
-    info "Building package..."
-    cd package
-    rm -rf dist/ build/ *.egg-info
-    python -m build
-    cd ..
-    success "Built dist files"
+    _build_and_upload_pypi "package" "lix-open-search" "$new_version"
 
-    # Upload to PyPI
-    info "Uploading to PyPI..."
-    twine upload package/dist/*
-    success "Published lix-open-cache $new_version to PyPI"
+    local notes
+    notes=$(cat <<NOTES
+## lix-open-search v${new_version}
 
-    # Create GitHub release with assets
-    if command -v gh &> /dev/null; then
-        info "Creating GitHub release v${new_version}..."
-        git add "$pyproject"
-        git commit -m "release: lix-open-cache v${new_version}"
-        git tag "v${new_version}"
-        git push origin main --tags
-        local release_notes
-        release_notes=$(cat <<NOTES
-## lix-open-cache v${new_version}
-
-Production-grade multi-layer caching for conversational AI — session memory, semantic deduplication, and compressed disk archival in ~800 lines of Python.
+Python SDK + caching library for lixSearch — multi-tool AI search with web, video, image, deep research, and production-grade session caching.
 
 ### Install
 
 \`\`\`bash
-pip install lix-open-cache==${new_version}
+pip install lix-open-search==${new_version}
 \`\`\`
 
-### Quick Start
+### Includes
 
+**lix_open_search** — Client SDK
+\`\`\`python
+from lix_open_search import LixSearch
+
+lix = LixSearch("http://localhost:9002")
+result = lix.search("quantum computing breakthroughs 2026")
+print(result.content)
+
+for chunk in lix.search_stream("latest AI papers"):
+    print(chunk.content, end="", flush=True)
+\`\`\`
+
+**lix_open_cache** — Multi-layer caching
 \`\`\`python
 from lix_open_cache import CacheConfig, CacheCoordinator
 
 config = CacheConfig(redis_host="localhost", redis_port=6379)
 cache = CacheCoordinator(session_id="user-abc", config=config)
-
-# Store & retrieve conversation context
 cache.add_message_to_context("user", "What's the weather in Tokyo?")
-cache.add_message_to_context("assistant", "22°C and sunny.")
-history = cache.get_context_messages()
 \`\`\`
 
-### What's Inside
+### Features
 
-| Layer | Purpose | Backend |
-|-------|---------|---------|
-| **Session Context Window** | Rolling 20-message window with disk overflow | Redis DB 2 + Huffman .huff files |
-| **Semantic Query Cache** | Deduplicate similar queries (cosine ≥ 0.90) | Redis DB 0 |
-| **URL Embedding Cache** | Cache embedding vectors per URL (24h TTL) | Redis DB 1 |
-
-### Key Features
-
-- **Two-tier hybrid storage** — Redis hot window + Huffman-compressed disk cold archive
-- **LRU eviction daemon** — auto-migrates idle sessions to disk, re-hydrates on return
-- **smart_context()** — recent messages + semantically relevant history from disk
-- **Pure Python Huffman codec** — ~54% compression, zero native dependencies
-- **Single CacheConfig dataclass** — all tunables in one place, 12-factor env var support
-- **Connection pooling** — shared Redis pools keyed by (host, port, db)
-
-### Dependencies
-
-Only 3: \`redis\`, \`numpy\`, \`loguru\`
+- **Search SDK**: sync + async clients, streaming, multi-turn sessions, multimodal
+- **Cache library**: 3-layer Redis caching, Huffman disk archival, LRU eviction
+- **OpenAI-compatible** — also works with the standard OpenAI Python client
+- **Self-host**: \`docker compose -f docker-compose.open.yml up -d\`
 
 ### Links
 
-- [PyPI](https://pypi.org/project/lix-open-cache/${new_version}/)
-- [Documentation](https://github.com/elixpo/lixSearch/blob/main/package/README.md)
+- [PyPI](https://pypi.org/project/lix-open-search/${new_version}/)
+- [SDK Docs](https://github.com/elixpo/lixSearch/blob/main/package/README.md)
+- [Docker Image](https://github.com/elixpo/lixSearch/pkgs/container/lix-open-search)
 - [Research Paper](https://github.com/elixpo/lixSearch/blob/main/docs/paper/lix_cache_paper.pdf)
 NOTES
-        )
+    )
 
-        gh release create "v${new_version}" package/dist/* \
-            --title "lix-open-cache v${new_version}" \
-            --notes "$release_notes"
-        success "GitHub release v${new_version} created with package assets"
-    else
-        warning "gh CLI not installed — skipping GitHub release"
-        info "Install: https://cli.github.com"
-        info "Then manually: git tag v${new_version} && git push --tags"
-    fi
+    _github_release "v${new_version}" "lix-open-search v${new_version}" "$notes" package/dist/*
 
     echo ""
-    success "Released lix-open-cache v${new_version}"
-    info "Install: pip install lix-open-cache==${new_version}"
+    success "Released lix-open-search v${new_version}"
+    info "Install: pip install lix-open-search==${new_version}"
+}
+
+release_docker() {
+    local bump_type=${1:-patch}
+    local image="ghcr.io/elixpo/lix-open-search"
+
+    # Read version from package pyproject (keeps them in sync)
+    local pyproject="package/pyproject.toml"
+    if [ ! -f "$pyproject" ]; then
+        error "lix_open_search/pyproject.toml not found"
+        exit 1
+    fi
+
+    local version=$(grep '^version' "$pyproject" | sed 's/version = "\(.*\)"/\1/')
+    info "Building Docker image: ${image}:${version}"
+
+    check_docker
+
+    # Build the image
+    docker build -f Dockerfile.open -t "${image}:${version}" -t "${image}:latest" .
+    success "Built ${image}:${version}"
+
+    # Push to GHCR
+    info "Pushing to GitHub Container Registry..."
+    echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_USER:-elixpo}" --password-stdin
+    docker push "${image}:${version}"
+    docker push "${image}:latest"
+    success "Pushed ${image}:${version} and :latest"
+
+    echo ""
+    success "Docker image published"
+    info "Pull: docker pull ${image}:${version}"
+    info "Run:  docker compose -f docker-compose.open.yml up -d"
+}
+
+release_all() {
+    local bump_type=${1:-patch}
+    info "Releasing all packages (${bump_type} bump)..."
+    echo ""
+
+    release_pypi "$bump_type"
+    echo ""
+    release_docker "$bump_type"
+
+    echo ""
+    success "All packages released!"
 }
 
 show_help() {
@@ -392,7 +446,9 @@ ${YELLOW}Commands:${NC}
   backup            Backup Redis data
   clean             Remove all data (volumes)
   test-scale        Test scalability (1→2→3→5 containers)
-  release [TYPE]    Bump version, publish to PyPI + GitHub (patch|minor|major)
+  release pypi [TYPE]    Release lix-open-search to PyPI + GitHub (patch|minor|major)
+  release docker         Build + push Docker image to ghcr.io
+  release all [TYPE]     Release everything (PyPI + Docker)
   help              Show this help message
 
 ${YELLOW}Examples:${NC}
@@ -404,8 +460,10 @@ ${YELLOW}Examples:${NC}
   ./deploy.sh logs app                    # View app logs
   ./deploy.sh health                      # Check all services
   ./deploy.sh backup                      # Backup Redis
-  ./deploy.sh release                     # Bump patch, publish to PyPI + GitHub
-  ./deploy.sh release minor               # Bump minor version
+  ./deploy.sh release pypi                # Bump patch, publish to PyPI + GitHub
+  ./deploy.sh release pypi minor          # Bump minor version
+  ./deploy.sh release docker              # Build + push Docker image to ghcr.io
+  ./deploy.sh release all                 # Release everything (PyPI + Docker)
 
 ${YELLOW}Environment:${NC}
   Use the root .env file with required variables:
@@ -504,7 +562,15 @@ case "${1:-help}" in
         test_scaling
         ;;
     release)
-        release_package "$2"
+        case "${2:-help}" in
+            pypi)   release_pypi "$3" ;;
+            docker) release_docker "$3" ;;
+            all)    release_all "$3" ;;
+            *)
+                error "Usage: ./deploy.sh release <pypi|docker|all> [patch|minor|major]"
+                exit 1
+                ;;
+        esac
         ;;
     status)
         show_status
