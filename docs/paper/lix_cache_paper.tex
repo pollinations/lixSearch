@@ -462,6 +462,8 @@ This aggregate hit rate spans all three databases. The high rate reflects the ef
 \section{Related Work}
 \label{sec:related}
 
+Before building \texttt{lix\_cache}, we surveyed the landscape of existing tools. None of them solved our problem completely, but each influenced our design in specific ways.
+
 \textbf{Conversation memory in LLM frameworks.}
 LangChain~\cite{langchain2023} provides several memory classes (\texttt{ConversationBufferMemory}, \texttt{ConversationSummaryMemory}, \texttt{ConversationBufferWindowMemory}) that maintain conversation state for LLM chains. These operate in-process and do not persist across restarts or scale across replicas. LlamaIndex~\cite{llamaindex2023} offers similar in-memory chat stores. \texttt{lix\_cache} differs by providing Redis-backed persistence with automatic disk archival, enabling shared state across horizontally scaled application instances.
 
@@ -526,6 +528,12 @@ D.~A.~Huffman, ``A method for the construction of minimum-redundancy codes,'' \t
 
 \bibitem{redis2023}
 S.~Sanfilippo, ``Redis: An in-memory data structure store,'' 2023. [Online]. Available: \url{https://redis.io}
+
+\bibitem{openai_search_pricing}
+OpenAI, ``API Pricing --- Web Search Tool,'' 2025. [Online]. Available: \url{https://openai.com/api/pricing/}
+
+\bibitem{openai_search_billing}
+OpenAI Community Forum, ``Heads up: Web search tool billing can be higher than you expect --- here's why,'' 2025. [Online]. Available: \url{https://community.openai.com/t/heads-up-web-search-tool-billing-can-be-higher-than-you-expect-here-s-why/1236954}
 
 \end{thebibliography}
 

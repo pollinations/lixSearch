@@ -666,21 +666,14 @@ LaTeX Font Info:    Trying to load font information for T1+pcr on input line 47.
  (/usr/share/texlive/texmf-dist/tex/latex/psnfss/t1pcr.fd
 File: t1pcr.fd 2001/06/04 font definitions for T1/pcr.
 )
-
-LaTeX Warning: Citation `openai_search_pricing' on page 1 undefined on input line 65.
-
 LaTeX Font Info:    Trying to load font information for U+msa on input line 65.
-(/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsa.fd
+ (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
 LaTeX Font Info:    Trying to load font information for U+msb on input line 65.
  (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
-)
-
-LaTeX Warning: Citation `openai_search_billing' on page 1 undefined on input line 65.
-
-[1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}{/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}
+) [1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}{/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}
 
 
 ]
@@ -856,32 +849,32 @@ Underfull \hbox (badness 6575) in paragraph at lines 437--438
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 465--467
+Underfull \hbox (badness 10000) in paragraph at lines 467--469
 []\T1/ptm/b/n/10 Conversation mem-ory in LLM frame-
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 465--467
+Underfull \hbox (badness 10000) in paragraph at lines 467--469
 \T1/ptm/b/n/10 works. \T1/ptm/m/n/10 LangChain [[]] pro-vides sev-eral mem-
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 465--467
+Underfull \hbox (badness 10000) in paragraph at lines 467--469
 \T1/ptm/m/n/10 ory classes (\T1/pcr/m/n/10 ConversationBufferMemory\T1/ptm/m/n/10 ,
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 465--467
+Underfull \hbox (badness 10000) in paragraph at lines 467--469
 \T1/pcr/m/n/10 ConversationSummaryMemory\T1/ptm/m/n/10 ,
  []
 
 
-Underfull \hbox (badness 5878) in paragraph at lines 465--467
+Underfull \hbox (badness 5878) in paragraph at lines 467--469
 \T1/pcr/m/n/10 ConversationBufferWindowMemory\T1/ptm/m/n/10 ) that main-tain
  []
 
 
-Underfull \hbox (badness 5091) in paragraph at lines 465--467
+Underfull \hbox (badness 5091) in paragraph at lines 467--469
 \T1/ptm/m/n/10 Lla-maIn-dex [[]] of-fers sim-i-lar in-memory chat stores.
  []
 
@@ -889,20 +882,40 @@ Underfull \hbox (badness 5091) in paragraph at lines 465--467
 pdfTeX warning (ext4): destination with the same identifier (name{table.1}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.476 
+l.478 
       
 pdfTeX warning (ext4): destination with the same identifier (name{table.2}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.476 
+l.478 
       
 pdfTeX warning (ext4): destination with the same identifier (name{table.3}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.476 
+l.478 
       ]
-Underfull \hbox (badness 4013) in paragraph at lines 510--511
+Underfull \hbox (badness 4013) in paragraph at lines 512--513
 []\T1/ptm/m/n/8 Zilliz, ``GPT-Cache: A li-brary for cre-at-ing se-man-tic cache for
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 536--537
+[]\T1/ptm/m/n/8 OpenAI Com-mu-nity Fo-rum, ``Heads up: Web search tool
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 536--537
+\T1/ptm/m/n/8 billing can be higher than you ex-pect --- here's why,''
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 536--537
+\T1/ptm/m/n/8 2025. [On-line]. Avail-able: [][]$https : / / community . openai . com / t /
+ []
+
+
+Overfull \hbox (22.25386pt too wide) in paragraph at lines 536--537
+\T1/ptm/m/n/8 heads-[]up-[]web-[]search-[]tool-[]billing-[]can-[]be-[]higher-[]than-[]you-[]expect-[]here-[]s-[]why /
  []
 
 
@@ -921,26 +934,22 @@ Before submitting the final camera ready copy, remember to:
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-22>
  ***********
-
-
-LaTeX Warning: There were undefined references.
-
 Package rerunfilecheck Info: File `lix_cache_paper.out' has not changed.
 (rerunfilecheck)             Checksum: 96B36B50EB6075339672FB1C8EFFDA6F;6016.
  ) 
 Here is how much of TeX's memory you used:
- 25172 strings out of 476106
- 467419 string characters out of 5793933
- 2015975 words of memory out of 5000000
- 46647 multiletter control sequences out of 15000+600000
+ 25176 strings out of 476106
+ 467517 string characters out of 5793933
+ 2014975 words of memory out of 5000000
+ 46649 multiletter control sequences out of 15000+600000
  679576 words of font info for 167 fonts, out of 8000000 for 9000
  59 hyphenation exceptions out of 8191
  84i,10n,93p,1191b,1710s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/courier/ucrb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmbi8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on lix_cache_paper.pdf (7 pages, 241152 bytes).
+Output written on lix_cache_paper.pdf (7 pages, 241904 bytes).
 PDF statistics:
- 364 PDF objects out of 1000 (max. 8388607)
- 317 compressed objects within 4 object streams
- 92 named destinations out of 1000 (max. 500000)
+ 372 PDF objects out of 1000 (max. 8388607)
+ 325 compressed objects within 4 object streams
+ 94 named destinations out of 1000 (max. 500000)
  285 words of extra memory for PDF output out of 10000 (max. 10000000)
 
