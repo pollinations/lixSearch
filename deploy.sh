@@ -248,6 +248,74 @@ test_scaling() {
     echo ""
 }
 
+release_package() {
+    local bump_type=${1:-patch}
+    local pyproject="package/pyproject.toml"
+
+    if [ ! -f "$pyproject" ]; then
+        error "package/pyproject.toml not found"
+        exit 1
+    fi
+
+    # Read current version
+    local current=$(grep '^version' "$pyproject" | sed 's/version = "\(.*\)"/\1/')
+    info "Current version: $current"
+
+    # Parse semver
+    IFS='.' read -r major minor patch <<< "$current"
+
+    case "$bump_type" in
+        major) major=$((major + 1)); minor=0; patch=0 ;;
+        minor) minor=$((minor + 1)); patch=0 ;;
+        patch) patch=$((patch + 1)) ;;
+        *)
+            error "Unknown bump type: $bump_type (use major, minor, or patch)"
+            exit 1
+            ;;
+    esac
+
+    local new_version="${major}.${minor}.${patch}"
+    info "Bumping to: $new_version"
+
+    # Update pyproject.toml
+    sed -i "s/^version = \".*\"/version = \"${new_version}\"/" "$pyproject"
+    success "Updated $pyproject"
+
+    # Build
+    info "Building package..."
+    cd package
+    rm -rf dist/ build/ *.egg-info
+    python -m build
+    cd ..
+    success "Built dist files"
+
+    # Upload to PyPI
+    info "Uploading to PyPI..."
+    twine upload package/dist/*
+    success "Published lix-open-cache $new_version to PyPI"
+
+    # Create GitHub release with assets
+    if command -v gh &> /dev/null; then
+        info "Creating GitHub release v${new_version}..."
+        git add "$pyproject"
+        git commit -m "release: lix-open-cache v${new_version}"
+        git tag "v${new_version}"
+        git push origin main --tags
+        gh release create "v${new_version}" package/dist/* \
+            --title "lix-open-cache v${new_version}" \
+            --notes "PyPI: \`pip install lix-open-cache==${new_version}\`"
+        success "GitHub release v${new_version} created with package assets"
+    else
+        warning "gh CLI not installed — skipping GitHub release"
+        info "Install: https://cli.github.com"
+        info "Then manually: git tag v${new_version} && git push --tags"
+    fi
+
+    echo ""
+    success "Released lix-open-cache v${new_version}"
+    info "Install: pip install lix-open-cache==${new_version}"
+}
+
 show_help() {
     cat << EOF
 ${BLUE}lixSearch Production Deployment Helper${NC}
@@ -269,6 +337,7 @@ ${YELLOW}Commands:${NC}
   backup            Backup Redis data
   clean             Remove all data (volumes)
   test-scale        Test scalability (1→2→3→5 containers)
+  release [TYPE]    Bump version, publish to PyPI + GitHub (patch|minor|major)
   help              Show this help message
 
 ${YELLOW}Examples:${NC}
@@ -280,6 +349,8 @@ ${YELLOW}Examples:${NC}
   ./deploy.sh logs app                    # View app logs
   ./deploy.sh health                      # Check all services
   ./deploy.sh backup                      # Backup Redis
+  ./deploy.sh release                     # Bump patch, publish to PyPI + GitHub
+  ./deploy.sh release minor               # Bump minor version
 
 ${YELLOW}Environment:${NC}
   Use the root .env file with required variables:
@@ -376,6 +447,9 @@ case "${1:-help}" in
         ;;
     test-scale)
         test_scaling
+        ;;
+    release)
+        release_package "$2"
         ;;
     status)
         show_status
