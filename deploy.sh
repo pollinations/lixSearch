@@ -433,46 +433,70 @@ release_docker() {
 }
 
 release_github() {
+    local target=${1:?Usage: release github <cache|search|all>}
+
     if ! command -v gh &> /dev/null; then
         error "gh CLI not installed (https://cli.github.com)"
         exit 1
     fi
 
-    local cache_v=$(_pkg_version "$CACHE_PKG")
-    local search_v=$(_pkg_version "$SEARCH_PKG")
+    # Commit + push any pending changes first
+    git add -A
+    git commit -m "release: update packages" 2>/dev/null || true
+    git push origin main 2>/dev/null || true
 
-    local notes
-    notes=$(cat <<NOTES
-## lixSearch Packages
+    _do_gh_release() {
+        local pkg_dir=$1 pkg_name=$2 tag_prefix=$3
+        local v=$(_pkg_version "$pkg_dir")
+        local tag="${tag_prefix}-v${v}"
 
-| Package | Version | Install |
-|---------|---------|---------|
-| lix-open-search | ${search_v} | \`pip install lix-open-search==${search_v}\` |
-| lix-open-cache | ${cache_v} | \`pip install lix-open-cache==${cache_v}\` |
-| Docker (LixSearch) | ${search_v} | \`docker pull elixpo/lixsearch:${search_v}\` |
+        local notes
+        notes=$(cat <<NOTES
+## ${pkg_name} v${v}
+
+\`\`\`bash
+$([ "$tag_prefix" = "cache" ] && echo "pip install lix-open-cache==${v}" || echo "pip install lix-open-search==${v}")
+\`\`\`
 
 ### Links
-- [PyPI search](https://pypi.org/project/lix-open-search/${search_v}/)
-- [PyPI cache](https://pypi.org/project/lix-open-cache/${cache_v}/)
-- [Docker Hub](https://hub.docker.com/r/elixpo/lixsearch)
+- [PyPI](https://pypi.org/project/${pkg_name}/${v}/)
+- [Docs](https://github.com/$(git remote get-url origin | sed 's|.*github.com/||;s|\.git||')/tree/main/${pkg_dir})
 - [Live Demo](https://search.elixpo.com)
 NOTES
-    )
+        )
 
-    info "Creating GitHub release..."
-    git add -A
-    git commit -m "release: v${search_v}" 2>/dev/null || true
-    git tag -f "v${search_v}"
-    git push origin main --tags
+        local assets=()
+        [ -d "${pkg_dir}/dist" ] && assets=(${pkg_dir}/dist/*)
 
-    local assets=()
-    [ -d "${CACHE_PKG}/dist" ] && assets+=(${CACHE_PKG}/dist/*)
-    [ -d "${SEARCH_PKG}/dist" ] && assets+=(${SEARCH_PKG}/dist/*)
+        # Delete existing tag + release if they exist, then recreate
+        git tag -d "$tag" 2>/dev/null || true
+        git push origin ":refs/tags/$tag" 2>/dev/null || true
+        gh release delete "$tag" --yes 2>/dev/null || true
 
-    gh release create "v${search_v}" "${assets[@]}" \
-        --title "lixSearch v${search_v}" \
-        --notes "$notes"
-    success "GitHub release v${search_v} created"
+        git tag "$tag"
+        git push origin "$tag"
+
+        if [ ${#assets[@]} -gt 0 ]; then
+            gh release create "$tag" "${assets[@]}" \
+                --title "${pkg_name} v${v}" \
+                --notes "$notes"
+        else
+            gh release create "$tag" \
+                --title "${pkg_name} v${v}" \
+                --notes "$notes"
+        fi
+        success "GitHub release ${tag} created/updated"
+    }
+
+    case "$target" in
+        cache)  _do_gh_release "$CACHE_PKG" "lix-open-cache" "cache" ;;
+        search) _do_gh_release "$SEARCH_PKG" "lix-open-search" "search" ;;
+        all)
+            _do_gh_release "$CACHE_PKG" "lix-open-cache" "cache"
+            _do_gh_release "$SEARCH_PKG" "lix-open-search" "search"
+            ;;
+        *)      error "Unknown target: $target (use cache, search, or all)"; exit 1 ;;
+    esac
 }
 
 # ── Frontend ───────────────────────────────────────────
@@ -560,7 +584,7 @@ release_all() {
     echo ""
     release_docker
     echo ""
-    release_github
+    release_github all
 
     echo ""
     success "All released!"
@@ -721,7 +745,7 @@ case "${1:-help}" in
             build)   release_build "$3" ;;
             pypi)    release_pypi "$3" ;;
             docker)  release_docker ;;
-            github)  release_github ;;
+            github)  release_github "$3" ;;
             all)     release_all "$3" ;;
             *)
                 cat <<RELEASE_HELP
@@ -735,7 +759,7 @@ ${YELLOW}Commands:${NC}
   build <target>              Build .whl + .tar.gz locally
   pypi <target>               Upload to PyPI (auto-builds if needed)
   docker                      Build + push Docker image to ghcr.io + Docker Hub
-  github                      Create GitHub release with all assets
+  github <target>             Create/update GitHub release (cache|search|all)
   all [TYPE]                  Full release: bump + build + PyPI + Docker + GitHub
 
 ${YELLOW}Examples:${NC}
@@ -747,7 +771,8 @@ ${YELLOW}Examples:${NC}
   ./deploy.sh release pypi cache           # Upload cache to PyPI
   ./deploy.sh release pypi all             # Upload both to PyPI
   ./deploy.sh release docker               # Push Docker image
-  ./deploy.sh release github               # Create GitHub release
+  ./deploy.sh release github cache          # Create/update cache release
+  ./deploy.sh release github all           # Create/update both releases
   ./deploy.sh release all                  # Everything (patch)
   ./deploy.sh release all minor            # Everything (minor)
 RELEASE_HELP
