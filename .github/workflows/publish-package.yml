@@ -3,6 +3,7 @@ name: Publish lix-open-cache
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -32,28 +33,20 @@ jobs:
         with:
           name: dist
           path: dist/
-      - name: Publish to PyPI
+      - name: Publish to PyPI (trusted publishing)
         uses: pypa/gh-action-pypi-publish@release/v1
 
-  publish-github:
+  publish-github-release:
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      packages: write
-      contents: read
+      contents: write
     steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
-      - name: Publish to GitHub Packages
-        run: |
-          pip install twine
-          twine upload --repository-url https://upload.pypi.org/legacy/ dist/* || true
-          twine upload --repository-url https://ghcr.io/v2/ dist/* || true
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      - name: Attach packages to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
