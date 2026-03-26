@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.3.25)  26 MAR 2026 06:37
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.3.25)  26 MAR 2026 08:08
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -606,78 +606,120 @@ Package: algorithmic 2009/08/24 v0.1 Document Style `algorithmic'
 ) (/usr/share/texlive/texmf-dist/tex/latex/preprint/balance.sty
 Package: balance 1999/02/23 4.3 (PWD)
 \oldvsize=\dimen313
-) (/usr/share/texlive/texmf-dist/tex/latex/listings/lstlang1.sty
+) (/usr/share/texlive/texmf-dist/tex/latex/pgfplots/pgfplots.sty (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplots.revision.tex)
+Package: pgfplots 2021/05/15 v1.18.1 Data Visualization (1.18.1)
+ (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplots.code.tex (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplotscore.code.tex
+\t@pgfplots@toka=\toks42
+\t@pgfplots@tokb=\toks43
+\t@pgfplots@tokc=\toks44
+\pgfplots@tmpa=\dimen314
+\c@pgfplots@coordindex=\count332
+\c@pgfplots@scanlineindex=\count333
+ (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/sys/pgfplotssysgeneric.code.tex))
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/libs/pgfplotslibrary.code.tex) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/oldpgfcompatib/pgfplotsoldpgfsupp_loader.code.tex (/usr/share/texlive/texmf-dist/tex/generic/pgf/libraries/pgflibraryfpu.code.tex)
+Package pgfplots: loading complementary utilities for your pgf version...
+\t@pgf@toka=\toks45
+\t@pgf@tokb=\toks46
+\t@pgf@tokc=\toks47
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/oldpgfcompatib/pgfplotsoldpgfsupp_pgfutil-common-lists.tex)) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/util/pgfplotsutil.code.tex (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/liststructure/pgfplotsliststructure.code.tex) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/liststructure/pgfplotsliststructureext.code.tex) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/liststructure/pgfplotsarray.code.tex
+\c@pgfplotsarray@tmp=\count334
+) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/liststructure/pgfplotsmatrix.code.tex) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/numtable/pgfplotstableshared.code.tex
+\c@pgfplotstable@counta=\count335
+\t@pgfplotstable@a=\toks48
+) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/liststructure/pgfplotsdeque.code.tex) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/util/pgfplotsbinary.code.tex (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/util/pgfplotsbinary.data.code.tex)) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/util/pgfplotsutil.verb.code.tex) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/libs/pgflibrarypgfplots.surfshading.code.tex
+\c@pgfplotslibrarysurf@no=\count336
+ (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/sys/pgflibrarypgfplots.surfshading.pgfsys-pdftex.def))) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/util/pgfplotscolormap.code.tex (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/util/pgfplotscolor.code.tex)) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplotsstackedplots.code.tex) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplotsplothandlers.code.tex (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplotsmeshplothandler.code.tex (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplotsmeshplotimage.code.tex))) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplots.scaling.code.tex) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplotscoordprocessing.code.tex) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplots.errorbars.code.tex) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplots.markers.code.tex) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplotsticks.code.tex) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplots.paths.code.tex) (/usr/share/texlive/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzlibrarydecorations.pathmorphing.code.tex (/usr/share/texlive/texmf-dist/tex/generic/pgf/libraries/decorations/pgflibrarydecorations.pathmorphing.code.tex)) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/libs/tikzlibrarypgfplots.contourlua.code.tex)
+\pgfplots@numplots=\count337
+\pgfplots@xmin@reg=\dimen315
+\pgfplots@xmax@reg=\dimen316
+\pgfplots@ymin@reg=\dimen317
+\pgfplots@ymax@reg=\dimen318
+\pgfplots@zmin@reg=\dimen319
+\pgfplots@zmax@reg=\dimen320
+) (/usr/share/texlive/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzlibraryplotmarks.code.tex
+File: tikzlibraryplotmarks.code.tex 2023-01-15 v3.1.10 (3.1.10)
+ (/usr/share/texlive/texmf-dist/tex/generic/pgf/libraries/pgflibraryplotmarks.code.tex
+File: pgflibraryplotmarks.code.tex 2023-01-15 v3.1.10 (3.1.10)
+))) (/usr/share/texlive/texmf-dist/tex/latex/listings/lstlang1.sty
 File: lstlang1.sty 2023/02/27 1.9 listings language file
 )
-Package hyperref Info: Option `colorlinks' set `true' on input line 30.
+Package hyperref Info: Option `colorlinks' set `true' on input line 32.
  (/usr/share/texlive/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def
 File: l3backend-pdftex.def 2024-01-04 L3 backend support: PDF output (pdfTeX)
-\l__color_backend_stack_int=\count332
+\l__color_backend_stack_int=\count338
 \l__pdf_internal_box=\box71
 ) (./lix_cache_paper.aux)
 \openout1 = `lix_cache_paper.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 39.
-LaTeX Font Info:    ... okay on input line 39.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 39.
-LaTeX Font Info:    ... okay on input line 39.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 39.
-LaTeX Font Info:    ... okay on input line 39.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 39.
-LaTeX Font Info:    ... okay on input line 39.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 39.
-LaTeX Font Info:    ... okay on input line 39.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 39.
-LaTeX Font Info:    ... okay on input line 39.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 39.
-LaTeX Font Info:    ... okay on input line 39.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 39.
-LaTeX Font Info:    ... okay on input line 39.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 39.
-LaTeX Font Info:    ... okay on input line 39.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 41.
+LaTeX Font Info:    ... okay on input line 41.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 41.
+LaTeX Font Info:    ... okay on input line 41.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 41.
+LaTeX Font Info:    ... okay on input line 41.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 41.
+LaTeX Font Info:    ... okay on input line 41.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 41.
+LaTeX Font Info:    ... okay on input line 41.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 41.
+LaTeX Font Info:    ... okay on input line 41.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 41.
+LaTeX Font Info:    ... okay on input line 41.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 41.
+LaTeX Font Info:    ... okay on input line 41.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 41.
+LaTeX Font Info:    ... okay on input line 41.
 
 -- Lines per column: 56 (exact).
 (/usr/share/texlive/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
-\scratchcounter=\count333
-\scratchdimen=\dimen314
+\scratchcounter=\count339
+\scratchdimen=\dimen321
 \scratchbox=\box72
-\nofMPsegments=\count334
-\nofMParguments=\count335
-\everyMPshowfont=\toks42
-\MPscratchCnt=\count336
-\MPscratchDim=\dimen315
-\MPnumerator=\count337
-\makeMPintoPDFobject=\count338
-\everyMPtoPDFconversion=\toks43
+\nofMPsegments=\count340
+\nofMParguments=\count341
+\everyMPshowfont=\toks49
+\MPscratchCnt=\count342
+\MPscratchDim=\dimen322
+\MPnumerator=\count343
+\makeMPintoPDFobject=\count344
+\everyMPtoPDFconversion=\toks50
 ) (/usr/share/texlive/texmf-dist/tex/latex/epstopdf-pkg/epstopdf-base.sty
 Package: epstopdf-base 2020-01-24 v2.11 Base part for package epstopdf
 Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 485.
  (/usr/share/texlive/texmf-dist/tex/latex/latexconfig/epstopdf-sys.cfg
 File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Live
 ))
-\c@lstlisting=\count339
-Package hyperref Info: Link coloring ON on input line 39.
+\c@lstlisting=\count345
+Package hyperref Info: Link coloring ON on input line 41.
  (./lix_cache_paper.out) (./lix_cache_paper.out)
 \@outlinefile=\write4
 \openout4 = `lix_cache_paper.out'.
 
-LaTeX Font Info:    Trying to load font information for T1+pcr on input line 47.
- (/usr/share/texlive/texmf-dist/tex/latex/psnfss/t1pcr.fd
+
+Package pgfplots notification 'compat/show suggested version=true': document has been generated with the most recent feature set (\pgfplotsset{compat=1.18}).
+
+LaTeX Font Info:    Trying to load font information for T1+pcr on input line 49.
+(/usr/share/texlive/texmf-dist/tex/latex/psnfss/t1pcr.fd
 File: t1pcr.fd 2001/06/04 font definitions for T1/pcr.
 )
-LaTeX Font Info:    Trying to load font information for U+msa on input line 65.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 67.
  (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 65.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 67.
  (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 ) [1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}{/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc}
 
 
 ]
-Underfull \hbox (badness 10000) in paragraph at lines 109--110
+Underfull \hbox (badness 1635) in paragraph at lines 97--98
+\T1/ptm/b/n/10 model\T1/ptm/m/n/10 -Redis for hot data ($[]\OT1/cmr/m/n/10 1$\T1/ptm/m/n/10 ms reads) and Huffman-
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 111--112
 []\T1/ptm/m/n/10 With the prob-lems iden-ti-fied, the ar-chi-tec-ture of
  []
 
@@ -691,218 +733,112 @@ LaTeX Font Info:    Font shape `OMS/ptm/m/n' in size <7> not available
 )
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\leavevmode@ifvmode' on input line 118.
+(hyperref)                removing `\leavevmode@ifvmode' on input line 120.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
 (hyperref)                \kern 1.66702pt
-(hyperref)                removed on input line 118.
+(hyperref)                removed on input line 120.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\leavevmode@ifvmode' on input line 126.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                \kern 1.66702pt
-(hyperref)                removed on input line 126.
-
-
-Package hyperref Warning: Token not allowed in a PDF string (Unicode):
-(hyperref)                removing `\leavevmode@ifvmode' on input line 139.
+(hyperref)                removing `\leavevmode@ifvmode' on input line 128.
 
 
 Package hyperref Warning: Token not allowed in a PDF string (Unicode):
 (hyperref)                \kern 1.66702pt
-(hyperref)                removed on input line 139.
+(hyperref)                removed on input line 128.
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 148--149
-[]\T1/pcr/m/n/10 add_message_to_context(role, content)
- []
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                removing `\leavevmode@ifvmode' on input line 141.
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 149--150
-[]\T1/pcr/m/n/10 get_semantic_response(url, embedding)
- []
+Package hyperref Warning: Token not allowed in a PDF string (Unicode):
+(hyperref)                \kern 1.66702pt
+(hyperref)                removed on input line 141.
 
-[2]
-Underfull \hbox (badness 10000) in paragraph at lines 176--177
-[]\T1/ptm/m/n/10 Our first in-stinct was to put ev-ery-thing
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 176--177
-\T1/ptm/m/n/10 in a sin-gle Re-dis names-pace with com-
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 176--177
-\T1/ptm/m/n/10 pound keys (e.g., \T1/pcr/m/n/10 session:{id}:context\T1/ptm/m/n/10 ,
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 176--177
-\T1/pcr/m/n/10 session:{id}:semantic\T1/ptm/m/n/10 ). It seemed sim-pler. It
- []
-
-[3
+[2] [3
 pdfTeX warning (ext4): destination with the same identifier (name{figure.1}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.193 \item \textbf
-                   {Exploiting byte frequency skew.} English-language conver...]
-Underfull \hbox (badness 3189) in paragraph at lines 224--225
-\T1/ptm/m/n/10 dat-a-class with sen-si-ble de-faults. This avoids the anti-
+l.188 \item \textbf
+                   {Zero native dependencies.} The codec is pure Python (${\...] [4]
+Package pgfplots info on input line 352: Using 'lua backend=false' for axis: ymode=log unsupported (yet).
+Package pgfplots info on input line 352: Using 'lua backend=false' for axis: x coord trafo unsupported.
+
+
+LaTeX Warning: `h' float specifier changed to `ht'.
+
+Package pgfplots info on input line 397: Using 'lua backend=false' for axis: xmode=log unsupported (yet).
+Package pgfplots info on input line 397: Using 'lua backend=false' for axis: x coord trafo unsupported.
+
+Overfull \hbox (42.92194pt too wide) in paragraph at lines 407--408
+ [][] 
  []
 
 
-Underfull \hbox (badness 2376) in paragraph at lines 236--237
-\T1/ptm/m/n/10 a flat im-port sur-face (e.g., \T1/pcr/m/n/10 from lix_chat import
- []
-
-[4]
-Underfull \hbox (badness 4673) in paragraph at lines 298--299
-[]\T1/ptm/m/n/10 Turn IDs are de-rived from the cur-rent times-tamp:
- []
+LaTeX Warning: `h' float specifier changed to `ht'.
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 308--309
-[]\T1/ptm/m/n/10 The \T1/pcr/m/n/10 SemanticCacheRedis \T1/ptm/m/n/10 stores cached items
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 308--309
-\T1/ptm/m/n/10 as a JSON doc-u-ment per \T1/pcr/m/n/10 (session_id, URL)
- []
-
-
-Underfull \hbox (badness 1490) in paragraph at lines 308--309
-\T1/pcr/m/n/10 max_items_per_url \T1/ptm/m/n/10 (de-fault 50) en-tries. Each en-try
- []
-
-
-Underfull \hbox (badness 4569) in paragraph at lines 316--317
-[]\T1/ptm/m/n/10 Embeddings are stored as raw \T1/pcr/m/n/10 float32 \T1/ptm/m/n/10 byte ar-
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 323--324
-[]\T1/ptm/m/n/10 Instance-level locks in
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 323--324
-\T1/pcr/m/n/10 HybridConversationCache\T1/ptm/m/n/10 ,
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 327--328
-[]\T1/pcr/m/n/10 RLock \T1/ptm/m/n/10 (re-entrant lock) is used through-out to
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 327--328
-\T1/ptm/m/n/10 al-low nested calls with-out deadlock---for ex-am-ple,
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 327--328
-\T1/pcr/m/n/10 HybridConversationCache.flush_to_disk()
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 327--328
-\T1/ptm/m/n/10 ac-quires the in-stance lock and then calls
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 327--328
-\T1/pcr/m/n/10 ConversationArchive.append_turns()\T1/ptm/m/n/10 , which
- []
+LaTeX Warning: `h' float specifier changed to `ht'.
 
 [5]
-Underfull \hbox (badness 10000) in paragraph at lines 408--409
-[]\T1/ptm/m/n/10 The pro-duc-tion Re-dis in-stance serves all three
+
+LaTeX Warning: `h' float specifier changed to `ht'.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 489--491
+[]\T1/ptm/b/n/10 Conversation mem-ory in LLM frame-works.
  []
 
 
-Underfull \hbox (badness 4454) in paragraph at lines 408--409
-\T1/ptm/m/n/10 databases with a to-tal mem-ory foot-print of \T1/ptm/b/n/10 1.38MB
- []
-
-
-Underfull \hbox (badness 6575) in paragraph at lines 408--409
-\T1/ptm/m/n/10 (\T1/pcr/m/n/10 used_memory_human\T1/ptm/m/n/10 ), of which 96.4% is dataset
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 438--440
-[]\T1/ptm/b/n/10 Conversation mem-ory in LLM frame-
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 438--440
-\T1/ptm/b/n/10 works. \T1/ptm/m/n/10 LangChain [[]] pro-vides sev-eral mem-
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 438--440
-\T1/ptm/m/n/10 ory classes (\T1/pcr/m/n/10 ConversationBufferMemory\T1/ptm/m/n/10 ,
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 438--440
-\T1/pcr/m/n/10 ConversationSummaryMemory\T1/ptm/m/n/10 ,
- []
-
-
-Underfull \hbox (badness 5878) in paragraph at lines 438--440
-\T1/pcr/m/n/10 ConversationBufferWindowMemory\T1/ptm/m/n/10 ) that main-tain
- []
-
-
-Underfull \hbox (badness 5091) in paragraph at lines 438--440
-\T1/ptm/m/n/10 Lla-maIn-dex [[]] of-fers sim-i-lar in-memory chat stores.
+Underfull \hbox (badness 1769) in paragraph at lines 489--491
+\T1/ptm/m/n/10 LangChain [[]] pro-vides sev-eral mem-ory modules-buffer,
  []
 
 [6
+pdfTeX warning (ext4): destination with the same identifier (name{figure.2}) has been already used, duplicate ignored
+<argument> ...shipout:D \box_use:N \l_shipout_box 
+                                                  \__shipout_drop_firstpage_...
+l.491 
+      
+pdfTeX warning (ext4): destination with the same identifier (name{figure.3}) has been already used, duplicate ignored
+<argument> ...shipout:D \box_use:N \l_shipout_box 
+                                                  \__shipout_drop_firstpage_...
+l.491 
+      
 pdfTeX warning (ext4): destination with the same identifier (name{table.1}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.444 \textbf{Redis as a caching layer.}
-                                        
+l.491 
+      
 pdfTeX warning (ext4): destination with the same identifier (name{table.2}) has been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.444 \textbf{Redis as a caching layer.}
-                                        
-pdfTeX warning (ext4): destination with the same identifier (name{table.3}) has been already used, duplicate ignored
-<argument> ...shipout:D \box_use:N \l_shipout_box 
-                                                  \__shipout_drop_firstpage_...
-l.444 \textbf{Redis as a caching layer.}
-                                        ]
-Underfull \hbox (badness 4013) in paragraph at lines 483--484
+l.491 
+      ]
+Underfull \hbox (badness 4013) in paragraph at lines 534--535
 []\T1/ptm/m/n/8 Zilliz, ``GPT-Cache: A li-brary for cre-at-ing se-man-tic cache for
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 507--508
+Underfull \hbox (badness 10000) in paragraph at lines 558--559
 []\T1/ptm/m/n/8 OpenAI Com-mu-nity Fo-rum, ``Heads up: Web search tool
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 507--508
-\T1/ptm/m/n/8 billing can be higher than you ex-pect --- here's why,''
+Underfull \hbox (badness 10000) in paragraph at lines 558--559
+\T1/ptm/m/n/8 billing can be higher than you ex-pect - here's why,''
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 507--508
+Underfull \hbox (badness 10000) in paragraph at lines 558--559
 \T1/ptm/m/n/8 2025. [On-line]. Avail-able: [][]$https : / / community . openai . com / t /
  []
 
 
-Overfull \hbox (22.25386pt too wide) in paragraph at lines 507--508
+Overfull \hbox (22.25386pt too wide) in paragraph at lines 558--559
 \T1/ptm/m/n/8 heads-[]up-[]web-[]search-[]tool-[]billing-[]can-[]be-[]higher-[]than-[]you-[]expect-[]here-[]s-[]why /
  []
 
@@ -923,21 +859,21 @@ LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2024-01-22>
  ***********
 Package rerunfilecheck Info: File `lix_cache_paper.out' has not changed.
-(rerunfilecheck)             Checksum: 96B36B50EB6075339672FB1C8EFFDA6F;6016.
+(rerunfilecheck)             Checksum: 308E3CA148B64C3128E75675C134FAD1;6327.
  ) 
 Here is how much of TeX's memory you used:
- 24752 strings out of 476106
- 463968 string characters out of 5793933
- 1952975 words of memory out of 5000000
- 46247 multiletter control sequences out of 15000+600000
- 679576 words of font info for 167 fonts, out of 8000000 for 9000
+ 34754 strings out of 476106
+ 801135 string characters out of 5793933
+ 1955975 words of memory out of 5000000
+ 56122 multiletter control sequences out of 15000+600000
+ 681732 words of font info for 169 fonts, out of 8000000 for 9000
  59 hyphenation exceptions out of 8191
- 84i,10n,93p,1191b,928s stack positions out of 10000i,1000n,20000p,200000b,200000s
-</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/courier/ucrb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmbi8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on lix_cache_paper.pdf (7 pages, 230652 bytes).
+ 84i,11n,93p,1191b,2313s stack positions out of 10000i,1000n,20000p,200000b,200000s
+</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy5.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/courier/ucrb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmbi8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
+Output written on lix_cache_paper.pdf (7 pages, 253212 bytes).
 PDF statistics:
- 339 PDF objects out of 1000 (max. 8388607)
- 295 compressed objects within 3 object streams
- 72 named destinations out of 1000 (max. 500000)
- 285 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 364 PDF objects out of 1000 (max. 8388607)
+ 313 compressed objects within 4 object streams
+ 74 named destinations out of 1000 (max. 500000)
+ 293 words of extra memory for PDF output out of 10000 (max. 10000000)
 

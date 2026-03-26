@@ -16,7 +16,7 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}Layer 1: Session Context Window (Redis DB\,2)}{2}{subsection.2.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}Layer 2: Semantic Query Cache (Redis DB\,0)}{2}{subsection.2.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-D}}Layer 3: URL Embedding Cache (Redis DB\,1)}{2}{subsection.2.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-E}}CacheCoordinator}{2}{subsection.2.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-E}}The Coordinator}{2}{subsection.2.5}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Data flow through the three-layer caching architecture. Solid arrows indicate the primary path; dashed arrows indicate overflow and eviction paths.}}{3}{figure.1}\protected@file@percent }
 \newlabel{fig:architecture}{{1}{3}{Data flow through the three-layer caching architecture. Solid arrows indicate the primary path; dashed arrows indicate overflow and eviction paths}{figure.1}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-F}}Redis Database Separation}{3}{subsection.2.6}\protected@file@percent }
@@ -39,21 +39,24 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-G}}Thread Safety}{5}{subsection.4.7}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {V}Evaluation}{5}{section.5}\protected@file@percent }
 \newlabel{sec:evaluation}{{V}{5}{Evaluation}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Cost Comparison: SearchGPT vs.\ lixSearch}{5}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Latency Profile}{5}{subsection.5.2}\protected@file@percent }
 \citation{langchain2023}
 \citation{llamaindex2023}
-\citation{gptcache2023}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Compression Efficiency}{6}{subsection.5.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Per-query cost comparison (log scale). SearchGPT API includes the hidden context token charge (${\sim }$8k tokens per search). lixSearch uses open models with Playwright-based search agents. The cached cost reflects the 89.3\% hit rate, where cache hits incur zero LLM cost.}}{6}{figure.2}\protected@file@percent }
+\newlabel{fig:cost}{{2}{6}{Per-query cost comparison (log scale). SearchGPT API includes the hidden context token charge (${\sim }$8k tokens per search). lixSearch uses open models with Playwright-based search agents. The cached cost reflects the 89.3\% hit rate, where cache hits incur zero LLM cost}{figure.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Operation latencies from production containers (log scale). Redis reads are two orders of magnitude faster than disk, confirming the hot-window design. Huffman codec throughput (${\sim }$700--800\,KB/s in pure Python) is sufficient for typical conversation payloads.}}{6}{figure.3}\protected@file@percent }
+\newlabel{fig:latency}{{3}{6}{Operation latencies from production containers (log scale). Redis reads are two orders of magnitude faster than disk, confirming the hot-window design. Huffman codec throughput (${\sim }$700--800\,KB/s in pure Python) is sufficient for typical conversation payloads}{figure.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Compression Efficiency}{6}{subsection.5.3}\protected@file@percent }
 \@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Huffman compression ratios on production conversation archives}}{6}{table.1}\protected@file@percent }
 \newlabel{tab:compression}{{I}{6}{Huffman compression ratios on production conversation archives}{table.1}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Huffman compression ratio vs.\ payload size (synthetic conversation data)}}{6}{table.2}\protected@file@percent }
 \newlabel{tab:compression_scaling}{{II}{6}{Huffman compression ratio vs.\ payload size (synthetic conversation data)}{table.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Latency}{6}{subsection.5.2}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Operation latencies (measured from application containers)}}{6}{table.3}\protected@file@percent }
-\newlabel{tab:latency}{{III}{6}{Operation latencies (measured from application containers)}{table.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Redis Memory Footprint}{6}{subsection.5.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-D}}Cache Hit Rate}{6}{subsection.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-D}}Redis Memory Footprint}{6}{subsection.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-E}}Cache Hit Rate}{6}{subsection.5.5}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {VI}Related Work}{6}{section.6}\protected@file@percent }
 \newlabel{sec:related}{{VI}{6}{Related Work}{section.6}{}}
+\citation{gptcache2023}
 \citation{semantic_kernel2023}
 \citation{haystack2023}
 \citation{memgpt2023}
