@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lix-open-cache"
-version = "0.1.0"
+version = "2.1.1"
 description = "Reusable session management and multi-layer Redis caching for conversational AI"
 requires-python = ">=3.10"
 dependencies = [
