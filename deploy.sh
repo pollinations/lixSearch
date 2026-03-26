@@ -447,24 +447,155 @@ release_github() {
     git commit -m "release: update packages" 2>/dev/null || true
     git push origin main 2>/dev/null || true
 
+    _cache_notes() {
+        local v=$1
+        cat <<NOTES
+## lix-open-cache v${v}
+
+Standalone multi-layer Redis caching + Huffman disk archival for conversational AI.
+
+### Install
+
+\`\`\`bash
+pip install lix-open-cache==${v}
+\`\`\`
+
+### Quick Start
+
+\`\`\`python
+from lix_open_cache import CacheConfig, CacheCoordinator
+
+config = CacheConfig(redis_host="localhost", redis_port=6379)
+cache = CacheCoordinator(session_id="user-abc", config=config)
+
+# Store & retrieve conversation context
+cache.add_message_to_context("user", "What's the weather in Tokyo?")
+cache.add_message_to_context("assistant", "22°C and sunny.")
+history = cache.get_context_messages()
+
+# Semantic cache — skip LLM on similar queries
+import numpy as np
+embedding = np.random.rand(384).astype(np.float32)
+cached = cache.get_semantic_response("https://weather.com", embedding)
+\`\`\`
+
+### Three Cache Layers
+
+| Layer | Purpose | Backend | TTL |
+|-------|---------|---------|-----|
+| **Session Context Window** | Rolling 20-message window + disk overflow | Redis DB 2 + \`.huff\` files | 24h |
+| **Semantic Query Cache** | Deduplicate similar queries (cosine ≥ 0.90) | Redis DB 0 | 5 min |
+| **URL Embedding Cache** | Cache embedding vectors per URL | Redis DB 1 | 24h |
+
+### Key Features
+
+- **Two-tier hybrid storage** — Redis hot window + Huffman-compressed disk cold archive
+- **LRU eviction daemon** — auto-migrates idle sessions to disk, re-hydrates on return
+- **smart_context()** — recent messages + semantically relevant history from disk
+- **Pure Python Huffman codec** — ~54% compression, zero native dependencies
+- **CacheConfig dataclass** — all tunables in one place, 12-factor env var support
+- **Connection pooling** — shared Redis pools keyed by (host, port, db)
+
+### Dependencies
+
+Only 3: \`redis\`, \`numpy\`, \`loguru\`
+
+### Links
+
+- [PyPI](https://pypi.org/project/lix-open-cache/${v}/)
+- [Docs](https://github.com/${repo_url}/tree/main/${CACHE_PKG})
+- [Research Paper](https://github.com/${repo_url}/blob/main/docs/paper/lix_cache_paper.pdf)
+- [Live Demo](https://search.elixpo.com)
+NOTES
+    }
+
+    _search_notes() {
+        local v=$1
+        cat <<NOTES
+## lix-open-search v${v}
+
+Python client SDK for lixSearch — multi-tool AI search with web, video, image, and deep research.
+
+### Install
+
+\`\`\`bash
+pip install lix-open-search==${v}
+\`\`\`
+
+### Quick Start
+
+\`\`\`python
+from lix_open_search import LixSearch
+
+lix = LixSearch("http://localhost:9002")
+
+# One-shot search
+result = lix.search("quantum computing breakthroughs 2026")
+print(result.content)
+
+# Streaming
+for chunk in lix.search_stream("latest AI papers"):
+    print(chunk.content, end="", flush=True)
+
+# Multi-turn conversation
+result = lix.chat([
+    {"role": "user", "content": "Compare Tesla and BYD sales"}
+], session_id="my-session")
+
+# Multimodal (text + image)
+result = lix.search("What is this?", images=["https://example.com/photo.jpg"])
+
+# Raw URLs without LLM
+urls = lix.surf("best Python frameworks", limit=10)
+\`\`\`
+
+### Async
+
+\`\`\`python
+from lix_open_search import AsyncLixSearch
+
+async with AsyncLixSearch("http://localhost:9002") as lix:
+    result = await lix.search("SpaceX updates")
+    async for chunk in lix.search_stream("AI papers"):
+        print(chunk.content, end="", flush=True)
+\`\`\`
+
+### Features
+
+- **Sync + Async** clients (\`LixSearch\` / \`AsyncLixSearch\`)
+- **Streaming** with parsed \`StreamChunk\` objects
+- **Multi-turn** sessions with server-side memory
+- **Multimodal** — text + up to 3 images
+- **Surf** — raw URL/image search without LLM synthesis
+- **OpenAI-compatible** — also works with the standard OpenAI Python client
+- **Single dependency** — just \`httpx\`
+
+### Self-Host with Docker
+
+\`\`\`bash
+docker pull elixpo/lixsearch
+docker compose -f package/lix_open_search_pkg/docker-compose.yml up -d
+\`\`\`
+
+### Links
+
+- [PyPI](https://pypi.org/project/lix-open-search/${v}/)
+- [Docs](https://github.com/${repo_url}/tree/main/${SEARCH_PKG})
+- [Docker Hub](https://hub.docker.com/r/elixpo/lixsearch)
+- [Live Demo](https://search.elixpo.com)
+NOTES
+    }
+
     _do_gh_release() {
         local pkg_dir=$1 pkg_name=$2 tag=$3
         local v=$(_pkg_version "$pkg_dir")
 
         local notes
-        notes=$(cat <<NOTES
-## ${pkg_name} v${v}
-
-\`\`\`bash
-pip install ${pkg_name}==${v}
-\`\`\`
-
-### Links
-- [PyPI](https://pypi.org/project/${pkg_name}/${v}/)
-- [Docs](https://github.com/${repo_url}/tree/main/${pkg_dir})
-- [Live Demo](https://search.elixpo.com)
-NOTES
-        )
+        if [ "$tag" = "lix-open-cache" ]; then
+            notes=$(_cache_notes "$v")
+        else
+            notes=$(_search_notes "$v")
+        fi
 
         # Collect dist assets
         local assets=()
