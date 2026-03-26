@@ -29,7 +29,7 @@
 
 \hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue}
 
-\title{lix\_cache: A Multi-Layer Caching Architecture\\for Conversational AI Session Management}
+\title{A Multi-Layer Caching Architecture\\for Conversational AI Session Management}
 
 \author{
 \IEEEauthorblockN{Ayushman Bhattacharya}
@@ -58,30 +58,45 @@ caching, conversational AI, session management, Redis, Huffman coding, semantic 
 % ============================================================
 \section{Introduction}
 
-Modern conversational AI applications---chatbots, search assistants, and retrieval-augmented generation (RAG) pipelines---must solve three recurring problems simultaneously:
+\subsection{The Problem: SearchGPT Was Too Expensive}
+
+In late 2024, OpenAI launched SearchGPT---later integrated into ChatGPT as its web search feature---promising to revolutionize how users find information online. For end users, it was impressive. For developers building on top of it, the economics told a different story.
+
+The API pricing for web search was steep: \$10--30 per thousand calls as a base fee, plus a hidden cost that caught many by surprise. Each search call injected approximately 8{,}000 tokens of retrieved web content into the model's context window, billed at standard input token rates. In practice, a single web search request could cost \$0.22---compared to \$0.0003 for the same query without search~\cite{openai_search_pricing}. Developers on OpenAI's community forums reported bills 2--3$\times$ higher than expected, with some paying over \$2 for just 21 searches~\cite{openai_search_billing}. For a search assistant handling thousands of queries per day, this was a non-starter.
+
+We wanted to build something different: a search assistant that could browse the web, synthesize answers with sources, and carry on multi-turn conversations---but at a cost we could actually sustain.
+
+\subsection{The First Version: Raw Search + LLM}
+
+So we built \texttt{lixSearch} from scratch. The initial version was deliberately simple. Instead of paying per-query fees to a proprietary search API, we used Playwright-based browser agents to perform web searches directly---the same way a human would. The agents scraped search results, fetched full page content, and fed it to an open LLM for synthesis. There was no retrieval-augmented generation (RAG), no vector database, no caching layer. Just a search agent pool, a language model, and a pipeline connecting them.
+
+It worked. The per-query cost dropped dramatically---from \$0.22 with SearchGPT to fractions of a cent with open models and free search. But as users grew and conversations got longer, three problems emerged that threatened to erode every cost advantage we had built:
 
 \begin{enumerate}
-\item \textbf{``What did we just talk about?''} Users expect the system to recall recent conversation context. Na\"ive approaches store entire histories in memory, which does not scale across thousands of concurrent sessions.
+\item \textbf{``What did we just talk about?''} Users expected the system to remember context across turns. Storing entire conversation histories in memory did not scale across thousands of concurrent sessions. Without context, the assistant repeated itself, missed follow-up nuances, and frustrated users.
 
-\item \textbf{``Didn't we already answer this?''} Semantically equivalent queries arrive frequently, especially in multi-turn dialogues where users rephrase or refine earlier questions. Each redundant LLM invocation wastes compute and adds latency.
+\item \textbf{``Didn't we already answer this?''} Users frequently rephrased queries: ``weather Tokyo'' followed by ``Tokyo weather forecast.'' Each rephrasing triggered a full pipeline execution---search agents, page fetches, LLM synthesis---even though the answer was already computed seconds ago.
 
-\item \textbf{``We already embedded this URL.''} In RAG workflows, the same URLs are fetched and embedded by multiple sessions. Re-computing a 384-dimensional embedding vector (${\sim}200$\,ms per URL) for every session is wasteful when the content has not changed.
+\item \textbf{``We already embedded this URL.''} As we added RAG capabilities to improve answer quality, the same popular URLs were fetched and embedded by multiple sessions. Computing a 384-dimensional embedding (${\sim}200$\,ms per URL) redundantly across sessions wasted the compute budget we had fought so hard to minimize.
 \end{enumerate}
 
-Existing solutions typically address one of these concerns in isolation: frameworks like LangChain~\cite{langchain2023} provide memory modules for conversation history, while GPTCache~\cite{gptcache2023} focuses on semantic caching of LLM responses. However, no single, lightweight library unifies session management, semantic query deduplication, and embedding caching into a cohesive, production-ready package with minimal dependencies.
+\subsection{The Solution: lix\_cache}
 
-We present \texttt{lix\_cache}, a Python library extracted from the production \texttt{lixSearch} intelligent search assistant. The library provides:
+Each of these problems had partial solutions in the ecosystem. LangChain~\cite{langchain2023} offered in-memory conversation buffers. GPTCache~\cite{gptcache2023} provided semantic caching for LLM responses. But nothing unified all three concerns into a single, lightweight library we could drop into our existing pipeline without adding heavyweight infrastructure.
+
+So we built \texttt{lix\_cache}---a three-layer caching architecture that grew organically out of the problems we faced in production. Each layer was born from a specific pain point:
 
 \begin{itemize}
-\item A \textbf{three-layer caching architecture} where each layer targets a distinct problem (session context, query deduplication, embedding reuse) and operates on a separate Redis logical database.
-\item A \textbf{two-tier hybrid storage model} combining Redis for hot data (${\sim}1$\,ms reads) with Huffman-compressed disk archives for cold data, connected by a background LRU eviction daemon.
-\item A \textbf{custom binary file format} (\texttt{.huff}) with a fixed 24-byte header and canonical Huffman-coded payload, achieving ${\sim}54\%$ compression on typical conversation text with zero native dependencies.
-\item A \textbf{single \texttt{CacheConfig} dataclass} that centralizes all tunables and supports 12-factor environment variable loading.
+\item \textbf{Layer 1: Session Context Window.} A rolling window of the 20 most recent messages in Redis, with automatic overflow to Huffman-compressed disk archives. Born from the need to maintain conversation context without unbounded memory growth.
+\item \textbf{Layer 2: Semantic Query Cache.} Catches rephrasings by comparing query embeddings via cosine similarity ($\tau \geq 0.90$), returning cached LLM responses and skipping the entire pipeline. Born from watching the same query hit our search agents dozens of times in slightly different words.
+\item \textbf{Layer 3: URL Embedding Cache.} A global, cross-session store of pre-computed embedding vectors with 24-hour TTL. Born from profiling and discovering that a significant fraction of embedding computations were redundant across concurrent sessions.
 \end{itemize}
 
-The library is pip-installable (\texttt{pip install lix-chat}), requires only \texttt{redis}, \texttt{numpy}, and \texttt{loguru} as dependencies, and is designed for drop-in integration with any Python-based conversational system.
+The system also introduced a \textbf{two-tier hybrid storage model}---Redis for hot data (${\sim}1$\,ms reads) and Huffman-compressed disk archives for cold data---connected by a background LRU eviction daemon. A \textbf{custom binary \texttt{.huff} file format} with a 24-byte header achieves ${\sim}54\%$ compression on conversation text using pure Python, with zero native dependencies. All tunables are consolidated into a single \textbf{\texttt{CacheConfig} dataclass} with 12-factor environment variable support.
 
-The remainder of this paper is organized as follows. Section~\ref{sec:architecture} presents the overall system architecture and data flow. Section~\ref{sec:design} discusses key design decisions and their rationale. Section~\ref{sec:implementation} details the implementation of each component. Section~\ref{sec:evaluation} evaluates compression ratios, latency, and cache hit behavior. Section~\ref{sec:related} surveys related work, and Section~\ref{sec:conclusion} concludes.
+Today, \texttt{lix\_cache} is extracted into a standalone, pip-installable library (\texttt{pip install lix-chat}), requiring only \texttt{redis}, \texttt{numpy}, and \texttt{loguru}. It powers the production \texttt{lixSearch} system at \texttt{search.elixpo.com}, serving an 89.3\% cache hit rate with just 1.38\,MB of Redis memory.
+
+The remainder of this paper follows the arc of this journey. Section~\ref{sec:architecture} presents the architecture that emerged. Section~\ref{sec:design} explains the design decisions we made and why. Section~\ref{sec:implementation} details the implementation. Section~\ref{sec:evaluation} evaluates what we achieved in production. Section~\ref{sec:related} surveys related work, and Section~\ref{sec:conclusion} reflects on what we learned.
 
 % ============================================================
 % II. ARCHITECTURE
@@ -91,7 +106,7 @@ The remainder of this paper is organized as follows. Section~\ref{sec:architectu
 
 \subsection{Overview}
 
-The \texttt{lix\_cache} system is organized as three independent caching layers, each backed by a dedicated Redis logical database, unified under a single \texttt{CacheCoordinator} fa\c{c}ade. Figure~\ref{fig:architecture} illustrates the complete data flow when a user message arrives.
+With the problems identified, the architecture of \texttt{lix\_cache} took shape around a simple principle: each problem gets its own caching layer, each layer gets its own Redis database, and a single \texttt{CacheCoordinator} fa\c{c}ade ties them together. Figure~\ref{fig:architecture} illustrates the complete data flow when a user message arrives.
 
 \begin{figure*}[t]
 \centering
@@ -102,7 +117,7 @@ The \texttt{lix\_cache} system is organized as three independent caching layers,
 
 \subsection{Layer 1: Session Context Window (Redis DB\,2)}
 
-The Session Context Window maintains a rolling window of the $k$ most recent messages (default $k{=}20$) for each session. Messages are stored as individual Redis keys with TTL, and an ordered list tracks message insertion order.
+The first problem we hit was the simplest to describe and the hardest to solve well: users expected the assistant to remember what they had said two turns ago. The Session Context Window maintains a rolling window of the $k$ most recent messages (default $k{=}20$) for each session. Messages are stored as individual Redis keys with TTL, and an ordered list tracks message insertion order.
 
 When a new message arrives, it is pushed to the head of the Redis list. If the list exceeds $k$ entries, the oldest message is popped, serialized, and appended to a Huffman-compressed disk archive. This ensures Redis memory usage remains bounded at $O(k)$ per session regardless of conversation length.
 
@@ -110,7 +125,7 @@ When \texttt{get\_context()} is called and Redis is empty (e.g., after LRU evict
 
 \subsection{Layer 2: Semantic Query Cache (Redis DB\,0)}
 
-The Semantic Query Cache intercepts queries before they reach the LLM. For each incoming query, the system:
+The second problem became apparent within the first week of production traffic. Users do not type the same query twice---they rephrase it. ``What's the weather in Tokyo'' becomes ``Tokyo weather forecast'' becomes ``Tokyo temperature today.'' Each variation triggered a full pipeline run: search agents launched, pages fetched, LLM invoked. The Semantic Query Cache intercepts queries before they reach the LLM. For each incoming query, the system:
 
 \begin{enumerate}
 \item Computes an embedding vector $\mathbf{q} \in \mathbb{R}^{384}$ for the query.
@@ -123,7 +138,7 @@ This catches rephrasings: ``weather Tokyo'' versus ``Tokyo weather forecast'' ty
 
 \subsection{Layer 3: URL Embedding Cache (Redis DB\,1)}
 
-The URL Embedding Cache is a global (cross-session) store mapping URL strings to their pre-computed embedding vectors, stored as raw \texttt{float32} byte arrays. Computing an embedding costs ${\sim}200$\,ms per URL via the sentence-transformers model; this cache ensures each URL is embedded at most once per 24-hour window across all sessions.
+The third problem surfaced when we introduced RAG to improve answer quality. Popular URLs---Wikipedia articles, news sites, documentation pages---appeared across dozens of sessions per hour. Each session independently fetched the URL, computed a 384-dimensional embedding via sentence-transformers (${\sim}200$\,ms each), and discarded it when the session ended. The URL Embedding Cache is a global (cross-session) store mapping URL strings to their pre-computed embedding vectors, stored as raw \texttt{float32} byte arrays. This cache ensures each URL is embedded at most once per 24-hour window across all sessions.
 
 \subsection{CacheCoordinator}
 
@@ -154,9 +169,11 @@ Each layer operates on a separate Redis logical database (DB\,0, DB\,1, DB\,2) r
 \section{Design Decisions}
 \label{sec:design}
 
+Not every design decision was obvious from the start. Several emerged from mistakes, production incidents, or debates that only resolved after we tried the wrong approach first. This section captures the key forks in the road and why we went the way we did.
+
 \subsection{Three Separate Layers vs.\ a Monolithic Cache}
 
-An alternative design would combine all caching into a single Redis namespace with compound keys. We opted for three independent layers for several reasons:
+Our first instinct was to put everything in a single Redis namespace with compound keys (e.g., \texttt{session:\{id\}:context}, \texttt{session:\{id\}:semantic}). It seemed simpler. It was not. We opted for three independent layers for several reasons:
 
 \begin{itemize}
 \item \textbf{Different TTL profiles.} Session context needs long TTLs (24\,h) since users may return to a conversation hours later. Semantic query caches need short TTLs (5\,min) to ensure freshness of LLM-generated content. URL embeddings sit between (24\,h) because web content changes slowly. A monolithic cache would require per-key TTL management at the application level rather than leveraging Redis database-level semantics.
@@ -168,7 +185,7 @@ An alternative design would combine all caching into a single Redis namespace wi
 
 \subsection{Huffman Coding vs.\ gzip/zlib/lz4}
 
-For the disk archive, we chose a custom canonical Huffman codec over standard compression libraries. This decision was driven by three factors:
+When we first needed to compress conversation archives for disk storage, the obvious choice was gzip or lz4---battle-tested, fast, available everywhere. We tried zlib first, and it worked fine for large archives. But for the typical conversation (1--100\,KB), the overhead was disproportionate. We ended up writing a custom canonical Huffman codec, driven by three factors:
 
 \begin{enumerate}
 \item \textbf{Small payload efficiency.} Conversation archives are typically 1--100\,KB. At these sizes, gzip's dictionary overhead (32\,KB window) and lz4's frame header can dominate. Huffman coding has no dictionary---only a symbol table proportional to the alphabet size (at most 256 entries, $\leq$512 bytes of overhead).
@@ -182,7 +199,7 @@ The resulting compression achieves ${\sim}54\%$ ratio on typical conversation te
 
 \subsection{Rolling Window with Overflow vs.\ Truncation}
 
-Many conversation memory systems simply truncate: they keep the last $k$ messages and discard everything older. \texttt{lix\_cache} instead \emph{overflows} old messages to disk. This preserves the full conversation history for:
+Early in development, we used a simple truncation strategy: keep the last $k$ messages, throw away the rest. This bit us when users returned to a conversation after an hour and asked ``what was that article you found earlier?'' The context was gone. \texttt{lix\_cache} instead \emph{overflows} old messages to disk. This preserves the full conversation history for:
 
 \begin{itemize}
 \item \textbf{Semantic retrieval:} The \texttt{smart\_context()} method retrieves semantically relevant messages from the disk archive via embedding cosine similarity, even if those messages left the hot window long ago.
@@ -192,7 +209,7 @@ Many conversation memory systems simply truncate: they keep the last $k$ message
 
 \subsection{LRU Eviction as a Background Daemon}
 
-Idle session data in Redis consumes memory without serving reads. Rather than relying solely on Redis TTL expiry (which discards data), the LRU daemon \emph{migrates} data to disk before freeing Redis memory. This preserves data while reclaiming resources.
+We noticed that after peak hours, hundreds of idle sessions sat in Redis consuming memory while no one was reading them. Redis TTL expiry would have cleaned them up---but it would have \emph{discarded} the data entirely. We needed something smarter: a daemon that \emph{migrates} data to disk before freeing Redis memory, preserving data while reclaiming resources.
 
 The daemon runs as a Python \texttt{threading.Thread} (daemon mode), checking every 60 seconds for sessions idle longer than the configured threshold (default 120 minutes). It is started lazily on first \texttt{HybridConversationCache} instantiation and shared across all sessions via module-level state.
 
@@ -212,7 +229,7 @@ All tunables are consolidated into a single \texttt{CacheConfig} dataclass with 
 \section{Implementation}
 \label{sec:implementation}
 
-The library is implemented in ${\sim}800$ lines of Python across eight modules. We describe the key implementation details of each component.
+With the architecture settled, the implementation came together over several weeks of iterative development. The entire library is ${\sim}800$ lines of Python across eight modules---compact enough to audit in an afternoon, but covering a surprising amount of ground. We describe the key implementation details of each component.
 
 \subsection{Package Structure}
 
@@ -344,7 +361,7 @@ All mutable state is protected by \texttt{threading.RLock} instances:
 \section{Evaluation}
 \label{sec:evaluation}
 
-We evaluate \texttt{lix\_cache} on a production deployment of the \texttt{lixSearch} search assistant, running three application replicas behind an nginx load balancer on a single server. Redis 7.4 runs on a dedicated container with password authentication. All measurements were taken from the live system.
+The real test of any caching system is whether it actually delivers in production. We deployed \texttt{lix\_cache} on the live \texttt{lixSearch} search assistant, running three application replicas behind an nginx load balancer on a single server. Redis 7.4 runs on a dedicated container with password authentication. All measurements below were taken from the live system---no synthetic benchmarks, no cherry-picked scenarios.
 
 \subsection{Compression Efficiency}
 
@@ -466,9 +483,10 @@ Standard approaches use gzip or lz4 for compressing stored conversations. Our us
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented \texttt{lix\_cache}, a multi-layer caching library for conversational AI session management. The system addresses three distinct problems---session context, query deduplication, and embedding reuse---through a unified architecture of three Redis-backed cache layers with a hybrid hot/cold storage tier.
+We started with a simple goal: build a search assistant that could compete with SearchGPT without the \$0.22-per-query price tag. What we got was \texttt{lixSearch}---and along the way, we discovered that the real engineering challenge was not in searching the web or calling an LLM, but in managing the state that accumulates around multi-turn conversations at scale.
 
-Production evaluation on the \texttt{lixSearch} search assistant demonstrates:
+\texttt{lix\_cache} is the library that grew out of those challenges. Each of its three layers---session context, semantic query deduplication, and URL embedding reuse---was born from a specific production pain point, not from a whiteboard architecture session. The result is a system that is simple enough to understand in an afternoon (${\sim}800$ lines of Python) but effective enough to run in production:
+
 \begin{itemize}
 \item \textbf{89.3\% aggregate cache hit rate} across all layers over a 6-day measurement window, with Redis memory usage of only 1.38\,MB.
 \item \textbf{Sub-millisecond Redis reads} (0.107\,ms per GET), confirming that the hot-window design delivers the latency benefits of in-memory storage.
@@ -476,9 +494,9 @@ Production evaluation on the \texttt{lixSearch} search assistant demonstrates:
 \item \textbf{Transparent session lifecycle management}: LRU eviction, disk archival, re-hydration, and TTL cleanup operate without application-level intervention.
 \end{itemize}
 
-The library is available as \texttt{pip install lix-chat} with minimal dependencies (redis, numpy, loguru) and ${\sim}800$ lines of implementation. By extracting these concerns into a reusable package, we aim to save other conversational AI developers from re-implementing the same session management and caching patterns.
+The library is available as \texttt{pip install lix-chat} with minimal dependencies (redis, numpy, loguru). By extracting these concerns into a reusable package, we hope to save other developers from the same trial-and-error we went through---so they can focus on what makes their search assistant unique, rather than re-implementing session management and caching from scratch.
 
-\textbf{Future work.} Potential improvements include: (1)~replacing the pure-Python Huffman codec with an optional C extension for higher throughput on large archives; (2)~adding async/await support for use with asyncio-based frameworks; (3)~supporting pluggable vector databases (FAISS, Chroma) as alternatives to the brute-force cosine similarity search in the semantic cache; and (4)~implementing adaptive TTL policies that learn optimal cache lifetimes from query patterns.
+\textbf{Future work.} The journey is not over. Potential improvements include: (1)~replacing the pure-Python Huffman codec with an optional C extension for higher throughput on large archives; (2)~adding native async/await support for frameworks like Quart and FastAPI; (3)~supporting pluggable vector databases (FAISS, Chroma) as alternatives to the brute-force cosine similarity search in the semantic cache; and (4)~implementing adaptive TTL policies that learn optimal cache lifetimes from observed query patterns.
 
 % ============================================================
 % REFERENCES
