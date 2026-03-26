@@ -293,11 +293,7 @@ Writes are atomic at the file level: the entire archive (existing turns + new tu
 
 The \texttt{HybridConversationCache} class manages the two-tier hot/cold storage. Key implementation details:
 
-\textbf{Redis key structure.} Each session uses two Redis keys:
-\begin{itemize}
-\item \texttt{\{prefix\}:session\_order:\{session\_id\}} --- a Redis list of turn IDs (insertion order)
-\item \texttt{\{prefix\}:session\_context:\{session\_id\}:\{turn\_id\}} --- individual message JSON, each with independent TTL
-\end{itemize}
+\textbf{Redis key structure.} Each session uses two Redis keys: (1)~a list key tracking turn IDs in insertion order, and (2)~per-turn keys storing individual message JSON, each with independent TTL. Keys are namespaced by a configurable prefix and the session ID.
 
 Turn IDs are derived from the current timestamp: \texttt{int(time.time() * 1000) \% $2^{31}$}, providing millisecond uniqueness.
 
