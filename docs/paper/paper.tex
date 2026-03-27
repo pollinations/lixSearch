@@ -98,9 +98,9 @@ So we built a three-layer caching architecture that grew organically out of the 
 \item \textbf{Layer 3: URL Embedding Cache.} A global, cross-session store of pre-computed embedding vectors with 24-hour TTL. Born from profiling and discovering that a significant fraction of embedding computations were redundant across concurrent sessions.
 \end{itemize}
 
-The system also introduced a \textbf{two-tier hybrid storage model}---Redis for hot data (${\sim}1$\,ms reads) and Huffman-compressed disk archives for cold data---connected by a background LRU eviction daemon. A \textbf{custom binary archive format} with a 24-byte header achieves 45--67\% compression on conversation text using pure Python, with zero native dependencies. All tunables are consolidated into a single configuration object with environment variable support, making the system deployable across different environments without code changes.
+The system also introduced a \textbf{two-tier hybrid storage model}-Redis for hot data (${\sim}1$\,ms reads) and Huffman-compressed disk archives for cold data connected by a background LRU eviction daemon. A \textbf{custom binary archive format} with a 24-byte header achieves 45--67\% compression on conversation text using pure Python, with zero native dependencies. All tunables are consolidated into a single configuration object with environment variable support, making the system deployable across different environments without code changes.
 
-In production, this architecture serves an 89.3\% cache hit rate with just 1.38\,MB of Redis memory---enabling conversations that persist indefinitely across sessions, server restarts, and horizontal scaling events.
+In production, this architecture serves an 89.3\% cache hit rate with just 1.38\,MB of Redis memory, enabling conversations that persist indefinitely across sessions, server restarts, and horizontal scaling events.
 
 The remainder of this paper follows the arc of this journey. Section~\ref{sec:architecture} presents the architecture that emerged. Section~\ref{sec:design} explains the design decisions we made and why. Section~\ref{sec:implementation} details the implementation. Section~\ref{sec:evaluation} evaluates what we achieved in production. Section~\ref{sec:related} surveys related work, and Section~\ref{sec:conclusion} reflects on what we learned.
 
@@ -189,7 +189,7 @@ When we first needed to compress conversation archives for disk storage, the obv
 
 \item \textbf{Exploiting byte frequency skew.} English-language conversation text exhibits extreme byte frequency imbalance: spaces account for ${\sim}18\%$ of bytes, the letter `e' for ${\sim}13\%$, while `z' appears only ${\sim}0.07\%$ of the time. Huffman coding directly exploits this skew, assigning shorter bit codes to frequent bytes.
 
-\item \textbf{Zero native dependencies.} The codec is pure Python (${\sim}160$ lines), eliminating build-time dependencies on C libraries. This simplifies deployment across diverse environments---from local development to containerized production---without platform-specific build steps.
+\item \textbf{Zero native dependencies.} The codec is pure Python (${\sim}160$ lines), eliminating build-time dependencies on C libraries. This simplifies deployment across diverse environments from local development to containerized production without platform-specific build steps.
 \end{enumerate}
 
 The resulting compression achieves ${\sim}54\%$ ratio on typical conversation text (i.e., compressed size is 54\% of original), comparable to zlib level-1 but without native code.
@@ -226,7 +226,7 @@ All tunables are consolidated into a single configuration dataclass with sensibl
 \section{Implementation}
 \label{sec:implementation}
 
-With the architecture settled, the implementation came together over several weeks of iterative development. The caching layer is ${\sim}800$ lines of Python across eight modules---compact enough to audit in an afternoon, but covering a surprising amount of ground. We describe the key implementation details of each component.
+With the architecture settled, the implementation came together over several weeks of iterative development. The caching layer is ${\sim}800$ lines of Python across eight modules compact enough to audit in an afternoon, but covering a surprising amount of ground. We describe the key implementation details of each component.
 
 \subsection{Module Structure}
 
@@ -322,7 +322,7 @@ We chose re-entrant locks specifically because the call graph is nested: flushin
 \section{Evaluation}
 \label{sec:evaluation}
 
-The real test of any caching system is whether it actually delivers in production---especially on modest hardware. Our entire stack runs on a single 8-vCPU Intel Cascade Lake cloud instance (2\,GHz, 32\,GB RAM, no GPU). The search assistant runs as three containerized replicas (2\,vCPU, 2\,GB RAM limit each) with 10 async workers per replica---30 workers total. Redis 7.4 runs in its own container capped at 2\,GB, and an nginx load balancer sits in front. All measurements below were taken from this live system---no synthetic benchmarks, no cherry-picked scenarios.
+The real test of any caching system is whether it actually delivers in production, especially on modest hardware. Our entire stack runs on a single 8-vCPU Intel Cascade Lake cloud instance (2\,GHz, 32\,GB RAM, no GPU). The search assistant runs as three containerized replicas (2\,vCPU, 2\,GB RAM limit each) with 10 async workers per replica i.e 30 workers total. Redis 7.4 runs in its own container capped at 2\,GB, and an nginx load balancer sits in front. All measurements below were taken from this live system no synthetic benchmarks, no cherry-picked scenarios.
 
 \subsection{Cost Comparison: SearchGPT vs.\ Our System}
 
@@ -330,7 +330,7 @@ The original motivation for building the search assistant was cost. To understan
 
 \textbf{SearchGPT cost breakdown.} OpenAI's web search API charges in two parts: (1)~a base fee of \$10--30 per thousand calls, and (2)~a hidden token charge-each search call injects ${\sim}$8{,}000 tokens of retrieved web content into the model context, billed at standard input rates (${\sim}$\$2.50/M tokens for GPT-4o). For a typical query, this amounts to ${\sim}$\$0.02 in token charges on top of the ${\sim}$\$0.01--0.03 base fee, totaling ${\sim}$\$0.22 per query when accounting for output tokens and model overhead~\cite{openai_search_pricing, openai_search_billing}.
 
-\textbf{Our cost breakdown.} Our system has \emph{zero per-query API fees}. LLM inference runs through an open model API at no per-call cost. Web search is performed by Playwright-based browser agents that scrape results directly---no search API subscription. Embedding computation (sentence-transformers, all-MiniLM-L6-v2) runs locally on CPU via a dedicated embedding service. The \emph{only} recurring cost is the server itself: an 8-vCPU cloud instance at ${\sim}$\$96/month. Per-query cost is therefore purely amortized infrastructure.
+\textbf{Our cost breakdown.} Our system has \emph{zero per-query API fees}. LLM inference runs through an open model API at no per-call cost. Web search is performed by Playwright-based stealth browser agents that scrape results directly with no search API subscription. Embedding computation (sentence-transformers, all-MiniLM-L6-v2) runs locally on CPU via a dedicated embedding service. The \emph{only} recurring cost is the server itself: an 8-vCPU cloud instance at ${\sim}$\$96/month. Per-query cost is therefore purely amortized infrastructure.
 
 Table~\ref{tab:cost} and Figure~\ref{fig:cost} show the comparison across query volumes.
 
@@ -525,7 +525,7 @@ LangChain~\cite{langchain2023} provides several memory modules-buffer, summary, 
 GPTCache~\cite{gptcache2023} is the closest prior work to our semantic query cache layer. It intercepts LLM calls, computes embeddings for queries, and returns cached responses when similarity exceeds a threshold. GPTCache supports multiple embedding backends and vector stores (FAISS, Milvus, etc.). Our semantic cache is deliberately simpler: it stores embeddings as JSON arrays in Redis (no external vector database), uses direct cosine similarity over a bounded list (50 items per URL), and is scoped per-session. This trades maximum throughput for operational simplicity-no additional infrastructure beyond Redis.
 
 \textbf{Redis as a caching layer.}
-Redis is widely used as an LLM response cache. Frameworks like Semantic Kernel~\cite{semantic_kernel2023} and Haystack~\cite{haystack2023} support Redis as a cache backend. However, these typically use Redis as a flat key-value store. Our system uses three separate Redis databases with distinct TTL profiles and data formats, and adds the hybrid hot/cold tier with disk overflow---a pattern not found in existing frameworks.
+Redis is widely used as an LLM response cache. Frameworks like Semantic Kernel~\cite{semantic_kernel2023} and Haystack~\cite{haystack2023} support Redis as a cache backend. However, these typically use Redis as a flat key-value store. Our system uses three separate Redis databases with distinct TTL profiles and data formats, and adds the hybrid hot/cold tier with disk overflow-a pattern not found in existing frameworks.
 
 \textbf{Conversation compression and archival.}
 MemGPT~\cite{memgpt2023} addresses the context window limitation by paging conversation history between a main context and an external storage tier, analogous to virtual memory. Our approach is similar in spirit: the hot Redis window serves as ``main memory'' and the Huffman-compressed disk archive as ``swap.'' However, MemGPT focuses on autonomous LLM-driven memory management, while our system uses deterministic LRU eviction with fixed window sizes.
@@ -541,7 +541,7 @@ Standard approaches use gzip or lz4 for compressing stored conversations. Our us
 
 We started with a simple goal: build a search assistant that could compete with SearchGPT without the \$0.22-per-query price tag-and do it on a single 8-vCPU server with no GPU. Along the way, we discovered that the real engineering challenge was not in searching the web or calling an LLM, but in managing the state that accumulates around multi-turn conversations at scale on resource-constrained hardware.
 
-The caching architecture that grew out of those challenges now powers every conversation on our search assistant. Each of its three layers---session context, semantic query deduplication, and URL embedding reuse---was born from a specific production pain point, not from a whiteboard architecture session. The result is a system that is simple enough to understand in an afternoon (${\sim}800$ lines of Python) but effective enough to sustain indefinitely long conversations in production on commodity CPU infrastructure:
+The caching architecture that grew out of those challenges now powers every conversation on our search assistant. Each of its three layers-session context, semantic query deduplication, and URL embedding reuse-was born from a specific production pain point, not from a whiteboard architecture session. The result is a system that is simple enough to understand in an afternoon (${\sim}800$ lines of Python) but effective enough to sustain indefinitely long conversations in production on commodity CPU infrastructure:
 
 \begin{itemize}
 \item \textbf{89.3\% aggregate cache hit rate} across all layers over a 6-day measurement window, with Redis memory usage of only 1.38\,MB.
@@ -550,7 +550,7 @@ The caching architecture that grew out of those challenges now powers every conv
 \item \textbf{Transparent session lifecycle management}: LRU eviction, disk archival, re-hydration, and TTL cleanup operate without application-level intervention.
 \end{itemize}
 
-The key insight is that forever-continuous conversations---sessions that can span hours, days, or weeks without losing context---are not a feature of the LLM itself, but of the infrastructure around it. By combining a bounded hot window with unbounded cold storage, aggressive semantic deduplication, and cross-session embedding reuse, we built a system where conversation length is no longer a constraint. Users can return to a session days later and pick up exactly where they left off, with full history available for semantic retrieval.
+The key insight is that forever-continuous conversations-sessions that can span hours, days, or weeks without losing context-are not a feature of the LLM itself, but of the infrastructure around it. By combining a bounded hot window with unbounded cold storage, aggressive semantic deduplication, and cross-session embedding reuse, we built a system where conversation length is no longer a constraint. Users can return to a session days later and pick up exactly where they left off, with full history available for semantic retrieval.
 
 \textbf{Future work.} The journey is not over. Potential improvements include: (1)~replacing the pure-Python Huffman codec with an optional C extension for higher throughput on large archives; (2)~supporting pluggable vector databases (FAISS, Chroma) as alternatives to the brute-force cosine similarity search in the semantic cache; (3)~implementing adaptive TTL policies that learn optimal cache lifetimes from observed query patterns; and (4)~exploring cross-session knowledge transfer, where insights from one conversation can inform responses in another.
 
