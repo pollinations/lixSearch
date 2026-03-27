@@ -293,8 +293,9 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
         final_message_content = None
         tool_call_count = 0
 
-        # --- RAG retrieval ---
+        # --- RAG retrieval (only include chunks that are actually relevant) ---
         rag_context = ""
+        _RAG_MIN_SCORE = 0.25
         if core_service:
             try:
                 active_top_k = RETRIEVAL_TOP_K * 2 if is_detailed_mode else RETRIEVAL_TOP_K
@@ -302,14 +303,15 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     asyncio.to_thread(core_service.retrieve, user_query, active_top_k), timeout=2.0
                 )
                 if retrieval_result.get("count", 0) > 0:
-                    _rag_chunks = [r["metadata"]["text"] for r in retrieval_result.get("results", [])]
-                    rag_context = "\n".join(_rag_chunks)
-                    if len(rag_context) > 8000:
-                        rag_context = rag_context[:8000]
-                    _rag_count = retrieval_result.get("count", 0)
-                    rag_event = emit_event("INFO", f"<TASK>Recalling {_rag_count} related snippet{'s' if _rag_count != 1 else ''} from memory</TASK>")
-                    if rag_event:
-                        yield rag_event
+                    relevant = [r for r in retrieval_result.get("results", []) if r.get("score", 0) >= _RAG_MIN_SCORE]
+                    if relevant:
+                        _rag_chunks = [r["metadata"]["text"] for r in relevant]
+                        rag_context = "\n".join(_rag_chunks)
+                        if len(rag_context) > 8000:
+                            rag_context = rag_context[:8000]
+                        rag_event = emit_event("INFO", f"<TASK>Recalling {len(relevant)} related snippet{'s' if len(relevant) != 1 else ''} from memory</TASK>")
+                        if rag_event:
+                            yield rag_event
             except asyncio.TimeoutError:
                 logger.warning("[Pipeline] Vector store retrieval timed out")
             except Exception:
