@@ -608,6 +608,8 @@ frontend_deploy() {
     npx wrangler pages deploy out || { cd ..; error "Pages deploy failed"; exit 1; }
     cd ..
     success "Frontend deployed to Cloudflare Pages"
+    docker restart lixsearch-nginx
+    success "Nginx restarted to serve new frontend"
 }
 
 # ── Version display ────────────────────────────────────
