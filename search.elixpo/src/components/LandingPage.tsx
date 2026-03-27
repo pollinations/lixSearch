@@ -333,7 +333,7 @@ export default function LandingPage() {
               <a href={LINKS.docs} className="text-sm text-white/30 hover:text-white/60 transition-colors">Docs</a>
               <a href={LINKS.trySearch} className="text-sm text-white/30 hover:text-white/60 transition-colors">App</a>
               <a href={LINKS.pollinations} target="_blank" rel="noopener noreferrer" className="text-sm text-white/30 hover:text-white/60 transition-colors">Pollinations</a>
-              <a href={LINKS.pypiSearch} target="_blank" rel="noopener noreferrer" className="text-sm text-white/30 hover:text-white/60 transition-colors">PyPI</a>
+              <a href={LINKS.pypiCache} target="_blank" rel="noopener noreferrer" className="text-sm text-white/30 hover:text-white/60 transition-colors">PyPI</a>
               <a href={LINKS.github} target="_blank" rel="noopener noreferrer" className="text-sm text-white/30 hover:text-white/60 transition-colors">GitHub</a>
             </div>
           </div>
