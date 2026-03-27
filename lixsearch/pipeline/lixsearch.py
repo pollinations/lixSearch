@@ -202,29 +202,27 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
             except Exception:
                 session_context = None
 
-        # --- Conversation cache ---
-        _embed_fn = core_service.embed_single_text if core_service else None
-        conversation_cache = ConversationCacheManager(
-            window_size=CACHE_WINDOW_SIZE, max_entries=CACHE_MAX_ENTRIES,
-            ttl_seconds=CACHE_TTL_SECONDS, compression_method=CACHE_COMPRESSION_METHOD,
-            embedding_model=CACHE_EMBEDDING_MODEL, similarity_threshold=CACHE_SIMILARITY_THRESHOLD,
-            cache_dir=CONVERSATION_CACHE_DIR, embed_fn=_embed_fn,
-        )
-        memoized_results["conversation_cache"] = conversation_cache
-
+        # --- Conversation cache + Semantic cache (skip for ephemeral — no history) ---
+        conversation_cache = None
         if session_id and not is_ephemeral:
+            _embed_fn = core_service.embed_single_text if core_service else None
+            conversation_cache = ConversationCacheManager(
+                window_size=CACHE_WINDOW_SIZE, max_entries=CACHE_MAX_ENTRIES,
+                ttl_seconds=CACHE_TTL_SECONDS, compression_method=CACHE_COMPRESSION_METHOD,
+                embedding_model=CACHE_EMBEDDING_MODEL, similarity_threshold=CACHE_SIMILARITY_THRESHOLD,
+                cache_dir=CONVERSATION_CACHE_DIR, embed_fn=_embed_fn,
+            )
+            memoized_results["conversation_cache"] = conversation_cache
             conversation_cache.load_from_disk(session_id=session_id)
 
-        # --- Semantic cache ---
-        semantic_cache = SemanticCache(
-            session_id=session_id or "pipeline",
-            ttl_seconds=SEMANTIC_CACHE_TTL_SECONDS,
-            similarity_threshold=SEMANTIC_CACHE_SIMILARITY_THRESHOLD,
-            redis_host=SEMANTIC_CACHE_REDIS_HOST,
-            redis_port=SEMANTIC_CACHE_REDIS_PORT,
-            redis_db=SEMANTIC_CACHE_REDIS_DB
-        )
-        if session_id and not is_ephemeral:
+            semantic_cache = SemanticCache(
+                session_id=session_id,
+                ttl_seconds=SEMANTIC_CACHE_TTL_SECONDS,
+                similarity_threshold=SEMANTIC_CACHE_SIMILARITY_THRESHOLD,
+                redis_host=SEMANTIC_CACHE_REDIS_HOST,
+                redis_port=SEMANTIC_CACHE_REDIS_PORT,
+                redis_db=SEMANTIC_CACHE_REDIS_DB
+            )
             semantic_cache.load_for_request(session_id)
 
         # --- Image handling ---
@@ -723,7 +721,7 @@ async def run_elixposearch_pipeline(user_query: str, user_image: str, event_id: 
                     else:
                         yield item
 
-                if final_message_content:
+                if final_message_content and conversation_cache is not None:
                     try:
                         _emb = core_service.embed_single_text(user_query) if core_service else None
                         conversation_cache.add_to_cache(
