@@ -90,12 +90,12 @@ It worked. The per-query cost dropped dramatically-from \$0.22 with SearchGPT to
 
 Each of these problems had partial solutions in the ecosystem. LangChain~\cite{langchain2023} offered in-memory conversation buffers. GPTCache~\cite{gptcache2023} provided semantic caching for LLM responses. But nothing unified all three concerns into a single, lightweight system we could integrate into our existing pipeline without adding heavyweight infrastructure.
 
-So we built a three-layer caching architecture that grew organically out of the problems we faced in production. Each layer was born from a specific pain point:
+So we built a three-layer caching architecture that grew organically out of the problems we faced in production. Each layer was created due to a specific pain point:
 
 \begin{itemize}
-\item \textbf{Layer 1: Session Context Window.} A rolling window of the 20 most recent messages in Redis, with automatic overflow to Huffman-compressed disk archives. Born from the need to maintain conversation context without unbounded memory growth.
-\item \textbf{Layer 2: Semantic Query Cache.} Catches rephrasings by comparing query embeddings via cosine similarity ($\tau \geq 0.90$), returning cached LLM responses and skipping the entire pipeline. Born from watching the same query hit our search agents dozens of times in slightly different words.
-\item \textbf{Layer 3: URL Embedding Cache.} A global, cross-session store of pre-computed embedding vectors with 24-hour TTL. Born from profiling and discovering that a significant fraction of embedding computations were redundant across concurrent sessions.
+\item \textbf{Layer 1: Session Context Window.} A rolling window of the 20 most recent messages in Redis, with automatic overflow to Huffman-compressed disk archives.
+\item \textbf{Layer 2: Semantic Query Cache.} Catches rephrasings by comparing query embeddings via cosine similarity ($\tau \geq 0.90$), returning cached LLM responses and skipping the entire pipeline. Created from watching the same query hit our search agents dozens of times in slightly different words.
+\item \textbf{Layer 3: URL Embedding Cache.} A global, cross-session store of pre-computed embedding vectors with 24-hour TTL. Created  from profiling and discovering that a significant fraction of embedding computations were redundant across concurrent sessions.
 \end{itemize}
 
 The system also introduced a \textbf{two-tier hybrid storage model}. Redis for hot data (${\sim}1$\,ms reads) and Huffman-compressed disk archives for cold data connected by a background LRU eviction daemon. Alongside with this, a \textbf{custom binary archive format} having a 24-byte header achieves 45-67\% compression on conversation based text, using zero native dependencies. All tunables are consolidated into a single configuration object with environment variable support, making the system deployable across different environments without code changes.
@@ -125,15 +125,15 @@ the complete data flow when a user message arrives.
 
 \subsection{Layer 1: Session Context Window (Redis DB\,2)}
 
-The first problem we hit was the simplest to describe and the hardest to solve well: users expected the assistant to remember what they had said two turns ago. The Session Context Window maintains a rolling window of the $k$ most recent messages (default $k{=}20$) for each session. Messages are stored as individual Redis keys with TTL, and an ordered list tracks message insertion order.
+Users expected the assistant to remember what they had said two turns ago. The Session Context Window maintains a rolling window of the $k$ most recent messages (default $k{=}20$) for each session. Messages are stored as individual Redis keys with TTL, and an ordered list tracks message insertion order.
 
 When a new message arrives, it is pushed to the head of the Redis list. If the list exceeds $k$ entries, the oldest message is popped, serialized, and appended to a Huffman-compressed disk archive. This ensures Redis memory usage remains bounded at $O(k)$ per session regardless of conversation length.
 
-When the application requests context and Redis is empty (e.g., after LRU eviction), the system transparently re-hydrates by loading the last $k$ messages from the disk archive back into Redis. If Redis is entirely unavailable, the system falls back to disk-only reads.
+When the application requests context and Redis is empty (e.g., after LRU eviction), the system transparently re-hydrates by loading the last $k$ messages from the disk archive back into Redis. If Redis is entirely unavailable, the system falls back to disk-only reads to ensure no downtime.
 
 \subsection{Layer 2: Semantic Query Cache (Redis DB\,0)}
 
-The second problem became apparent within the first week of production traffic. Users do not type the same query twice-they rephrase it. ``What's the weather in Tokyo'' becomes ``Tokyo weather forecast'' becomes ``Tokyo temperature today.'' Each variation triggered a full pipeline run: search agents launched, pages fetched, LLM invoked. The Semantic Query Cache intercepts queries before they reach the LLM. For each incoming query, the system:
+Users do not type the same query twice-they rephrase it. ``What's the weather in Tokyo'' becomes ``Tokyo weather forecast'' becomes ``Tokyo temperature today.'' Each variation triggered a full pipeline run: search agents launched, pages fetched, LLM invoked. The Semantic Query Cache intercepts queries before they reach the LLM. For each incoming query, the system:
 
 \begin{enumerate}
 \item Computes an embedding vector $\mathbf{q} \in \mathbb{R}^{384}$ for the query.
@@ -150,11 +150,11 @@ The third problem surfaced when we introduced RAG to improve answer quality. Pop
 
 \subsection{The Coordinator}
 
-Rather than asking developers to manage three separate cache objects, we wrapped everything behind a single coordinator. One object per session, one configuration object, four verbs: store a message, check the semantic cache, look up an embedding, get statistics. Under the hood, each call is routed to the appropriate layer. This keeps the integration surface minimal-a developer can add caching to an existing pipeline by creating one object and calling one method per operation.
+Rather than asking developers to manage three separate cache objects, we wrapped everything behind a single coordinator. One object per session, one configuration object, four verbs: \texttt{add\_message\_to\_context}, \texttt{get\_semantic\_response}, \texttt{get\_url\_embedding}, and \texttt{get\_stats}. Under the hood, each call is routed to the appropriate layer. This keeps the integration surface minimal-a developer can add caching to an existing pipeline by creating one object and calling one method per operation.
 
 \subsection{Redis Database Separation}
 
-Each layer operates on a separate Redis logical database (DB\,0, DB\,1, DB\,2) rather than using key prefixes within a single database. This provides three operational advantages:
+Each layer operates on a separate Redis logical database i.e \textbf{DB\,0, DB\,1, DB\,2} rather than using key prefixes within a single database. This provides three operational advantages:
 
 \begin{enumerate}
 \item \textbf{Selective flushing}: wiping one layer's data does not affect the others.
@@ -168,9 +168,9 @@ Each layer operates on a separate Redis logical database (DB\,0, DB\,1, DB\,2) r
 \section{Design Decisions}
 \label{sec:design}
 
-Not every design decision was obvious from the start. Several emerged from mistakes, production incidents, or debates that only resolved after we tried the wrong approach first. This section captures the key forks in the road and why we went the way we did.
+Not every design decision was obvious from the start. Several emerged from mistakes, production incidents, or debates that only resolved after we tried the wrong approach first. This section captures the five key forks in the road and why we went the way we did.
 
-\subsection{Three Separate Layers vs.\ a Monolithic Cache}
+\subsection{Three Separate Layers vs.\ Monolithic Cache}
 
 Our first instinct was to put everything in a single Redis namespace with compound keys-context, semantic cache, and embeddings all sharing one database, differentiated only by key prefixes. It seemed simpler. It was not. We opted for three independent layers for several reasons:
 
@@ -187,11 +187,11 @@ Our first instinct was to put everything in a single Redis namespace with compou
 When we first needed to compress conversation archives for disk storage, the obvious choice was gzip or lz4-battle-tested, fast, available everywhere. We tried zlib first, and it worked fine for large archives. But for the typical conversation (1--100\,KB), the overhead was disproportionate. We ended up writing a custom canonical Huffman codec, driven by three factors:
 
 \begin{enumerate}
-\item \textbf{Small payload efficiency.} Conversation archives are typically 1--100\,KB. At these sizes, gzip's dictionary overhead (32\,KB window) and lz4's frame header can dominate. Huffman coding has no dictionary-only a symbol table proportional to the alphabet size (at most 256 entries, $\leq$512 bytes of overhead).
+\item \textbf{Small payload efficiency.} Conversation archives are typically 1-100\,KB. At these sizes, gzip's dictionary overhead (32\,KB window) and lz4's frame header can dominate. Huffman coding has no dictionary-only a symbol table proportional to the alphabet size (at most 256 entries, $\leq$512 bytes of overhead).
 
 \item \textbf{Exploiting byte frequency skew.} English-language conversation text exhibits extreme byte frequency imbalance: spaces account for ${\sim}18\%$ of bytes, the letter `e' for ${\sim}13\%$, while `z' appears only ${\sim}0.07\%$ of the time. Huffman coding directly exploits this skew, assigning shorter bit codes to frequent bytes.
 
-\item \textbf{Zero native dependencies.} The codec is pure Python (${\sim}160$ lines), eliminating build-time dependencies on C libraries. This simplifies deployment across diverse environments from local development to containerized production without platform-specific build steps.
+\item \textbf{Zero native dependencies.} The code is pure Python based, eliminating build-time dependencies on C libraries. This simplifies deployment across diverse environments from local development to containerized production without platform-specific build steps.
 \end{enumerate}
 
 The resulting compression achieves ${\sim}54\%$ ratio on typical conversation text (i.e., compressed size is 54\% of original), comparable to zlib level-1 but without native code.
@@ -218,9 +218,6 @@ Redis connections are pooled globally, keyed by the combination of host, port, a
 
 Authentication is handled gracefully: the pool first attempts to connect with the configured password, and on failure falls back to unauthenticated access. This accommodates both password-protected production Redis instances and local development servers without configuration changes.
 
-\subsection{Single Configuration Object}
-
-All tunables are consolidated into a single configuration dataclass with sensible defaults. This avoids the anti-pattern of scattered magic numbers across service files. A factory method supports 12-factor apps by reading environment variables with a configurable prefix, so the same caching layer can be deployed across multiple services with different Redis instances without code changes.
 
 % ============================================================
 % IV. IMPLEMENTATION
@@ -228,7 +225,7 @@ All tunables are consolidated into a single configuration dataclass with sensibl
 \section{Implementation}
 \label{sec:implementation}
 
-With the architecture settled, the implementation came together over several weeks of iterative development. The caching layer is ${\sim}800$ lines of Python across eight modules compact enough to audit in an afternoon, but covering a surprising amount of ground. We describe the key implementation details of each component.
+We explore the technical level implementation in this section. The importance of each layer of the caching mechanism and it's seven components are thus being described.
 
 \subsection{Module Structure}
 
@@ -324,7 +321,7 @@ We chose re-entrant locks specifically because the call graph is nested: flushin
 \section{Evaluation}
 \label{sec:evaluation}
 
-The real test of any caching system is whether it actually delivers in production, especially on modest hardware. Our entire stack runs on a single 8-vCPU Intel Cascade Lake cloud instance (2\,GHz, 32\,GB RAM, no GPU). The search assistant runs as three containerized replicas (2\,vCPU, 2\,GB RAM limit each) with 10 async workers per replica i.e 30 workers total. Redis 7.4 runs in its own container capped at 2\,GB, and an nginx load balancer sits in front. All measurements below were taken from this live system no synthetic benchmarks, no cherry-picked scenarios.
+The real test of any caching system is whether it actually delivers in production, especially on modest hardware. Our entire stack runs on a single 8-vCPU Intel Cascade Lake cloud instance (2\,GHz, 32\,GB RAM, no GPU). The search assistant runs as three containerized replicas (2\,vCPU, 2\,GB RAM limit each) with 10 async workers per replica i.e 30 workers total. Redis 7.4 runs in its own container capped at 2\,GB, and an nginx load balancer sits in front. All measurements below were taken from this live system in production.
 
 \subsection{Cost Comparison: SearchGPT vs.\ Our System}
 
@@ -543,7 +540,7 @@ Standard approaches use gzip or lz4 for compressing stored conversations. Our us
 
 We started with a simple goal: build a search assistant that could compete with SearchGPT without the \$0.22-per-query price tag-and do it on a single 8-vCPU server with no GPU. Along the way, we discovered that the real engineering challenge was not in searching the web or calling an LLM, but in managing the state that accumulates around multi-turn conversations at scale on resource-constrained hardware.
 
-The caching architecture that grew out of those challenges now powers every conversation on our search assistant. Each of its three layers-session context, semantic query deduplication, and URL embedding reuse-was born from a specific production pain point, not from a whiteboard architecture session. The result is a system that is simple enough to understand in an afternoon (${\sim}800$ lines of Python) but effective enough to sustain indefinitely long conversations in production on commodity CPU infrastructure:
+The caching architecture that grew out of those challenges now powers every conversation on our search based pipeline. Each of its three layers-session context, semantic query deduplication, and URL embedding. This idea came from from a specific production pain point. The result is a system that is simple enough to understand and also effective enough to sustain indefinitely long conversations in production on commodity CPU infrastructure:
 
 \begin{itemize}
 \item \textbf{89.3\% aggregate cache hit rate} across all layers over a 6-day measurement window, with Redis memory usage of only 1.38\,MB.
