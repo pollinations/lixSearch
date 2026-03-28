@@ -50,7 +50,7 @@
 % ABSTRACT
 % ============================================================
 \begin{abstract}
-The past two years have seen a proliferation of AI-powered search products-OpenAI's SearchGPT (now integrated into ChatGPT), Google's AI Overviews, and Perplexity's real-time answer engine-each offering LLM-synthesized answers grounded in live web results. For end users, these are transformative. For developers building on top of them, the economics are punishing: OpenAI charges \$0.22 per search query via API, Google's Gemini with grounding starts at \$35/1K queries, and Perplexity's Sonar API runs \$5/1K requests for the base tier~\cite{perplexity_pricing}. We set out to build an open-source alternative that could search the web with LLMs at a fraction of the cost, using automated browser agents and open models-running entirely on CPU, without GPU acceleration. The system worked, but as users grew, so did the problems. Sessions lost context between turns. Semantically identical queries triggered redundant LLM calls. The same URLs were embedded over and over across sessions. On a resource-constrained 8-vCPU server, every wasted computation mattered.
+The past two years have seen a proliferation of AI-powered search products-OpenAI's SearchGPT (now integrated into ChatGPT), Google's AI Overviews, and Perplexity's real-time answer engine-each offering LLM-synthesized answers grounded in live web results. For end users, these are transformative. For developers building on top of them, the economics are punishing: OpenAI's web search API costs \$0.03--0.10 per query (base fee plus injected context tokens), Google's Gemini with grounding starts at \$35/1K queries, and Perplexity's Sonar API runs \$5--18/1K requests depending on tier~\cite{perplexity_pricing}. We set out to build an open-source alternative that could search the web with LLMs at a fraction of the cost, using automated browser agents and open models-running entirely on CPU, without GPU acceleration. The system worked, but as users grew, so did the problems. Sessions lost context between turns. Semantically identical queries triggered redundant LLM calls. The same URLs were embedded over and over across sessions. On a resource-constrained 8-vCPU server, every wasted computation mattered.
 
 This paper tells the story of how we solved those problems. We present a three-layer caching architecture designed to sustain indefinitely long conversations without degradation: (1)~a \emph{Session Context Window} maintaining a rolling window of recent messages in Redis with automatic overflow to Huffman-compressed disk archives; (2)~a \emph{Semantic Query Cache} that catches rephrasings via cosine similarity on embedding vectors, eliminating redundant LLM invocations; and (3)~a \emph{URL Embedding Cache} that deduplicates embedding computations across sessions. Deployed on a single 8-vCPU Intel Cascade Lake server (2\,GHz, 32\,GB RAM) running 30 async workers across three containerized replicas, the system achieves an 89.3\% cache hit rate with 0.1\,ms Redis read latency and just 1.38\,MB of memory overhead. A background LRU eviction daemon transparently migrates idle sessions from Redis to disk and re-hydrates them on demand, enabling conversations that can be resumed hours or days later with full context preserved. We describe the journey from a bare-bones search pipeline to a production system, detail the architecture and implementation of each caching layer, and evaluate the system's throughput, latency, and compression characteristics on commodity CPU hardware.
 \end{abstract}
@@ -68,7 +68,7 @@ LLM caching architecture, AI-powered web search, semantic query deduplication, c
 
 The past two years have brought a wave of AI-powered search products. OpenAI launched SearchGPT in late 2024 (now integrated into ChatGPT). Google added AI Overviews with Gemini grounding. Perplexity built a real-time answer engine with its Sonar API. For end users, these are impressive. For developers building on top of them, the economics tell a different story.
 
-The API pricing across providers is steep. OpenAI charges \$10--30 per thousand search calls as a base fee, plus ${\sim}$8{,}000 tokens of injected web context billed at input rates-a single query can cost \$0.22~\cite{openai_search_pricing, openai_search_billing}. Google's Gemini with grounding starts at \$35 per 1{,}000 grounded queries~\cite{google_grounding_pricing}. Perplexity's Sonar API charges \$5 per 1{,}000 requests for the base model, scaling to \$200/1K for the ``deep research'' tier~\cite{perplexity_pricing}. Developers on OpenAI's community forums reported bills 2--3$\times$ higher than expected, with some paying over \$2 for just 21 searches~\cite{openai_search_billing}. For a search assistant handling thousands of queries per day, this was a non-starter.
+The API pricing across providers is steep. OpenAI charges \$10--30 per thousand search calls as a base fee (varying by model and context tier), plus ${\sim}$8{,}000 tokens of injected web context billed at standard input rates. In practice, a single query costs \$0.03--0.10 depending on the model used~\cite{openai_search_pricing}. Developers on OpenAI's community forums reported bills 2--3$\times$ higher than expected, with some paying over \$2 for just 21 searches (${\sim}$\$0.10 each)~\cite{openai_search_billing}. Google's Gemini with grounding charges \$35 per 1{,}000 grounded queries for the Pro model (\$14/1K for Flash)~\cite{google_grounding_pricing}. Perplexity's Sonar API charges \$5 per 1{,}000 requests for the base search tier, scaling to \$18/1K for Sonar Pro~\cite{perplexity_pricing}. For a search assistant handling thousands of queries per day, these per-query fees add up quickly.
 
 We wanted to build something different: a search assistant that could browse the web, synthesize answers with sources, and carry on multi-turn conversations-but at a cost we could actually sustain.
 
@@ -76,7 +76,7 @@ We wanted to build something different: a search assistant that could browse the
 
 So we built our search assistant from scratch. The initial version was deliberately simple. Instead of paying per-query fees to a proprietary search API, we used automated headless browser agents to perform web searches directly-the same way a human would. The agents navigated search engines, extracted results, fetched full page content, and fed it to an open LLM for synthesis. There was no retrieval-augmented generation (RAG), no vector database, no caching layer. Just a search agent pool, a language model, and a pipeline connecting them.
 
-It worked. The per-query cost dropped dramatically-from \$0.22 with SearchGPT to fractions of a cent with open models and free search. But as users grew and conversations got longer, three problems emerged that threatened to erode every cost advantage we had built:
+It worked. The per-query cost dropped dramatically-from \$0.03--0.10 with SearchGPT to fractions of a cent with open models and free search. But as users grew and conversations got longer, three problems emerged that threatened to erode every cost advantage we had built:
 
 \begin{enumerate}
 \item \textbf{``What did we just talk about?''} Users expected the system to remember context across turns. Storing entire conversation histories in memory did not scale across thousands of concurrent sessions. Without context, the assistant repeated itself, missed follow-up nuances, and frustrated users.
@@ -98,7 +98,7 @@ So we built a three-layer caching architecture that grew organically out of the 
 \item \textbf{Layer 3: URL Embedding Cache.} A global, cross-session store of pre-computed embedding vectors with 24-hour TTL. Created  from profiling and discovering that a significant fraction of embedding computations were redundant across concurrent sessions.
 \end{itemize}
 
-The system also introduced a \textbf{two-tier hybrid storage model}. Redis for hot data (${\sim}1$\,ms reads) and Huffman-compressed disk archives for cold data connected by a background LRU eviction daemon. Alongside with this, a \textbf{custom binary archive format} having a 24-byte header achieves 45-67\% compression on conversation based text, using zero native dependencies. All tunables are consolidated into a single configuration object with environment variable support, making the system deployable across different environments without code changes.
+The system also introduced a \textbf{two-tier hybrid storage model}: Redis for hot data (${\sim}1$\,ms reads) and Huffman-compressed disk archives for cold data, connected by a background LRU eviction daemon. A \textbf{custom binary archive format} with a 24-byte header achieves 45--67\% compression on conversation text using zero native dependencies. All tunables are consolidated into a single configuration object with environment variable support, making the system deployable across different environments without code changes.
 
 In production, this architecture serves an 89.3\% cache hit rate with just 1.38\,MB of Redis memory, enabling conversations that persist indefinitely across sessions, server restarts, and horizontal scaling events.
 
@@ -154,7 +154,7 @@ Rather than asking developers to manage three separate cache objects, we wrapped
 
 \subsection{Redis Database Separation}
 
-Each layer operates on a separate Redis logical database i.e \textbf{DB\,0, DB\,1, DB\,2} rather than using key prefixes within a single database. This provides three operational advantages:
+Each layer operates on a separate Redis logical database (i.e., \textbf{DB\,0, DB\,1, DB\,2}) rather than using key prefixes within a single database. This provides three operational advantages:
 
 \begin{enumerate}
 \item \textbf{Selective flushing}: wiping one layer's data does not affect the others.
@@ -216,7 +216,7 @@ The daemon runs as a background thread, checking every 60 seconds for sessions i
 
 Redis connections are pooled globally, keyed by the combination of host, port, and database number. The pool is created on first access and reused for all subsequent connections with matching parameters. This ensures that even when hundreds of cache instances are created (one per session), the number of Redis connections remains bounded by a configurable pool size (default 50) per database.
 
-Authentication is handled gracefully: the pool first attempts to connect with the configured password, and on failure falls back to unauthenticated access. This accommodates both password-protected production Redis instances and local development servers without configuration changes.
+Authentication is handled with a fallback strategy: the pool first attempts to connect with the configured password, and if authentication fails (e.g., on a local development server with no password set), falls back to unauthenticated access with a logged warning. This accommodates both production and development environments, though operators should ensure \texttt{REDIS\_PASSWORD} is always set in production to avoid silently connecting without auth.
 
 
 % ============================================================
@@ -225,7 +225,7 @@ Authentication is handled gracefully: the pool first attempts to connect with th
 \section{Implementation}
 \label{sec:implementation}
 
-We explore the technical level implementation in this section. The importance of each layer of the caching mechanism and it's seven components are thus being described.
+This section details the implementation of each component. The caching system comprises eight modules, described below.
 
 \subsection{Module Structure}
 
@@ -321,15 +321,15 @@ We chose re-entrant locks specifically because the call graph is nested: flushin
 \section{Evaluation}
 \label{sec:evaluation}
 
-The real test of any caching system is whether it actually delivers in production, especially on modest hardware. Our entire stack runs on a single 8-vCPU Intel Cascade Lake cloud instance (2\,GHz, 32\,GB RAM, no GPU). The search assistant runs as three containerized replicas (2\,vCPU, 2\,GB RAM limit each) with 10 async workers per replica i.e 30 workers total. Redis 7.4 runs in its own container capped at 2\,GB, and an nginx load balancer sits in front. All measurements below were taken from this live system in production.
+The real test of any caching system is whether it actually delivers in production, especially on modest hardware. Our entire stack runs on a single 8-vCPU Intel Cascade Lake cloud instance (2\,GHz, 32\,GB RAM, no GPU). The search assistant runs as three containerized replicas (2\,vCPU, 2\,GB RAM limit each) with 10 Hypercorn worker processes per replica (30 total), each handling multiple concurrent async requests. Redis 7.4 runs in its own container capped at 2\,GB, and an nginx load balancer sits in front. All measurements below were taken from this live system in production.
 
 \subsection{Cost Comparison: Commercial AI Search vs.\ lixSearch}
 
 The original motivation for building the search assistant was cost. The fundamental difference is that commercial providers charge per-query API fees, while our system amortizes a fixed infrastructure cost.
 
-\textbf{Commercial AI search pricing.} OpenAI's web search API charges \$10--30 per thousand calls plus ${\sim}$8{,}000 tokens of injected context at ${\sim}$\$2.50/M tokens, totaling ${\sim}$\$0.22 per query~\cite{openai_search_pricing, openai_search_billing}. Perplexity's Sonar API charges \$5/1K requests for the base tier (Sonar) and up to \$200/1K for deep research~\cite{perplexity_pricing}. Google's Gemini with grounding starts at \$35/1K grounded queries~\cite{google_grounding_pricing}. All scale linearly with volume-no economies of scale for the developer.
+\textbf{Commercial AI search pricing.} OpenAI's web search API charges \$10--30 per thousand calls (varying by model and context tier) plus ${\sim}$8{,}000 tokens of injected context at standard input rates. In practice, a single query costs \$0.03--0.10 depending on the model~\cite{openai_search_pricing, openai_search_billing}. Perplexity's Sonar API charges \$5/1K for the base search tier and \$18/1K for Sonar Pro~\cite{perplexity_pricing}. Google's Gemini with grounding charges \$35/1K for the Pro model and \$14/1K for Flash~\cite{google_grounding_pricing}. All scale linearly with volume-no economies of scale for the developer.
 
-\textbf{Our cost breakdown.} Our system has \emph{zero per-query API fees}. LLM inference runs through an open model API at no per-call cost. Web search is performed by automated headless browser agents that navigate search engines directly-no search API subscription required. Embedding computation (sentence-transformers, all-MiniLM-L6-v2) runs locally on CPU. The \emph{only} recurring cost is the server itself: an 8-vCPU cloud instance at ${\sim}$\$96/month.
+\textbf{Our cost breakdown.} Our system has \emph{zero per-query API fees}. LLM inference runs through an open model API at no per-call cost. Web search is performed by automated headless browser agents that navigate search engines directly-no search API subscription required. Embedding computation (sentence-transformers, all-MiniLM-L6-v2) runs locally on CPU. The \emph{only} recurring cost is the server itself: an 8-vCPU cloud instance at ${\sim}$\$96/month, dedicated entirely to the search assistant (all services---Redis, embedding model, search agents, and application workers---run on this single machine).
 
 Table~\ref{tab:cost} and Figure~\ref{fig:cost} show the comparison across query volumes.
 
@@ -342,9 +342,10 @@ Table~\ref{tab:cost} and Figure~\ref{fig:cost} show the comparison across query 
 \toprule
 \textbf{System} & \textbf{Per query} & \textbf{100k q/mo} & \textbf{Model} \\
 \midrule
-SearchGPT API & \$0.220 & \$22{,}000 & per-query \\
-Google Gemini & \$0.035 & \$3{,}500 & per-query \\
-Perplexity Pro & \$0.015 & \$1{,}500 & per-query \\
+SearchGPT API & \$0.03--0.10 & \$3{,}000--10{,}000 & per-query \\
+Google Gemini (Pro) & \$0.035 & \$3{,}500 & per-query \\
+Google Gemini (Flash) & \$0.014 & \$1{,}400 & per-query \\
+Perplexity Sonar Pro & \$0.018 & \$1{,}800 & per-query \\
 Perplexity Sonar & \$0.005 & \$500 & per-query \\
 \midrule
 lixSearch & \$0.00096 & \$96 & fixed infra \\
@@ -353,7 +354,7 @@ lixSearch & \$0.00096 & \$96 & fixed infra \\
 \end{tabular}}
 \end{table}
 
-Commercial providers charge linearly per query-costs scale with volume. lixSearch has a \emph{fixed} infrastructure cost (\$96/month for an 8-vCPU server) regardless of query volume. With the semantic cache achieving an 89.3\% hit rate, only ${\sim}$11\% of queries trigger a full pipeline execution. The remaining 89\% are served directly from Redis-no search agents, no LLM call, no embedding computation. At 100{,}000 queries per month, lixSearch costs \textbf{229$\times$} less than SearchGPT, \textbf{36$\times$} less than Google Gemini, and \textbf{5$\times$} less than Perplexity Sonar.
+Commercial providers charge linearly per query-costs scale with volume. lixSearch has a \emph{fixed} infrastructure cost (\$96/month for an 8-vCPU server) regardless of query volume. With the semantic cache achieving an 89.3\% hit rate, only ${\sim}$11\% of queries trigger a full pipeline execution. The remaining 89\% are served directly from Redis-no search agents, no LLM call, no embedding computation. At 100{,}000 queries per month, lixSearch costs \textbf{31--104$\times$} less than SearchGPT (depending on model tier), \textbf{36$\times$} less than Google Gemini Pro, and \textbf{5$\times$} less than Perplexity Sonar.
 
 \begin{figure}[h]
 \centering
@@ -383,7 +384,7 @@ Commercial providers charge linearly per query-costs scale with volume. lixSearc
     grid style={gray!20},
 ]
 \addplot[fill=red!40] coordinates {
-({SearchGPT}, 0.22) [\$0.220]
+({SearchGPT}, 0.10) [\$0.10]
 ({Google Gemini}, 0.035) [\$0.035]
 ({Perplexity}, 0.005) [\$0.005]
 ({lixSearch}, 0.0019) [\$0.002]
@@ -392,7 +393,7 @@ Commercial providers charge linearly per query-costs scale with volume. lixSearc
 \end{axis}
 \end{tikzpicture}%
 }
-\caption{Per-query cost at 50k queries/month (log scale). Commercial providers charge per-query API fees. lixSearch amortizes a fixed \$96/mo server cost. With 89\% cache hit rate, effective cost drops to \$0.0002/query-1{,}000$\times$ cheaper than SearchGPT, 24$\times$ cheaper than Perplexity.}
+\caption{Per-query cost at 50k queries/month (log scale). SearchGPT shown at upper typical range (\$0.10). lixSearch amortizes a fixed \$96/mo server cost. With 89\% cache hit rate, effective cost drops to \$0.0002/query-roughly 500$\times$ cheaper than SearchGPT and 24$\times$ cheaper than Perplexity.}
 \label{fig:cost}
 \end{figure}
 
@@ -505,7 +506,7 @@ The low key count in DB\,0 and DB\,1 demonstrates that the aggressive TTL policy
 
 \subsection{Cache Hit Rate}
 
-Over the lifetime of the Redis instance (7 days, 114{,}547 total commands):
+Over the lifetime of the Redis instance (6 days, 114{,}547 total commands):
 
 \begin{itemize}
 \item \textbf{Keyspace hits:} 2{,}182
@@ -513,7 +514,7 @@ Over the lifetime of the Redis instance (7 days, 114{,}547 total commands):
 \item \textbf{Hit rate:} $\frac{2{,}182}{2{,}182 + 262} = \mathbf{89.3\%}$
 \end{itemize}
 
-This aggregate hit rate spans all three databases. The high rate reflects the effectiveness of the session context window (Layer~1), where repeated context lookups within a session consistently find messages in Redis. The semantic cache (Layer~2) contributes when users rephrase queries within the 5-minute window.
+This is the \emph{Redis-level} aggregate hit rate across all three databases, reflecting all key lookups including internal operations (TTL refreshes, list reads, existence checks). It is not a direct measure of query-level cache hits, but rather an indicator of how effectively the system keeps its working set in Redis. The high rate is driven primarily by Layer~1 (session context), where repeated context lookups within a session consistently find messages in Redis. Layer~2 (semantic cache) contributes when users rephrase queries within the 5-minute TTL window.
 
 % ============================================================
 % VI. RELATED WORK
@@ -544,9 +545,9 @@ Standard approaches use gzip or lz4 for compressing stored conversations. Our us
 \section{Conclusion}
 \label{sec:conclusion}
 
-We started with a simple goal: build a search assistant that could compete with SearchGPT, Perplexity, and Google's AI search-without their per-query price tags-and do it on a single 8-vCPU server with no GPU. Along the way, we discovered that the real engineering challenge was not in searching the web or calling an LLM, but in managing the state that accumulates around multi-turn conversations at scale on resource-constrained hardware.
+We started with a simple goal: build a search assistant that could compete with SearchGPT (\$0.03--0.10/query), Perplexity (\$0.005--0.018/query), and Google's grounded Gemini (\$0.014--0.035/query)-without their per-query price tags-and do it on a single 8-vCPU server with no GPU. Along the way, we discovered that the real engineering challenge was not in searching the web or calling an LLM, but in managing the state that accumulates around multi-turn conversations at scale on resource-constrained hardware.
 
-The caching architecture that grew out of those challenges now powers every conversation on our search based pipeline. Each of its three layers-session context, semantic query deduplication, and URL embedding. This idea came from from a specific production pain point. The result is a system that is simple enough to understand and also effective enough to sustain indefinitely long conversations in production on commodity CPU infrastructure:
+The caching architecture that grew out of those challenges now powers every conversation on our search pipeline. Each of its three layers---session context, semantic query deduplication, and URL embedding reuse---was born from a specific production pain point. The result is a system that is simple enough to understand in an afternoon and effective enough to sustain indefinitely long conversations in production on commodity CPU infrastructure:
 
 \begin{itemize}
 \item \textbf{89.3\% aggregate cache hit rate} across all layers over a 6-day measurement window, with Redis memory usage of only 1.38\,MB.
