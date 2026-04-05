@@ -243,62 +243,13 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-    post:
-      operationId: searchPost
-      summary: Search (POST)
-      description: |
-        POST variant of the search endpoint. Accepts the same parameters as GET but in a JSON body.
-        For most use cases, prefer `/v1/chat/completions` — this endpoint exists for backward compatibility.
-      tags: [Chat]
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [query]
-              properties:
-                query:
-                  type: string
-                  description: Search query
-                stream:
-                  type: boolean
-                  default: false
-                session_id:
-                  type: string
-                image:
-                  type: string
-                  format: uri
-                  description: Image URL
-                images:
-                  type: array
-                  items:
-                    type: string
-                    format: uri
-                  maxItems: 3
-                  description: Multiple image URLs
-      responses:
-        '200':
-          description: Search response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChatResponse'
-            text/event-stream:
-              schema:
-                type: string
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
 
   # ─── Surf ────────────────────────────────────────────
 
   /api/surf:
     get:
-      operationId: surfGet
-      summary: Surf (GET)
+      operationId: surf
+      summary: Surf
       description: |
         Lightweight search — returns raw URLs and optionally image URLs.
         No LLM synthesis, no answer generation. Fast.
@@ -342,69 +293,24 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-    post:
-      operationId: surfPost
-      summary: Surf (POST)
-      description: Same as GET but with JSON body.
-      tags: [Surf]
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [query]
-              properties:
-                query:
-                  type: string
-                limit:
-                  type: integer
-                  default: 5
-                  minimum: 1
-                  maximum: 20
-                images:
-                  type: boolean
-                  default: false
-            example:
-              query: "Eiffel Tower"
-              limit: 10
-              images: true
-      responses:
-        '200':
-          description: Search results
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SurfResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-
   # ─── Sessions ───────────────────────────────────────
 
   /api/session/create:
-    post:
+    get:
       operationId: createSession
       summary: Create session
       description: |
         Create a new named session. Returns a `session_id` that can be passed
         to `/v1/chat/completions` or `/api/search` for multi-turn context.
       tags: [Sessions]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [query]
-              properties:
-                query:
-                  type: string
-                  description: Initial query / session topic
-            example:
-              query: "Research on quantum computing"
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Initial query / session topic
+          example: "Research on quantum computing"
       responses:
         '201':
           description: Session created
@@ -430,8 +336,8 @@ paths:
   /api/session/{session_id}:
     get:
       operationId: getSession
-      summary: Get session
-      description: Returns session info, conversation history, and summary.
+      summary: Get session and chat history
+      description: Returns session info and full conversation history (messages array).
       tags: [Sessions]
       parameters:
         - $ref: '#/components/parameters/SessionId'
@@ -489,11 +395,13 @@ paths:
 
   # ─── System ─────────────────────────────────────────
 
-  /v1/models:
+  /api/models:
     get:
       operationId: listModels
       summary: List models
-      description: Returns available models. Currently returns `lixsearch`.
+      description: |
+        Returns available models. Currently returns `lixsearch`.
+        Also available at `/v1/models` for OpenAI SDK compatibility.
       tags: [System]
       security: []
       responses:
