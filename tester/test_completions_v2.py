@@ -26,6 +26,14 @@ elif os.getenv("TEST_BASE_URL"):
     BASE_URL = os.getenv("TEST_BASE_URL").rstrip("/")
 
 URL = f"{BASE_URL}{ENDPOINT}"
+TEST_IMAGE_URL = "https://thewildlylife.com/wp-content/uploads/2025/01/trocadero-steps-2-1-scaled.jpg"
+
+# API key: from env, CLI, or default to none (port 80 internal server has no auth)
+API_KEY = os.getenv("LIXSEARCH_API_KEY", "")
+if len(sys.argv) > 2 and sys.argv[1] == "--api-key":
+    API_KEY = sys.argv[2]
+elif len(sys.argv) > 4 and sys.argv[3] == "--api-key":
+    API_KEY = sys.argv[4]
 
 # ── Helpers ──────────────────────────────────────────────────────
 
@@ -41,8 +49,15 @@ def report(name, ok, detail=""):
     print(f"  [{tag}] {name}" + (f"  ({detail})" if detail else ""))
 
 
+def _headers():
+    h = {"Content-Type": "application/json"}
+    if API_KEY:
+        h["Authorization"] = f"Bearer {API_KEY}"
+    return h
+
+
 def post(payload, stream=False, timeout=120):
-    return requests.post(URL, json=payload, stream=stream, timeout=timeout)
+    return requests.post(URL, json=payload, headers=_headers(), stream=stream, timeout=timeout)
 
 
 def collect_stream(resp):
@@ -159,7 +174,7 @@ def test_image_url():
                 "role": "user",
                 "content": [
                     {"type": "text", "text": "What is in this image?"},
-                    {"type": "image_url", "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png"}},
+                    {"type": "image_url", "image_url": {"url": TEST_IMAGE_URL}},
                 ],
             }
         ],
@@ -183,14 +198,15 @@ def test_image_url():
 def test_image_base64():
     print("\n5. Image input via base64 data URI")
 
-    # Download the same test image and convert to base64
-    img_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png"
+    # Download a real image and convert to base64
+    img_url = TEST_IMAGE_URL  # same image used in other tests
     print(f"    Downloading {img_url} ...")
-    img_resp = requests.get(img_url, timeout=15)
+    img_resp = requests.get(img_url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
     img_resp.raise_for_status()
     b64_str = base64.b64encode(img_resp.content).decode()
-    data_uri = f"data:image/png;base64,{b64_str}"
-    print(f"    Base64 size: {len(b64_str)} chars")
+    ct = img_resp.headers.get("Content-Type", "image/jpeg").split(";")[0]
+    data_uri = f"data:{ct};base64,{b64_str}"
+    print(f"    Base64 size: {len(b64_str)} chars ({ct})")
 
     payload = {
         "messages": [
@@ -228,7 +244,7 @@ def test_image_only():
             {
                 "role": "user",
                 "content": [
-                    {"type": "image_url", "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png"}},
+                    {"type": "image_url", "image_url": {"url": TEST_IMAGE_URL}},
                 ],
             }
         ],
@@ -257,7 +273,7 @@ def test_streaming_with_image():
                 "role": "user",
                 "content": [
                     {"type": "text", "text": "Briefly describe this image"},
-                    {"type": "image_url", "image_url": {"url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png"}},
+                    {"type": "image_url", "image_url": {"url": TEST_IMAGE_URL}},
                 ],
             }
         ],
