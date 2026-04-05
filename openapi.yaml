@@ -80,6 +80,8 @@ tags:
     description: Lightweight search — raw URLs and images, no LLM synthesis
   - name: Sessions
     description: Session lifecycle — create, read, delete conversation sessions
+  - name: Images
+    description: Hosted images — generated or uploaded via base64
   - name: System
     description: Health and models
 
@@ -538,6 +540,42 @@ paths:
                   status:
                     type: string
                     example: ok
+
+  # ─── Images ─────────────────────────────────────────
+
+  /api/image/{image_id}:
+    get:
+      operationId: getImage
+      summary: Get image
+      description: |
+        Serves a hosted image by ID. Images are created when:
+        - The model generates an image via `create_image` tool
+        - A base64 image is uploaded through `/v1/chat/completions`
+
+        Images have a 7-day TTL and are cleaned up automatically. No auth required.
+      tags: [Images]
+      security: []
+      parameters:
+        - name: image_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Image identifier (UUID)
+      responses:
+        '200':
+          description: Image file
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Image not found
 
 components:
   securitySchemes:
