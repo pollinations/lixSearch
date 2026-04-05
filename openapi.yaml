@@ -12,28 +12,48 @@ info:
     - **Sessions**: Conversations are stateful. Each `session_id` maintains context across queries with a two-tier cache (Redis hot + Huffman-compressed disk archive).
     - **Deep Search**: Automatic multi-step research mode — the pipeline detects complex queries and decomposes them into sub-queries for comprehensive answers. No explicit flag needed.
 
+    ## Authentication
+
+    All API endpoints (except `/api/health`, `/docs`, `/v1/models`, `/api/stats`, `/api/image/*`) require an API key.
+    Pass it via any of these methods:
+
+    | Method | Example |
+    |--------|---------|
+    | `Authorization` header (OpenAI-compatible) | `Authorization: Bearer <key>` |
+    | `X-API-Key` header | `X-API-Key: <key>` |
+    | Query parameter (GET requests) | `?key=<key>` |
+
+    Unauthenticated requests return `401`. Invalid keys return `403`.
+
     ## Quick Start
 
     ```bash
     # Text query (non-streaming, no session needed)
     curl -X POST https://search.elixpo.com/v1/chat/completions \
+      -H "Authorization: Bearer YOUR_API_KEY" \
       -H "Content-Type: application/json" \
       -d '{"messages": [{"role": "user", "content": "What is quantum computing?"}]}'
 
     # Streaming search
     curl -X POST https://search.elixpo.com/v1/chat/completions \
+      -H "Authorization: Bearer YOUR_API_KEY" \
       -H "Content-Type: application/json" \
       -d '{"messages": [{"role": "user", "content": "What is quantum computing?"}], "stream": true}'
 
     # Image input (URL)
     curl -X POST https://search.elixpo.com/v1/chat/completions \
+      -H "Authorization: Bearer YOUR_API_KEY" \
       -H "Content-Type: application/json" \
       -d '{"messages": [{"role": "user", "content": [{"type": "text", "text": "What is this?"}, {"type": "image_url", "image_url": {"url": "https://example.com/photo.jpg"}}]}]}'
 
     # Image input (base64) — auto-hosted, no session needed
     curl -X POST https://search.elixpo.com/v1/chat/completions \
+      -H "Authorization: Bearer YOUR_API_KEY" \
       -H "Content-Type: application/json" \
       -d '{"messages": [{"role": "user", "content": [{"type": "text", "text": "Describe this"}, {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,/9j/4AAQ..."}}]}]}'
+
+    # GET search with key as query param
+    curl "https://search.elixpo.com/api/search?query=latest+AI+news&stream=false&key=YOUR_API_KEY"
     ```
 
     ## Session-Free Usage
@@ -1046,7 +1066,28 @@ paths:
                   request_id:
                     type: string
 
+security:
+  - BearerAuth: []
+  - ApiKeyHeader: []
+  - ApiKeyQuery: []
+
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: "Pass API key as `Authorization: Bearer <key>` (OpenAI-compatible)"
+    ApiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: "Pass API key as `X-API-Key: <key>` header"
+    ApiKeyQuery:
+      type: apiKey
+      in: query
+      name: key
+      description: "Pass API key as `?key=<key>` query parameter (GET requests)"
+
   parameters:
     SessionId:
       name: session_id
@@ -1258,6 +1299,24 @@ components:
                   enum: [invalid_request_error, server_error]
 
   responses:
+    Unauthorized:
+      description: API key required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "API key required. Pass via Authorization: Bearer <key>, X-API-Key header, or ?key= param"
+
+    Forbidden:
+      description: Invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Invalid API key"
+
     BadRequest:
       description: Invalid request parameters
       content:
