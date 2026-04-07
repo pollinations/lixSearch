@@ -42,7 +42,11 @@
 \author{
 \IEEEauthorblockN{Ayushman Bhattacharya}
 \IEEEauthorblockA{MyceliAI AÜ\\ayushman@myceli.ai}
+\IEEEauthorblockN{Anwesha Chakraborty}
+\IEEEauthorblockA{Dept. CSE JIS University\\anwesha@elixpo.com}
 }
+
+
 
 \begin{document}
 
@@ -96,7 +100,7 @@ So we built a three-layer caching architecture that grew organically out of the 
 \item \textbf{Layer 3: URL Embedding Cache.} Global cross-session store of pre-computed embedding vectors.
 \end{itemize}
 
-Figure~\ref{fig:pipeline} illustrates how a user query flows through these layers before reaching the LLM.
+Fig.~\ref{fig:pipeline} illustrates how a user query flows through these layers before reaching the LLM.
 
 \begin{figure}[h]
 \centering
@@ -182,7 +186,7 @@ Standard approaches use gzip or lz4 for compressing stored conversations. Our us
 \subsection{Overview}
 
 With the problems identified, the architecture took shape around a simple 
-principle: each caching concern gets its own logical partition within a single Redis~\cite{redis2023} instance (DB~0 for semantic query cache, DB~1 for URL embeddings, DB~2 for session context), and a single coordinator process ties them together. Figure~\ref{fig:architecture} illustrates 
+principle: each caching concern gets its own logical partition within a single Redis~\cite{redis2023} instance (DB~0 for semantic query cache, DB~1 for URL embeddings, DB~2 for session context), and a single coordinator process ties them together. Fig.~\ref{fig:architecture} illustrates 
 the complete data flow when a user message arrives.
 
 \begin{figure*}[t]
@@ -231,7 +235,7 @@ Each layer of hot memory operates on a separate Redis logical database (i.e., \t
 \item \textbf{Namespace isolation}: eliminates the risk of key collisions between layers.
 \end{enumerate}
 
-Figure~\ref{fig:redis_layers} shows how the three databases coexist within a single Redis instance, each with its own scope, TTL policy, and data format.
+Fig.~\ref{fig:redis_layers} shows how the three databases coexist within a single Redis instance, each with its own scope, TTL policy, and data format.
 
 \begin{figure}[h]
 \centering
@@ -307,7 +311,7 @@ The resulting compression achieves ${\sim}54\%$ ratio on synthetic conversation 
 
 \subsection{Rolling Window with Overflow vs.\ Truncation}
 
-Early in development, we used a simple truncation strategy: keep the last $k$ messages, throw away the rest (context window policy). This caused us trouble when users returned to a conversation after an hour and asked ``what was that article you found earlier?'' The context was gone. Our system instead \emph{overflows} compressed old messages to disk, as shown in Figure~\ref{fig:session_lifecycle}. This preserves the full conversation history for semantic retrieval, audit/replay, and session resumption after eviction.
+Early in development, we used a simple truncation strategy: keep the last $k$ messages, throw away the rest (context window policy). This caused us trouble when users returned to a conversation after an hour and asked ``what was that article you found earlier?'' The context was gone. Our system instead \emph{overflows} compressed old messages to disk, as shown in Fig.~\ref{fig:session_lifecycle}. This preserves the full conversation history for semantic retrieval, audit/replay, and session resumption after eviction.
 
 \begin{figure}[h]
 \centering
@@ -414,7 +418,7 @@ The canonical ordering means only the symbol-to-length mapping needs to be store
 
 \subsection{Conversation Archive and .huff File Format}
 
-Each session's disk archive is a single \texttt{.huff} file consisting of two nested layers: a fixed 24-byte application header (readable without decompression) wrapping a Huffman-compressed payload that itself has a variable-length codec header. Figure~\ref{fig:huff_format} shows the complete binary layout.
+Each session's disk archive is a single \texttt{.huff} file consisting of two nested layers: a fixed 24-byte application header (readable without decompression) wrapping a Huffman-compressed payload that itself has a variable-length codec header. Fig.~\ref{fig:huff_format} shows the complete binary layout.
 
 \begin{figure}[h]
 \centering
@@ -458,7 +462,7 @@ The hybrid cache is where the hot and cold tiers meet. It manages the two-tier s
 
 \textbf{Re-hydration.} When the application requests context and finds an empty Redis list, it loads from disk and re-populates Redis with the most recent $k$ messages, restoring the hot window transparently.
 
-Figure~\ref{fig:hybrid_cache} illustrates the internal data flow of the hybrid conversation cache, showing how messages move between the three storage tiers.
+Fig.~\ref{fig:hybrid_cache} illustrates the internal data flow of the hybrid conversation cache, showing how messages move between the three storage tiers.
 
 \begin{figure}[h]
 \centering
@@ -543,7 +547,7 @@ The original motivation for building the search assistant was cost. The fundamen
 
 \textbf{Our cost breakdown.} Our system has \emph{zero per-query API fees}. LLM inference runs through an open model API at no per-call cost. Web search is performed by automated headless browser agents that navigate search engines directly-no search API subscription required. Embedding computation (sentence-transformers, all-MiniLM-L6-v2) runs locally on CPU. The \emph{only} recurring cost is the server itself: an 8-vCPU cloud instance at ${\sim}$\$96/month, dedicated entirely to the search assistant (all services---Redis, embedding model, search agents, and application workers---run on this single machine).
 
-Table~\ref{tab:cost} and Figure~\ref{fig:cost} show the comparison across query volumes.
+Table~\ref{tab:cost} and Fig.~\ref{fig:cost} show the comparison across query volumes.
 
 \begin{table}[h]
 \centering
@@ -611,7 +615,7 @@ Commercial providers charge linearly per query-costs scale with volume. lixSearc
 
 \subsection{Latency Profile}
 
-Figure~\ref{fig:latency} visualizes the latency characteristics of each storage tier. The two-order-of-magnitude gap between Redis and disk confirms the value of keeping a hot window in memory.
+Fig.~\ref{fig:latency} visualizes the latency characteristics of each storage tier. The two-order-of-magnitude gap between Redis and disk confirms the value of keeping a hot window in memory.
 
 \begin{figure}[h]
 \centering
@@ -725,7 +729,7 @@ To justify the choice of Huffman over standard compressors, Table~\ref{tab:compr
 
 Zlib achieves better compression ratios at all sizes, as expected from a dictionary-based compressor. However, the gap narrows at smaller payloads: at 2\,KB, zlib-1 achieves 63.2\% versus Huffman's 68.8\%---a difference of only 5.6 percentage points. Huffman consistently outperforms lz4 at all tested sizes. The choice of Huffman is therefore not motivated by superior compression, but by three practical factors: (1)~the compression gap is small at typical archive sizes $<$5\,KB, (2)~the codec has zero native dependencies, and (3)~it runs on the non-critical path (overflow and re-hydration only).
 
-As shown in Figure~\ref{fig:latency}, Redis reads are two orders of magnitude faster than disk reads, confirming the value of the hot-window design. Even for the largest archive (133 turns), disk reads complete in ${\sim}$107\,ms---acceptable for session re-hydration, which occurs at most once per returning user.
+As shown in Fig.~\ref{fig:latency}, Redis reads are two orders of magnitude faster than disk reads, confirming the value of the hot-window design. Even for the largest archive (133 turns), disk reads complete in ${\sim}$107\,ms---acceptable for session re-hydration, which occurs at most once per returning user.
 
 \subsection{Redis Memory Footprint}
 
