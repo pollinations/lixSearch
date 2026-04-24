@@ -1,125 +1,92 @@
-# Security Policy
+## 📢 Security Policy for pollinations.ai
 
-## Reporting a Vulnerability
-
-**Do not open public GitHub issues for security vulnerabilities.**
-
-Email **security@elixpo.ai** with:
-
-- Description of the vulnerability
-- Steps to reproduce
-- Potential impact
-- Affected component (backend, frontend, cache library, Docker image)
-
-We will acknowledge receipt within 24 hours and provide updates every 48 hours.
-
-## Supported Versions
-
-| Package | Version | Supported |
-|---------|---------|-----------|
-| lixSearch (backend) | 2.x | Active |
-| lix-open-cache (PyPI) | 2.x | Active |
-| lix-open-search (PyPI) | 2.x | Deprecated — removed from PyPI |
-| LixSearch (Docker) | latest | Active |
-
-Always run the latest version for security patches.
-
-## Architecture Security
-
-### Network Isolation
-
-All internal services communicate over a private Docker network. No internal ports are published to the host.
-
-| Service | Port | Exposed to host? |
-|---------|------|-----------------|
-| nginx | 80, 443, 10001 | Yes (only entry point) |
-| App workers | 9002 | No |
-| IPC service | 9510 | No |
-| ChromaDB | 9001 | No |
-| Redis | 9530 | No |
-
-### Authentication
-
-- **nginx (port 10001)**: API key required via `X-API-Key` header or `?key=` query param
-- **nginx (port 80)**: Internal/dev access, no API key
-- **App-level**: `INTERNAL_API_KEY` env var for service-to-service calls
-- **IPC service**: Shared authkey (`IPC_AUTHKEY` env var)
-- **Redis**: Password-protected (`REDIS_PASSWORD` env var)
-
-### Rate Limiting
-
-nginx enforces per-IP rate limits:
-
-| Endpoint | Limit |
-|----------|-------|
-| `/api/search`, `/v1/*` | 50 req/s, burst 10 |
-| `/api/chat` | 30 req/s, burst 5 |
-| `/api/session*` | 100 req/s, burst 20 |
-| General | 100 req/s |
-
-### Data Storage
-
-- **Redis**: In-memory with AOF persistence. Stores session data (30-min hot window), semantic cache (5-min TTL), URL embeddings (24h TTL)
-- **Disk archives**: Huffman-compressed `.huff` files with 30-day TTL, auto-cleaned on startup
-- **ChromaDB**: Vector embeddings stored on persistent volume
-
-No user credentials or PII are stored by the search engine itself.
-
-## Deployment Checklist
-
-- [ ] Change all default passwords in `.env` (`REDIS_PASSWORD`, `IPC_AUTHKEY`, `API_KEY`)
-- [ ] Use TLS via reverse proxy (nginx, Cloudflare) for all external traffic
-- [ ] Restrict firewall to only expose nginx ports (80, 443, 10001)
-- [ ] Set Docker resource limits (CPU, memory) on app containers
-- [ ] Enable access logging and monitor for anomalies
-- [ ] Run `pip-audit` periodically against `requirements.txt`
-- [ ] Keep base images updated (`python:3.11-slim`, `redis:7-alpine`, `chromadb/chroma`)
-- [ ] Never commit `.env` files or credentials to version control
-
-## Hidden File Protection
-
-nginx blocks access to dotfiles (`.git`, `.env`, `.htaccess`, etc.):
-
-```nginx
-location ~ /\. {
-    deny all;
-    access_log off;
-    log_not_found off;
-    return 404;
-}
-```
-
-## Vulnerability Disclosure Timeline
-
-| Day | Action |
-|-----|--------|
-| 0 | Report received and acknowledged |
-| 1-2 | Investigation and verification |
-| 3-7 | Fix development |
-| 7-14 | Patch released |
-| 14-21 | Advisory published |
-
-## Scope
-
-**In scope:**
-- Authentication and authorization bypasses
-- Injection vulnerabilities (SQL, command, SSRF)
-- Unauthorized data access or leakage
-- Code execution flaws
-- Denial of service via application logic
-- Cryptographic weaknesses
-
-**Out of scope:**
-- Social engineering
-- Third-party dependency vulnerabilities (report upstream)
-- User configuration errors
-- Physical or infrastructure-level attacks
-
-## Contact
-
-- Security issues: security@elixpo.ai
-- General issues: [GitHub Issues](https://github.com/pollinations/lixSearch/issues)
+Hi there! First off, thank you for caring about the stability and safety of pollinations.ai. We deeply appreciate folks like you who want to help keep our ecosystem healthy. Our team is committed to making pollinations.ai a safe, privacy-first space for everyone to explore AI creativity.
 
 ---
 
-**Last reviewed**: March 2026
+## 🛡️ Reporting Security Vulnerabilities
+
+If you’ve spotted a security vulnerability anywhere in our code, APIs, or infrastructure, here’s how you can help us protect the community:
+
+1. **Reach Out Privately**  
+   Please **don’t** make a public GitHub issue, comment, or post in discussions about vulnerabilities! Instead, reach out to us in one of these ways:
+   - Email us at [hello@elixpo.com](mailto:hello@elixpo.com)
+   - Or DM a maintainer directly on [Discord](https://discord.gg/pollinations-ai-885844321461485618).
+2. **What to Include**  
+   The more detail you can provide, the faster we can fix things. Here’s what helps us:
+
+   - A clear description of what you found
+   - Proof of Concept or steps to reproduce, if possible
+   - Why it matters and what an attacker could potentially do
+   - Any ideas for fixes or mitigations (always welcome!)
+
+3. **How We Respond**  
+   We do our absolute best to reply within **72 hours** and will keep you updated as we investigate and patch the issue. Once it’s fixed, we’ll publish a public advisory and, with your consent, give you credit for the find.
+
+4. **Recognition**  
+   Security-minded contributors keep us strong! With your permission, we’re happy to mention you in our thanks—just let us know if you’d prefer to stay anonymous.
+
+---
+
+## 📋 Scope of This Policy
+
+This policy covers everything in the [`pollinations/pollinations`](https://github.com/pollinations/pollinations) repository, including:
+
+- The main `pollinations.ai` website and React frontend
+- Backend and CDN/caching systems for image and text generation
+- Model Context Protocol (MCP), Software Development Kit (SDK), Pollinations-CLI & our community bots and server.
+
+_If you discover something in third-party code, let their maintainers know unless it’s a problem because of our integration._
+
+---
+
+## 🏷️ What Counts as a Vulnerability?
+
+We’d especially like to hear about:
+
+- Remote code execution, privilege escalation, or command injection in any system
+- Ways to bypass authentication or access control (like APIs or dashboards)
+- Leaks of sensitive data, including user input/history, logs, or info in error messages
+- API abuse resulting in denial of service, rate limit bypass, or billing manipulation
+- Prompt injection/model escape in AI endpoints (especially if it produces unsafe or privileged output)
+- Proven supply chain attacks from dependencies
+- Misconfigurations (debug endpoints left open, secrets in logs or code)
+- Issues with our CI/CD or deployment pipeline security
+
+---
+
+## ⛔ What’s Not in Scope
+
+While we love feedback, these are _not_ considered security vulnerabilities for this project:
+
+- Self-XSS (you attacking your own browser)
+- DoS from just going past normal API rate limits (unless it’s a new exploit)
+- Bugs exclusive to other, unrelated projects
+- Social engineering targeting our team/community
+- Feature requests, moderation tweaks, or other changes to how the model thinks/responds
+
+---
+
+## 📣 A Note on Conduct
+
+pollinations.ai thrives on kindness, respect, and constructive collaboration. Please always treat others well. If you suspect someone is acting in bad faith or discover an urgent exploit, contact us privately right away.
+
+for general questions, hop into a github discussion—but **never** share sensitive security info in public spaces.
+
+---
+
+## 🙏 Thanks
+
+We can’t say this enough: **thank you** for helping make pollinations.ai a safer hub for creative ai. every tip, every report, every patch makes a real difference!
+
+— with gratitude,  
+the pollinations.ai maintainers & community team
+
+---
+
+**For truly urgent or sensitive security issues:**  
+Always use private contact (email/Discord) as public posts may go unnoticed!
+
+---
+
+_(Last updated: 2026-04-23)_
